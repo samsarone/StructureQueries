@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Telepathy Panel</title>
+    <link rel="stylesheet" href="./popup.css" />
+  </head>
+  <body>
+    <div id="registration-overlay" class="registration-overlay">
+      <form id="registration-form" class="registration-dialog">
+        <p class="eyebrow">Register</p>
+        <h2>Register StructuredQueries</h2>
+        <p class="subtitle registration-copy">
+          Register this browser installation before webpage analysis and voice
+          chat. Profile details are optional.
+        </p>
+
+        <label class="field">
+          <span>Display Name</span>
+          <input
+            id="registration-display-name"
+            type="text"
+            placeholder="Optional"
+            autocomplete="name"
+          />
+        </label>
+        <label class="field">
+          <span>Email</span>
+          <input
+            id="registration-email"
+            type="email"
+            placeholder="Optional"
+            autocomplete="email"
+          />
+        </label>
+        <label class="field">
+          <span>Username</span>
+          <input
+            id="registration-username"
+            type="text"
+            placeholder="Optional"
+            autocomplete="username"
+          />
+        </label>
+
+        <div class="action-row">
+          <button class="primary-button" type="submit">Register</button>
+        </div>
+
+        <p id="registration-status" class="detail-line">
+          Register this browser installation. These profile fields are optional.
+        </p>
+      </form>
+    </div>
+
+    <main class="panel-shell">
+      <header class="hero">
+        <p class="eyebrow">Telepathy</p>
+        <div class="hero-row">
+          <div>
+            <h1>Webpage Voice Agent</h1>
+            <p class="subtitle">
+              Analyze the active page, then speak to the proxy-backed agent from
+              the Chrome side panel.
+            </p>
+          </div>
+          <button id="refresh-button" class="ghost-button" type="button">
+            Refresh
+          </button>
+        </div>
+      </header>
+
+      <section class="panel-card">
+        <div class="status-grid">
+          <div>
+            <p class="status-label">Server</p>
+            <p id="server-status" class="status-value">Checking...</p>
+          </div>
+          <div>
+            <p class="status-label">Voice Session</p>
+            <p id="voice-session-status" class="status-value">Idle</p>
+          </div>
+          <div>
+            <p class="status-label">Index Status</p>
+            <p id="index-status" class="status-value">Checking...</p>
+          </div>
+          <div>
+            <p class="status-label">Browser Session</p>
+            <p id="browser-session" class="status-value">Loading...</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel-card">
+        <div class="section-heading">
+          <p class="section-kicker">Current Page</p>
+        </div>
+        <h2 id="page-title" class="page-title">Loading...</h2>
+        <p id="page-url" class="page-url">Loading...</p>
+        <p id="page-language" class="detail-line">Document language: unknown</p>
+      </section>
+
+      <section class="panel-card">
+        <div class="section-heading">
+          <p class="section-kicker">Controls</p>
+        </div>
+        <div class="control-grid">
+          <label class="field">
+            <span>Speaker</span>
+            <select id="voice-select"></select>
+          </label>
+          <label class="field">
+            <span>Speech Language</span>
+            <select id="language-select">
+              <option value="auto">Auto-detect</option>
+              <option value="en">English</option>
+              <option value="es">Spanish</option>
+              <option value="fr">French</option>
+              <option value="de">German</option>
+              <option value="hi">Hindi</option>
+              <option value="pt">Portuguese</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="action-row">
+          <button id="analyze-button" class="primary-button" type="button">
+            Analyze Webpage
+          </button>
+          <button
+            id="start-chat-button"
+            class="secondary-button"
+            type="button"
+            disabled
+          >
+            Start Voice Chat
+          </button>
+          <button
+            id="stop-chat-button"
+            class="danger-button"
+            type="button"
+            disabled
+          >
+            Stop Recording
+          </button>
+        </div>
+
+        <p id="analysis-status" class="detail-line">
+          Waiting for index check before enabling analysis.
+        </p>
+      </section>
+
+      <section class="panel-card">
+        <div class="section-heading">
+          <p class="section-kicker">Conversation</p>
+        </div>
+        <div id="conversation-log" class="conversation-log">
+          <article class="log-item log-item-system">
+            <p class="log-role">System</p>
+            <p class="log-text">
+              Analyze the webpage first. After that, start a voice chat and
+              speak into your microphone.
+            </p>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <script src="./popup.js"></script>
+  </body>
+</html>
