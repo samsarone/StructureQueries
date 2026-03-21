@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "Telepathy",
+  "name": "StructuredQueries",
   "version": "0.1.0",
-  "description": "Chrome extension scaffold for the Telepathy client.",
+  "description": "Chrome extension for the StructuredQueries client.",
   "action": {
-    "default_title": "Telepathy"
+    "default_title": "StructuredQueries"
   },
   "background": {
     "service_worker": "background.js"
@@ -20,11 +20,11 @@
     "tabs"
   ],
   "host_permissions": [
-    "http://localhost:3000/*"
+    "https://structuredqueries.samsar.one/*"
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' http://localhost:3000 ws://localhost:3000;"
-  ],
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://structuredqueries.samsar.one wss://structuredqueries.samsar.one;"
+  },
   "content_scripts": [
     {
       "matches": [

@@ -107,7 +107,7 @@ export function createChatCompletionPayload(
       }
     ],
     usage: getUsageRecord(assistantReply),
-    telepathy: {
+    structuredqueries: {
       provider: assistantReply.provider,
       responseId: assistantReply.responseId ?? null,
       status: assistantReply.status ?? null,

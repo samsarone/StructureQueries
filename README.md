@@ -1,4 +1,4 @@
-# Telepathy
+# StructuredQueries
 
 Monorepo scaffold with:
 

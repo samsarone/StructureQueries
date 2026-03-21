@@ -489,7 +489,7 @@ export async function generateGroundedAssistantReply(
     model:
       assistantResult.data.model ??
       env.integrations.samsar.assistantModel ??
-      "telepathy-samsar-rag",
+      "structuredqueries-samsar-rag",
     text,
     images,
     modalities,

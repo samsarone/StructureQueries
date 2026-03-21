@@ -1,9 +1,11 @@
 export {};
 
-const SERVER_HTTP_ORIGIN = "http://localhost:3000";
-const SERVER_WS_URL = "ws://localhost:3000/ws/plugin";
-const ANALYZED_PAGES_STORAGE_KEY = "telepathy.analyzedPages";
-const REGISTRATION_STORAGE_KEY = "telepathy.registration";
+const SERVER_HTTP_ORIGIN = "https://structuredqueries.samsar.one";
+const SERVER_WS_URL = "wss://structuredqueries.samsar.one/ws/plugin";
+const ANALYZED_PAGES_STORAGE_KEY = "structuredqueries.analyzedPages";
+const REGISTRATION_STORAGE_KEY = "structuredqueries.registration";
+const LEGACY_ANALYZED_PAGES_STORAGE_KEY = "telepathy.analyzedPages";
+const LEGACY_REGISTRATION_STORAGE_KEY = "telepathy.registration";
 
 interface ExtensionSessionPayload {
   ok: boolean;
@@ -489,11 +491,26 @@ async function fetchPageContext() {
 }
 
 async function getAnalyzedPagesCache() {
-  const stored = await chrome.storage.local.get(ANALYZED_PAGES_STORAGE_KEY);
-  const cache = stored[ANALYZED_PAGES_STORAGE_KEY];
+  const stored = await chrome.storage.local.get([
+    ANALYZED_PAGES_STORAGE_KEY,
+    LEGACY_ANALYZED_PAGES_STORAGE_KEY
+  ]);
+  const cache =
+    stored[ANALYZED_PAGES_STORAGE_KEY] ??
+    stored[LEGACY_ANALYZED_PAGES_STORAGE_KEY];
 
   if (!cache || typeof cache !== "object") {
     return {} as Record<string, AnalyzedPageCacheEntry>;
+  }
+
+  if (
+    stored[ANALYZED_PAGES_STORAGE_KEY] === undefined &&
+    stored[LEGACY_ANALYZED_PAGES_STORAGE_KEY] !== undefined
+  ) {
+    await chrome.storage.local.set({
+      [ANALYZED_PAGES_STORAGE_KEY]: cache
+    });
+    await chrome.storage.local.remove(LEGACY_ANALYZED_PAGES_STORAGE_KEY);
   }
 
   return cache as Record<string, AnalyzedPageCacheEntry>;
@@ -516,8 +533,12 @@ async function getAnalyzedPageState(url: string) {
 }
 
 async function getRegistrationState(browserSessionId: string) {
-  const stored = await chrome.storage.local.get(REGISTRATION_STORAGE_KEY);
-  const registration = stored[REGISTRATION_STORAGE_KEY];
+  const stored = await chrome.storage.local.get([
+    REGISTRATION_STORAGE_KEY,
+    LEGACY_REGISTRATION_STORAGE_KEY
+  ]);
+  const registration =
+    stored[REGISTRATION_STORAGE_KEY] ?? stored[LEGACY_REGISTRATION_STORAGE_KEY];
 
   if (!registration || typeof registration !== "object") {
     return null;
@@ -527,6 +548,16 @@ async function getRegistrationState(browserSessionId: string) {
 
   if (payload.browserSessionId !== browserSessionId) {
     return null;
+  }
+
+  if (
+    stored[REGISTRATION_STORAGE_KEY] === undefined &&
+    stored[LEGACY_REGISTRATION_STORAGE_KEY] !== undefined
+  ) {
+    await chrome.storage.local.set({
+      [REGISTRATION_STORAGE_KEY]: registration
+    });
+    await chrome.storage.local.remove(LEGACY_REGISTRATION_STORAGE_KEY);
   }
 
   return payload;

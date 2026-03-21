@@ -9,6 +9,7 @@ messagesRouter.post("/", (request, response) => {
   response.json({
     ok: true,
     received: message,
-    reply: message ? `Echo: ${message}` : "Telepathy server scaffold is ready."
+    reply:
+      message ? `Echo: ${message}` : "StructuredQueries server scaffold is ready."
   });
 });
