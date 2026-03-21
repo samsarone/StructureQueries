@@ -2,9 +2,18 @@ function getSelectedText() {
   return window.getSelection()?.toString().trim() ?? "";
 }
 
-const MIN_SPEECH_DURATION_MS = 250;
-const SILENCE_STOP_DURATION_MS = 550;
-const VOICE_ACTIVITY_THRESHOLD = 0.02;
+const MIN_SPEECH_DURATION_MS = 320;
+const SILENCE_STOP_DURATION_MS = 450;
+const MIN_SIGNAL_RMS = 0.018;
+const MIN_SUSTAINED_VOICE_FRAMES = 5;
+const VOICE_BAND_MIN_HZ = 140;
+const VOICE_BAND_MAX_HZ = 3600;
+const LOW_RUMBLE_MAX_HZ = 120;
+const HIGH_CLICK_MIN_HZ = 4200;
+const ANALYSIS_BAND_MAX_HZ = 6000;
+const MIN_VOICE_BAND_SHARE = 0.58;
+const MAX_LOW_BAND_SHARE = 0.28;
+const MAX_HIGH_BAND_SHARE = 0.22;
 const OVERLAY_HOST_ID = "structuredqueries-overlay-host";
 const OVERLAY_FRAME_URL = chrome.runtime.getURL("popup.html");
 
@@ -12,13 +21,15 @@ let mediaRecorder: MediaRecorder | undefined;
 let mediaStream: MediaStream | undefined;
 let recordedChunks: Blob[] = [];
 let analyserNode: AnalyserNode | undefined;
-let analyserData: Uint8Array<ArrayBuffer> | undefined;
+let analyserTimeData: Uint8Array<ArrayBuffer> | undefined;
+let analyserFrequencyData: Uint8Array<ArrayBuffer> | undefined;
 let audioContext: AudioContext | undefined;
 let mediaSourceNode: MediaStreamAudioSourceNode | undefined;
 let monitorFrameId: number | undefined;
 let speechDetectedAt: number | undefined;
 let lastVoiceDetectedAt: number | undefined;
 let stopRequested = false;
+let sustainedVoiceFrames = 0;
 let overlayHost: HTMLDivElement | undefined;
 let overlayFrame: HTMLIFrameElement | undefined;
 
@@ -26,6 +37,7 @@ function resetSpeechActivity() {
   speechDetectedAt = undefined;
   lastVoiceDetectedAt = undefined;
   stopRequested = false;
+  sustainedVoiceFrames = 0;
 }
 
 function cleanupAudioMonitor() {
@@ -34,7 +46,8 @@ function cleanupAudioMonitor() {
   }
 
   monitorFrameId = undefined;
-  analyserData = undefined;
+  analyserTimeData = undefined;
+  analyserFrequencyData = undefined;
 
   try {
     mediaSourceNode?.disconnect();
@@ -117,21 +130,99 @@ function normalizeRecordingError(error: unknown) {
   return "Failed to start recording.";
 }
 
-function getCurrentVolumeLevel() {
-  if (!analyserNode || !analyserData) {
+function getBandEnergy(
+  frequencyData: Uint8Array,
+  sampleRate: number,
+  minHz: number,
+  maxHz: number
+) {
+  const nyquist = sampleRate / 2;
+  const clampedMinHz = Math.max(0, minHz);
+  const clampedMaxHz = Math.min(maxHz, nyquist);
+
+  if (clampedMaxHz <= clampedMinHz) {
     return 0;
   }
 
-  analyserNode.getByteTimeDomainData(analyserData);
+  const startIndex = Math.max(
+    0,
+    Math.floor((clampedMinHz / nyquist) * frequencyData.length)
+  );
+  const endIndex = Math.min(
+    frequencyData.length - 1,
+    Math.ceil((clampedMaxHz / nyquist) * frequencyData.length)
+  );
+
+  if (endIndex < startIndex) {
+    return 0;
+  }
+
+  let energy = 0;
+
+  for (let index = startIndex; index <= endIndex; index += 1) {
+    energy += frequencyData[index];
+  }
+
+  return energy;
+}
+
+function isVoiceLikeSignal() {
+  if (!analyserNode || !analyserTimeData || !analyserFrequencyData || !audioContext) {
+    return false;
+  }
+
+  analyserNode.getByteTimeDomainData(analyserTimeData);
+  analyserNode.getByteFrequencyData(analyserFrequencyData);
 
   let sum = 0;
 
-  for (const sample of analyserData) {
+  for (const sample of analyserTimeData) {
     const normalized = (sample - 128) / 128;
     sum += normalized * normalized;
   }
 
-  return Math.sqrt(sum / analyserData.length);
+  const rms = Math.sqrt(sum / analyserTimeData.length);
+
+  if (rms < MIN_SIGNAL_RMS) {
+    return false;
+  }
+
+  const sampleRate = audioContext.sampleRate;
+  const analysisMaxHz = Math.min(ANALYSIS_BAND_MAX_HZ, sampleRate / 2);
+  const totalEnergy = getBandEnergy(analyserFrequencyData, sampleRate, 80, analysisMaxHz);
+
+  if (totalEnergy <= 0) {
+    return false;
+  }
+
+  const voiceEnergy = getBandEnergy(
+    analyserFrequencyData,
+    sampleRate,
+    VOICE_BAND_MIN_HZ,
+    Math.min(VOICE_BAND_MAX_HZ, analysisMaxHz)
+  );
+  const lowEnergy = getBandEnergy(
+    analyserFrequencyData,
+    sampleRate,
+    0,
+    Math.min(LOW_RUMBLE_MAX_HZ, analysisMaxHz)
+  );
+  const highEnergy = getBandEnergy(
+    analyserFrequencyData,
+    sampleRate,
+    Math.min(HIGH_CLICK_MIN_HZ, analysisMaxHz),
+    analysisMaxHz
+  );
+
+  const voiceShare = voiceEnergy / totalEnergy;
+  const lowShare = lowEnergy / totalEnergy;
+  const highShare = highEnergy / totalEnergy;
+
+  return (
+    voiceShare >= MIN_VOICE_BAND_SHARE &&
+    lowShare <= MAX_LOW_BAND_SHARE &&
+    highShare <= MAX_HIGH_BAND_SHARE
+  );
 }
 
 function monitorSpeechActivity() {
@@ -141,11 +232,18 @@ function monitorSpeechActivity() {
   }
 
   const now = performance.now();
-  const currentLevel = getCurrentVolumeLevel();
+  const voiceLikeSignal = isVoiceLikeSignal();
 
-  if (currentLevel >= VOICE_ACTIVITY_THRESHOLD) {
-    speechDetectedAt ??= now;
-    lastVoiceDetectedAt = now;
+  if (voiceLikeSignal) {
+    sustainedVoiceFrames = Math.min(
+      sustainedVoiceFrames + 1,
+      MIN_SUSTAINED_VOICE_FRAMES + 4
+    );
+
+    if (sustainedVoiceFrames >= MIN_SUSTAINED_VOICE_FRAMES) {
+      speechDetectedAt ??= now;
+      lastVoiceDetectedAt = now;
+    }
   } else if (
     speechDetectedAt &&
     lastVoiceDetectedAt &&
@@ -155,6 +253,8 @@ function monitorSpeechActivity() {
     void stopPageRecording("silence");
     monitorFrameId = undefined;
     return;
+  } else {
+    sustainedVoiceFrames = Math.max(sustainedVoiceFrames - 1, 0);
   }
 
   monitorFrameId = requestAnimationFrame(monitorSpeechActivity);
@@ -163,12 +263,15 @@ function monitorSpeechActivity() {
 function startSpeechMonitor(stream: MediaStream) {
   cleanupAudioMonitor();
 
-  audioContext = new AudioContext();
+  audioContext = new AudioContext({
+    latencyHint: "interactive"
+  });
   mediaSourceNode = audioContext.createMediaStreamSource(stream);
   analyserNode = audioContext.createAnalyser();
   analyserNode.fftSize = 2048;
-  analyserNode.smoothingTimeConstant = 0.7;
-  analyserData = new Uint8Array(analyserNode.fftSize);
+  analyserNode.smoothingTimeConstant = 0.5;
+  analyserTimeData = new Uint8Array(analyserNode.fftSize);
+  analyserFrequencyData = new Uint8Array(analyserNode.frequencyBinCount);
   mediaSourceNode.connect(analyserNode);
   monitorFrameId = requestAnimationFrame(monitorSpeechActivity);
 }
@@ -189,7 +292,23 @@ async function startPageRecording() {
   }
 
   mediaStream = await navigator.mediaDevices.getUserMedia({
-    audio: true
+    audio: {
+      autoGainControl: {
+        ideal: true
+      },
+      channelCount: {
+        ideal: 1
+      },
+      echoCancellation: {
+        ideal: true
+      },
+      noiseSuppression: {
+        ideal: true
+      },
+      sampleRate: {
+        ideal: 24000
+      }
+    }
   });
   recordedChunks = [];
   resetSpeechActivity();
@@ -278,10 +397,10 @@ function createOverlay() {
 
       .sq-shell {
         position: fixed;
-        top: 18px;
-        right: 18px;
-        width: min(430px, calc(100vw - 24px));
-        height: min(760px, calc(100vh - 24px));
+        top: 16px;
+        right: 16px;
+        width: min(388px, calc(100vw - 24px));
+        height: min(680px, calc(100vh - 24px));
         z-index: 2147483647;
         pointer-events: none;
       }
@@ -290,7 +409,7 @@ function createOverlay() {
         width: 100%;
         height: 100%;
         border: 0;
-        border-radius: 30px;
+        border-radius: 26px;
         background: transparent;
         overflow: hidden;
         pointer-events: auto;
@@ -304,7 +423,7 @@ function createOverlay() {
       @keyframes sq-enter {
         from {
           opacity: 0;
-          transform: translateY(-10px) scale(0.98);
+          transform: translateY(-8px) scale(0.985);
         }
 
         to {
@@ -319,7 +438,7 @@ function createOverlay() {
           right: 12px;
           left: 12px;
           width: auto;
-          height: min(82vh, calc(100vh - 24px));
+          height: min(76vh, calc(100vh - 24px));
         }
       }
     </style>

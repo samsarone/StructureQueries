@@ -346,7 +346,12 @@ function appendLog(role: LogRole, text: string) {
 
   article.className = `log-item log-item-${role}`;
   roleNode.className = "log-role";
-  roleNode.textContent = role;
+  roleNode.textContent =
+    role === "user"
+      ? "You"
+      : role === "assistant"
+        ? "StructuredQueries"
+        : "System";
   textNode.className = "log-text";
   textNode.textContent = text;
 
@@ -401,10 +406,7 @@ function resetConversationLog() {
   }
 
   conversationLogNode.innerHTML = "";
-  appendLog(
-    "system",
-    "Analyze, then tap Talk."
-  );
+  appendLog("system", "Scan the page, then talk.");
 }
 
 function renderVoiceOptions() {
@@ -477,7 +479,7 @@ function render() {
     readOptionalString(state.currentUser?.displayName) ??
     readOptionalString(state.currentUser?.username) ??
     readOptionalString(state.currentUser?.email) ??
-    (state.registrationRequired ? "Registration required" : "StructuredQueries user");
+    (state.registrationRequired ? "Setup required" : "StructuredQueries");
   const analysisPill = state.isAnalyzing
     ? "Scanning"
     : !state.serverOnline
@@ -496,22 +498,22 @@ function render() {
                   ? "Ready"
                   : "Scan";
   const analysisDetail = !state.serverOnline
-    ? "Server offline."
+    ? "Server unavailable."
     : state.registrationRequired
-      ? "Register to continue."
+      ? "Finish setup to continue."
       : analyzeUrlError
         ? analyzeUrlError
         : state.isAnalyzing
-          ? "Scanning page context."
+          ? "Reading this page."
           : state.recording
-            ? "Listening for your turn."
+            ? "Listening."
             : state.assistantSpeaking
-              ? "Responding."
+              ? "Speaking."
               : state.conversationActive
                 ? "Voice chat live."
                 : state.analysisReady
-                  ? "Ready on this page."
-                  : "Analyze this page first.";
+                  ? "Ready when you are."
+                  : "Scan this page first.";
   const registrationDialogOpen =
     state.registrationRequired || state.accountEditorOpen;
   const registrationMode = state.registrationRequired ? "register" : "edit";
@@ -537,10 +539,10 @@ function render() {
   setText(
     accountHintNode,
     state.registrationRequired
-      ? "Register to unlock voice chat."
+      ? "Setup is required."
       : state.currentUser?.email
-        ? "Active session ready."
-        : "Session registered."
+        ? "Ready."
+        : "Connected."
   );
   setText(
     accountEmailNode,
@@ -554,15 +556,15 @@ function render() {
   setText(analysisPillNode, analysisPill);
   setText(
     pageTitleNode,
-    state.currentPage?.title ?? "No active tab"
+    state.currentPage?.title ?? "Current page"
   );
   setText(
     pageUrlNode,
-    state.currentPage?.url ?? "Unavailable"
+    state.currentPage?.url ?? "No page selected"
   );
   setText(
     pageLanguageNode,
-    `Document language: ${state.currentPage?.documentLanguage || "unknown"}`
+    `Language: ${state.currentPage?.documentLanguage || "unknown"}`
   );
   setText(analysisStatusNode, analysisDetail);
   setText(
@@ -578,8 +580,8 @@ function render() {
   setText(
     registrationSubtitleNode,
     registrationMode === "register"
-      ? "Register this browser installation to continue."
-      : "Update the session profile."
+      ? "Set up this browser to continue."
+      : "Update your session profile."
   );
   setText(
     registrationStatusNode,
@@ -587,11 +589,11 @@ function render() {
       ? "Server must be online."
       : state.registrationSubmitting
         ? registrationMode === "register"
-          ? "Creating your account..."
-          : "Saving account changes..."
+          ? "Setting up..."
+          : "Saving..."
         : registrationMode === "register"
-          ? "Profile fields are optional."
-          : "Save profile changes."
+          ? "All fields are optional."
+          : "Save changes."
   );
 
   document.body.dataset.voiceMode = voiceMode;
@@ -628,8 +630,8 @@ function render() {
     analyzeButton.textContent = state.isAnalyzing
       ? "Scanning..."
       : state.analysisReady
-        ? "Reanalyze"
-        : "Analyze";
+        ? "Scan again"
+        : "Scan";
   }
 
   if (startChatButton) {
@@ -643,7 +645,7 @@ function render() {
       state.websocketState === "connecting";
     startChatButton.textContent =
       state.websocketState === "connecting"
-        ? "Syncing"
+        ? "Connecting"
         : state.conversationActive
           ? "Live"
           : "Talk";
@@ -654,7 +656,7 @@ function render() {
       state.registrationRequired ||
       state.registrationSubmitting ||
       !state.conversationActive;
-    stopChatButton.textContent = "Stop";
+    stopChatButton.textContent = "End";
   }
 
   if (voiceSelect) {
@@ -1330,12 +1332,10 @@ function handleSocketMessage(event: MessageEvent<string>) {
         ? payload.templateId
         : state.currentTemplateId;
     render();
-    appendLog("system", "Voice session is ready.");
     return;
   }
 
   if (payload.type === "voice_updated") {
-    appendLog("system", "Speaker preference updated for the active session.");
     return;
   }
 
@@ -1401,7 +1401,7 @@ function handleSocketMessage(event: MessageEvent<string>) {
           imageUrl: imageUrl || undefined,
           mimeType
         },
-        "Assistant generated an image response."
+        "Image response"
       );
     }
 
@@ -1533,7 +1533,7 @@ async function submitRecordedAudioBase64(audioBase64: string, mimeType: string) 
 function normalizeRecordingError(error: unknown) {
   if (error instanceof DOMException) {
     if (error.name === "NotAllowedError") {
-      return "Microphone access was blocked or dismissed. Click Start Voice Chat again and allow microphone access in Chrome.";
+      return "Microphone access was blocked or dismissed. Allow it for this page, then try Talk again.";
     }
 
     if (error.name === "NotFoundError") {
@@ -1601,12 +1601,8 @@ async function startRecording() {
   }
 
   state.conversationActive = true;
-  state.websocketDetail = "Starting voice chat...";
+  state.websocketDetail = "Starting...";
   render();
-  appendLog(
-    "system",
-    "Voice chat live."
-  );
 
   try {
     await startConversationTurn();
@@ -1632,10 +1628,9 @@ async function stopRecording() {
   clearResumeConversationTimer();
   state.conversationActive = false;
   state.recording = false;
-  state.websocketDetail = "Voice chat stopped";
+  state.websocketDetail = "Stopped";
   stopAssistantPlayback();
   render();
-  appendLog("system", "Voice chat stopped.");
 
   try {
     const response = await sendMessageToActiveTab<{
@@ -1708,7 +1703,7 @@ async function analyzeCurrentPage() {
       });
       appendLog(
         "system",
-        "Document analysis completed. Voice chat is now available for this client session."
+        "Page ready."
       );
       await ensureWebSocketSession();
     }
@@ -1777,7 +1772,6 @@ chrome.runtime.onMessage.addListener((message) => {
     message?.type === "OFFSCREEN_AUDIO_READY" ||
     message?.type === "PAGE_AUDIO_READY"
   ) {
-    appendLog("system", "Audio captured. Uploading turn to the proxy...");
     void submitRecordedAudioBase64(
       typeof message.audioBase64 === "string" ? message.audioBase64 : "",
       typeof message.mimeType === "string" ? message.mimeType : "audio/webm"

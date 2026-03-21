@@ -41,11 +41,11 @@ select {
 
 .overlay-shell {
   position: relative;
-  min-height: 100vh;
+  min-height: 100%;
   display: grid;
-  gap: 14px;
-  padding: 16px;
-  border-radius: 30px;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 26px;
   overflow: hidden;
   background:
     radial-gradient(circle at 16% 16%, rgba(70, 191, 255, 0.24), transparent 26%),
@@ -75,9 +75,9 @@ select {
 
 .topbar {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
 }
 
 .brand-stack {
@@ -100,8 +100,8 @@ select {
 }
 
 .page-title {
-  margin: 6px 0 0;
-  font-size: 1.18rem;
+  margin: 4px 0 0;
+  font-size: 1rem;
   font-weight: 700;
   line-height: 1.2;
   letter-spacing: -0.03em;
@@ -109,24 +109,24 @@ select {
   overflow: hidden;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
 }
 
 .topbar-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-shrink: 0;
 }
 
 .status-pill {
   margin: 0;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border-radius: 999px;
   border: 1px solid rgba(70, 191, 255, 0.24);
   background: rgba(70, 191, 255, 0.12);
   color: #dff6ff;
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -161,8 +161,8 @@ select {
 }
 
 .icon-button {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -181,9 +181,9 @@ select {
 .voice-surface {
   position: relative;
   display: grid;
-  gap: 18px;
-  padding: 18px;
-  border-radius: 28px;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 24px;
   border: 1px solid var(--line);
   background:
     linear-gradient(180deg, rgba(8, 18, 31, 0.9), rgba(7, 15, 26, 0.86)),
@@ -203,14 +203,14 @@ select {
 .voice-stage {
   display: grid;
   place-items: center;
-  gap: 12px;
-  padding-block: 8px 2px;
+  gap: 8px;
+  padding-block: 4px 0;
 }
 
 .voice-orb-shell {
   position: relative;
-  width: 204px;
-  height: 204px;
+  width: 168px;
+  height: 168px;
   display: grid;
   place-items: center;
 }
@@ -228,19 +228,19 @@ select {
   background:
     radial-gradient(circle at 36% 34%, rgba(70, 191, 255, 0.09), transparent 42%),
     rgba(8, 19, 30, 0.24);
-  animation: ringDrift 7s linear infinite;
+  animation: ringDrift 10s linear infinite;
 }
 
 .voice-ring-two {
-  inset: 12%;
+  inset: 14%;
   animation-direction: reverse;
-  animation-duration: 8.8s;
+  animation-duration: 12s;
 }
 
 .voice-orb {
   position: relative;
-  width: 116px;
-  height: 116px;
+  width: 94px;
+  height: 94px;
   display: grid;
   place-items: center;
   background:
@@ -249,7 +249,7 @@ select {
   box-shadow:
     0 0 0 1px rgba(122, 177, 211, 0.16),
     0 0 40px rgba(70, 191, 255, 0.12);
-  animation: orbFloat 4.8s ease-in-out infinite;
+  animation: orbFloat 6.5s ease-in-out infinite;
 }
 
 .voice-orb::before,
@@ -272,8 +272,8 @@ select {
 }
 
 .voice-orb-core {
-  width: 42px;
-  height: 42px;
+  width: 34px;
+  height: 34px;
   background: linear-gradient(160deg, rgba(231, 248, 255, 0.9), rgba(85, 214, 255, 0.38));
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.34),
@@ -286,12 +286,13 @@ select {
 
 .surface-label {
   color: rgba(191, 231, 245, 0.82);
+  letter-spacing: 0.14em;
 }
 
 .control-row,
 .button-row {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .control-row {
@@ -300,15 +301,15 @@ select {
 
 .control-pill {
   display: grid;
-  gap: 7px;
-  padding: 12px 14px;
-  border-radius: 18px;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 16px;
   border: 1px solid var(--line);
   background: rgba(10, 24, 38, 0.76);
 }
 
 .control-pill span {
-  font-size: 0.72rem;
+  font-size: 0.67rem;
   font-weight: 700;
   color: rgba(178, 212, 195, 0.92);
   letter-spacing: 0.08em;
@@ -337,10 +338,10 @@ select {
 .primary-button,
 .secondary-button,
 .danger-button {
-  min-height: 50px;
-  padding: 0 14px;
-  border-radius: 18px;
-  font-size: 0.92rem;
+  min-height: 46px;
+  padding: 0 12px;
+  border-radius: 16px;
+  font-size: 0.88rem;
   font-weight: 700;
 }
 
@@ -364,7 +365,7 @@ select {
 }
 
 .drawer {
-  border-radius: 22px;
+  border-radius: 18px;
   border: 1px solid var(--line);
   background: rgba(8, 18, 31, 0.58);
   overflow: hidden;
@@ -375,10 +376,10 @@ select {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 14px 16px;
+  gap: 10px;
+  padding: 12px 14px;
   cursor: pointer;
-  font-size: 0.84rem;
+  font-size: 0.8rem;
   font-weight: 700;
   color: var(--text);
 }
@@ -395,20 +396,20 @@ select {
 
 .drawer-body {
   display: grid;
-  gap: 12px;
-  padding: 0 16px 16px;
+  gap: 10px;
+  padding: 0 14px 14px;
 }
 
 .meta-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: 1fr;
+  gap: 8px;
 }
 
 .meta-card,
 .log-item {
-  padding: 12px 14px;
-  border-radius: 18px;
+  padding: 10px 12px;
+  border-radius: 16px;
   border: 1px solid rgba(122, 177, 211, 0.12);
   background: rgba(11, 26, 40, 0.72);
 }
@@ -429,7 +430,7 @@ select {
 }
 
 .status-value {
-  font-size: 0.92rem;
+  font-size: 0.88rem;
   font-weight: 600;
   color: var(--text);
   overflow-wrap: anywhere;
@@ -437,15 +438,15 @@ select {
 
 .detail-line,
 .log-text {
-  font-size: 0.84rem;
+  font-size: 0.8rem;
   color: var(--muted);
   overflow-wrap: anywhere;
 }
 
 .conversation-log {
   display: grid;
-  gap: 10px;
-  max-height: 240px;
+  gap: 8px;
+  max-height: 180px;
   overflow: auto;
   padding-right: 2px;
 }
@@ -481,8 +482,8 @@ select {
   width: min(100%, 400px);
   display: grid;
   gap: 12px;
-  padding: 18px;
-  border-radius: 26px;
+  padding: 16px;
+  border-radius: 24px;
   border: 1px solid var(--line-strong);
   background:
     radial-gradient(circle at top left, rgba(70, 191, 255, 0.18), transparent 28%),
@@ -511,8 +512,8 @@ select {
 .field {
   display: grid;
   gap: 7px;
-  padding: 12px 14px;
-  border-radius: 18px;
+  padding: 10px 12px;
+  border-radius: 16px;
   border: 1px solid var(--line);
   background: rgba(10, 24, 38, 0.76);
 }
@@ -529,31 +530,31 @@ body[data-voice-mode="ready"] .voice-orb,
 body[data-voice-mode="armed"] .voice-orb {
   box-shadow:
     0 0 0 1px rgba(122, 177, 211, 0.2),
-    0 0 48px rgba(70, 191, 255, 0.18);
+    0 0 38px rgba(70, 191, 255, 0.16);
 }
 
 body[data-voice-mode="listening"] .voice-ring {
   border-color: rgba(57, 216, 129, 0.28);
-  animation-duration: 2.8s;
+  animation-duration: 4.2s;
 }
 
 body[data-voice-mode="listening"] .voice-orb {
-  transform: scale(1.04);
+  transform: scale(1.03);
   box-shadow:
     0 0 0 1px rgba(57, 216, 129, 0.34),
-    0 0 58px rgba(57, 216, 129, 0.24);
+    0 0 46px rgba(57, 216, 129, 0.22);
 }
 
 body[data-voice-mode="speaking"] .voice-ring {
   border-color: rgba(70, 191, 255, 0.34);
-  animation-duration: 2.1s;
+  animation-duration: 3.6s;
 }
 
 body[data-voice-mode="speaking"] .voice-orb {
-  transform: scale(1.08);
+  transform: scale(1.05);
   box-shadow:
     0 0 0 1px rgba(70, 191, 255, 0.4),
-    0 0 72px rgba(70, 191, 255, 0.28);
+    0 0 54px rgba(70, 191, 255, 0.24);
 }
 
 body[data-voice-mode="analyzing"] .voice-orb,
@@ -570,7 +571,7 @@ body[data-voice-mode="error"] .voice-orb,
 body[data-voice-mode="offline"] .voice-orb {
   box-shadow:
     0 0 0 1px rgba(251, 113, 133, 0.28),
-    0 0 58px rgba(251, 113, 133, 0.16);
+    0 0 42px rgba(251, 113, 133, 0.14);
 }
 
 @keyframes orbFloat {
@@ -580,7 +581,7 @@ body[data-voice-mode="offline"] .voice-orb {
   }
 
   50% {
-    transform: translateY(-4px) scale(1.03);
+    transform: translateY(-2px) scale(1.015);
   }
 }
 
@@ -590,7 +591,7 @@ body[data-voice-mode="offline"] .voice-orb {
   }
 
   50% {
-    transform: rotate(180deg) scale(1.02);
+    transform: rotate(180deg) scale(1.008);
   }
 
   to {
@@ -601,7 +602,7 @@ body[data-voice-mode="offline"] .voice-orb {
 @media (max-width: 560px) {
   .overlay-shell {
     min-height: auto;
-    padding: 14px;
+    padding: 12px;
     border-radius: 24px;
   }
 
@@ -621,7 +622,7 @@ body[data-voice-mode="offline"] .voice-orb {
   }
 
   .voice-orb-shell {
-    width: 176px;
-    height: 176px;
+    width: 150px;
+    height: 150px;
   }
 }

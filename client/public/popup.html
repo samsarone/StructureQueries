@@ -121,17 +121,17 @@
           </div>
 
           <div class="surface-copy">
-            <p class="surface-label">Live page voice retrieval</p>
+            <p class="surface-label">Ask about this page</p>
           </div>
         </div>
 
         <div class="control-row">
           <label class="control-pill">
-            <span>Speaker</span>
+            <span>Voice</span>
             <select id="voice-select"></select>
           </label>
           <label class="control-pill">
-            <span>Language</span>
+            <span>Lang</span>
             <select id="language-select">
               <option value="auto">Auto</option>
               <option value="en">English</option>
@@ -164,8 +164,8 @@
 
       <details class="drawer">
         <summary>
-          <span>Session drawer</span>
-          <span class="drawer-hint">status, transcript, page</span>
+          <span>Details</span>
+          <span class="drawer-hint">status and transcript</span>
         </summary>
 
         <div class="drawer-body">
@@ -174,7 +174,7 @@
               <p class="status-label">User</p>
               <p id="account-name" class="status-value">Checking...</p>
               <p id="account-hint" class="detail-line">
-                Loading account details.
+                Loading session.
               </p>
             </article>
             <article class="meta-card">
@@ -193,7 +193,7 @@
               <p class="status-label">Page</p>
               <p id="page-url" class="detail-line">Loading...</p>
               <p id="page-language" class="detail-line">
-                Document language: unknown
+                Language: unknown
               </p>
               <p id="account-user-id" class="detail-line">Loading...</p>
             </article>
@@ -202,7 +202,7 @@
           <div id="conversation-log" class="conversation-log">
             <article class="log-item log-item-system">
               <p class="log-role">System</p>
-              <p class="log-text">Analyze, then tap Talk.</p>
+              <p class="log-text">Scan the page, then talk.</p>
             </article>
           </div>
         </div>
