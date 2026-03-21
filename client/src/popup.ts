@@ -100,6 +100,7 @@ interface AppState {
   externalUserApiKey?: string;
   registrationRequired: boolean;
   registrationSubmitting: boolean;
+  accountEditorOpen: boolean;
   serverOnline: boolean;
   indexChecked: boolean;
   analysisReady: boolean;
@@ -111,23 +112,35 @@ interface AppState {
   recording: boolean;
 }
 
-const serverStatusNode = document.querySelector<HTMLElement>("#server-status");
-const browserSessionNode =
-  document.querySelector<HTMLElement>("#browser-session");
+const accountButton = document.querySelector<HTMLButtonElement>("#account-button");
+const accountNameNode = document.querySelector<HTMLElement>("#account-name");
+const accountHintNode = document.querySelector<HTMLElement>("#account-hint");
+const accountEmailNode = document.querySelector<HTMLElement>("#account-email");
+const accountUsernameNode =
+  document.querySelector<HTMLElement>("#account-username");
+const accountUserIdNode =
+  document.querySelector<HTMLElement>("#account-user-id");
+const analysisPillNode = document.querySelector<HTMLElement>("#analysis-pill");
 const pageTitleNode = document.querySelector<HTMLElement>("#page-title");
 const pageUrlNode = document.querySelector<HTMLElement>("#page-url");
 const pageLanguageNode =
   document.querySelector<HTMLElement>("#page-language");
-const indexStatusNode = document.querySelector<HTMLElement>("#index-status");
-const voiceSessionStatusNode = document.querySelector<HTMLElement>(
-  "#voice-session-status"
-);
 const registrationOverlayNode =
   document.querySelector<HTMLElement>("#registration-overlay");
 const registrationFormNode =
   document.querySelector<HTMLFormElement>("#registration-form");
+const registrationEyebrowNode =
+  document.querySelector<HTMLElement>("#registration-eyebrow");
+const registrationTitleNode =
+  document.querySelector<HTMLElement>("#registration-title");
+const registrationSubtitleNode =
+  document.querySelector<HTMLElement>("#registration-subtitle");
 const registrationStatusNode =
   document.querySelector<HTMLElement>("#registration-status");
+const registrationCloseButton =
+  document.querySelector<HTMLButtonElement>("#registration-close-button");
+const registrationSubmitButton =
+  document.querySelector<HTMLButtonElement>("#registration-submit-button");
 const registrationDisplayNameNode =
   document.querySelector<HTMLInputElement>("#registration-display-name");
 const registrationEmailNode =
@@ -152,6 +165,7 @@ const state: AppState = {
   currentUser: null,
   registrationRequired: true,
   registrationSubmitting: false,
+  accountEditorOpen: false,
   serverOnline: false,
   indexChecked: false,
   analysisReady: false,
@@ -178,12 +192,69 @@ function normalizeUrl(rawUrl: string) {
   }
 }
 
-function truncateMiddle(value: string, size = 14) {
-  if (value.length <= size * 2) {
-    return value;
+function readOptionalString(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function isPrivateHostname(hostname: string) {
+  const normalized = hostname.toLowerCase();
+
+  if (
+    normalized === "localhost" ||
+    normalized === "::1" ||
+    normalized === "[::1]" ||
+    normalized.endsWith(".local")
+  ) {
+    return true;
   }
 
-  return `${value.slice(0, size)}...${value.slice(-size)}`;
+  if (/^127\./.test(normalized) || /^10\./.test(normalized)) {
+    return true;
+  }
+
+  if (/^192\.168\./.test(normalized)) {
+    return true;
+  }
+
+  const match = normalized.match(/^172\.(\d{1,3})\./);
+
+  if (!match) {
+    return false;
+  }
+
+  const secondOctet = Number(match[1]);
+  return Number.isInteger(secondOctet) && secondOctet >= 16 && secondOctet <= 31;
+}
+
+function getAnalyzeUrlError(rawUrl?: string) {
+  if (!rawUrl) {
+    return "Open a page before starting document analysis.";
+  }
+
+  try {
+    const url = new URL(rawUrl);
+
+    if (!["http:", "https:"].includes(url.protocol)) {
+      return "Only http and https pages can be analyzed.";
+    }
+
+    if (isPrivateHostname(url.hostname)) {
+      return "Only public URLs can be analyzed. Local and private network pages are not supported.";
+    }
+
+    return undefined;
+  } catch {
+    return "This page URL is not valid for document analysis.";
+  }
+}
+
+function getCurrentUserId() {
+  return (
+    state.currentUser?.externalUserId ??
+    state.browserSessionId ??
+    "Unavailable"
+  );
 }
 
 function setText(node: HTMLElement | null, value: string) {
@@ -260,7 +331,7 @@ function resetConversationLog() {
   conversationLogNode.innerHTML = "";
   appendLog(
     "system",
-    "Analyze the webpage first. After that, start a voice chat and speak into your microphone."
+    "Analyze the document first. After that, start a voice chat and speak into your microphone."
   );
 }
 
@@ -307,15 +378,73 @@ function syncRegistrationForm() {
   }
 }
 
+function openAccountEditor() {
+  state.accountEditorOpen = true;
+  syncRegistrationForm();
+  render();
+}
+
+function closeAccountEditor() {
+  if (state.registrationRequired || state.registrationSubmitting) {
+    return;
+  }
+
+  state.accountEditorOpen = false;
+  render();
+}
+
 function render() {
+  const analyzeUrlError = getAnalyzeUrlError(state.currentPage?.url);
+  const accountName =
+    readOptionalString(state.currentUser?.displayName) ??
+    readOptionalString(state.currentUser?.username) ??
+    readOptionalString(state.currentUser?.email) ??
+    (state.registrationRequired ? "Registration required" : "StructuredQueries user");
+  const analysisPill = state.isAnalyzing
+    ? "Analyzing"
+    : !state.serverOnline
+      ? "Server offline"
+      : state.registrationRequired
+        ? "Register first"
+        : analyzeUrlError
+          ? "Unsupported page"
+          : state.analysisReady
+            ? "Ready for voice chat"
+            : "Needs analysis";
+  const analysisDetail = !state.serverOnline
+    ? "The StructuredQueries server is offline. Reconnect before continuing."
+    : state.registrationRequired
+      ? "Register this browser installation before document analysis and voice chat are enabled."
+      : analyzeUrlError
+        ? analyzeUrlError
+        : state.isAnalyzing
+          ? "Analyzing the current document with Samsar."
+          : state.analysisReady
+            ? "This document has already been analyzed, so voice chat can use grounded retrieval."
+            : "Analyze this document to prepare grounded voice chat.";
+  const registrationDialogOpen =
+    state.registrationRequired || state.accountEditorOpen;
+  const registrationMode = state.registrationRequired ? "register" : "edit";
+
+  setText(accountNameNode, accountName);
   setText(
-    serverStatusNode,
-    state.serverOnline ? "Online" : "Offline"
+    accountHintNode,
+    state.registrationRequired
+      ? "Register this browser installation to unlock document analysis and voice chat."
+      : state.currentUser?.email
+        ? "Your saved account details will be used for this client session."
+        : "This client session is registered. Add or update email and username from the account menu."
   );
   setText(
-    browserSessionNode,
-    state.browserSessionId ? truncateMiddle(state.browserSessionId, 8) : "Unavailable"
+    accountEmailNode,
+    readOptionalString(state.currentUser?.email) ?? "Not provided"
   );
+  setText(
+    accountUsernameNode,
+    readOptionalString(state.currentUser?.username) ?? "Not provided"
+  );
+  setText(accountUserIdNode, getCurrentUserId());
+  setText(analysisPillNode, analysisPill);
   setText(
     pageTitleNode,
     state.currentPage?.title ?? "No active tab"
@@ -328,55 +457,70 @@ function render() {
     pageLanguageNode,
     `Document language: ${state.currentPage?.documentLanguage || "unknown"}`
   );
-
-  const indexStatus = state.isAnalyzing
-    ? "Analyzing..."
-    : state.registrationRequired
-      ? "Registration Required"
-    : state.analysisReady
-      ? "Analyzed"
-      : state.indexChecked
-        ? "Not indexed"
-        : "Checking...";
-  setText(indexStatusNode, indexStatus);
-  setText(voiceSessionStatusNode, state.websocketDetail);
-
-  const analysisDetail = state.registrationRequired
-    ? "Register this browser installation before webpage analysis and chat are enabled."
-    : state.analysisReady
-      ? "The page has a stored template id in this extension, so voice chat can use grounded retrieval now."
-      : "Analyze the current page to create a Samsar embedding template for grounded voice chat.";
   setText(analysisStatusNode, analysisDetail);
   setText(
+    registrationEyebrowNode,
+    registrationMode === "register" ? "Register" : "Account"
+  );
+  setText(
+    registrationTitleNode,
+    registrationMode === "register"
+      ? "Register StructuredQueries"
+      : "Update Account"
+  );
+  setText(
+    registrationSubtitleNode,
+    registrationMode === "register"
+      ? "Register this browser installation before document analysis and voice chat. Profile details are optional."
+      : "Update the external user details used by this client session."
+  );
+  setText(
     registrationStatusNode,
-    state.serverOnline
-      ? state.registrationSubmitting
-        ? "Saving registration..."
-        : state.registrationRequired
+    !state.serverOnline
+      ? "The StructuredQueries server must be online before account changes can be saved."
+      : state.registrationSubmitting
+        ? registrationMode === "register"
+          ? "Creating your account..."
+          : "Saving account changes..."
+        : registrationMode === "register"
           ? "Register this browser installation. These profile fields are optional."
-          : state.currentUser?.displayName
-            ? `Registered as ${state.currentUser.displayName}.`
-            : "Registration complete."
-      : "The proxy server must be online before registration can be completed."
+          : "Save changes to update the name, email, or username for this external user."
   );
 
   if (registrationOverlayNode) {
-    registrationOverlayNode.classList.toggle(
-      "is-hidden",
-      !state.serverOnline || !state.registrationRequired
-    );
+    registrationOverlayNode.classList.toggle("is-hidden", !registrationDialogOpen);
+  }
+
+  if (registrationCloseButton) {
+    registrationCloseButton.disabled =
+      state.registrationRequired || state.registrationSubmitting;
+    registrationCloseButton.hidden = state.registrationRequired;
+  }
+
+  if (registrationSubmitButton) {
+    registrationSubmitButton.disabled =
+      state.registrationSubmitting || !state.serverOnline;
+    registrationSubmitButton.textContent = state.registrationSubmitting
+      ? registrationMode === "register"
+        ? "Registering..."
+        : "Saving..."
+      : registrationMode === "register"
+        ? "Register"
+        : "Save Changes";
   }
 
   if (analyzeButton) {
     analyzeButton.disabled =
       state.registrationRequired ||
       state.registrationSubmitting ||
-      !state.serverOnline || !state.currentPage?.url || state.isAnalyzing;
+      !state.serverOnline ||
+      Boolean(analyzeUrlError) ||
+      state.isAnalyzing;
     analyzeButton.textContent = state.isAnalyzing
       ? "Analyzing..."
       : state.analysisReady
-        ? "Re-analyze Webpage"
-        : "Analyze Webpage";
+        ? "Re-analyze Document"
+        : "Analyze Document";
   }
 
   if (startChatButton) {
@@ -422,6 +566,10 @@ function render() {
 
   if (registrationUsernameNode) {
     registrationUsernameNode.disabled = state.registrationSubmitting;
+  }
+
+  if (accountButton) {
+    accountButton.disabled = state.registrationSubmitting;
   }
 }
 
@@ -620,34 +768,38 @@ async function syncBrowserSession() {
   state.registrationRequired = Boolean(payload.registrationRequired);
 }
 
-async function submitRegistration() {
+async function submitAccountProfile() {
   if (!state.browserSessionId) {
     return;
   }
+
+  const isRegistrationFlow = state.registrationRequired;
+  const endpoint = isRegistrationFlow
+    ? "/api/browser-sessions/register"
+    : "/api/browser-sessions/profile";
 
   state.registrationSubmitting = true;
   render();
 
   try {
-    const payload = await fetchJson<BrowserSessionPayload>(
-      "/api/browser-sessions/register",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          browserSessionId: state.browserSessionId,
-          extensionId: state.extensionId,
-          userAgent: navigator.userAgent,
-          displayName: registrationDisplayNameNode?.value ?? "",
-          email: registrationEmailNode?.value ?? "",
-          username: registrationUsernameNode?.value ?? "",
-          preferredLanguage: languageSelect?.value ?? "auto",
-          preferredVoiceId: voiceSelect?.value
-        })
-      }
-    );
+    const payload = await fetchJson<BrowserSessionPayload>(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        assistantSessionId: state.assistantSessionId,
+        browserSessionId: state.browserSessionId,
+        externalUserApiKey: state.externalUserApiKey,
+        extensionId: state.extensionId,
+        userAgent: navigator.userAgent,
+        displayName: registrationDisplayNameNode?.value ?? "",
+        email: registrationEmailNode?.value ?? "",
+        username: registrationUsernameNode?.value ?? "",
+        preferredLanguage: languageSelect?.value ?? "auto",
+        preferredVoiceId: voiceSelect?.value
+      })
+    });
 
     state.assistantSessionId =
       typeof payload.assistantSessionId === "string"
@@ -659,6 +811,7 @@ async function submitRegistration() {
         ? payload.externalUserApiKey
         : undefined;
     state.registrationRequired = Boolean(payload.registrationRequired);
+    state.accountEditorOpen = false;
     await saveRegistrationState(state.browserSessionId, {
       assistantSessionId: state.assistantSessionId,
       externalUser: state.currentUser,
@@ -666,14 +819,20 @@ async function submitRegistration() {
     });
     appendLog(
       "system",
-      "Registration completed. You can now analyze webpages and start voice chat."
+      isRegistrationFlow
+        ? "Registration completed. You can now analyze documents and start voice chat."
+        : "Account details updated for this client session."
     );
     await refreshAll();
   } catch (error) {
-    console.error("Failed to register StructuredQueries user", error);
+    console.error("Failed to save StructuredQueries account profile", error);
     appendLog(
       "system",
-      error instanceof Error ? error.message : "Registration failed."
+      error instanceof Error
+        ? error.message
+        : isRegistrationFlow
+          ? "Registration failed."
+          : "Failed to update account details."
     );
   } finally {
     state.registrationSubmitting = false;
@@ -1140,10 +1299,20 @@ async function analyzeCurrentPage() {
     return;
   }
 
+  const analyzeUrlError = getAnalyzeUrlError(state.currentPage.url);
+
   if (state.registrationRequired) {
     appendLog(
       "system",
-      "Registration is required before webpage analysis can start."
+      "Registration is required before document analysis can start."
+    );
+    return;
+  }
+
+  if (analyzeUrlError) {
+    appendLog(
+      "system",
+      analyzeUrlError
     );
     return;
   }
@@ -1178,15 +1347,15 @@ async function analyzeCurrentPage() {
       });
       appendLog(
         "system",
-        "Webpage analysis completed. Voice chat is now available for this browser session."
+        "Document analysis completed. Voice chat is now available for this client session."
       );
       await ensureWebSocketSession();
     }
   } catch (error) {
-    console.error("Failed to analyze webpage", error);
+    console.error("Failed to analyze document", error);
     appendLog(
       "system",
-      error instanceof Error ? error.message : "Failed to analyze webpage."
+      error instanceof Error ? error.message : "Failed to analyze document."
     );
   } finally {
     state.isAnalyzing = false;
@@ -1225,13 +1394,27 @@ refreshButton?.addEventListener("click", () => {
   void refreshAll();
 });
 
+accountButton?.addEventListener("click", () => {
+  openAccountEditor();
+});
+
 analyzeButton?.addEventListener("click", () => {
   void analyzeCurrentPage();
 });
 
 registrationFormNode?.addEventListener("submit", (event) => {
   event.preventDefault();
-  void submitRegistration();
+  void submitAccountProfile();
+});
+
+registrationCloseButton?.addEventListener("click", () => {
+  closeAccountEditor();
+});
+
+registrationOverlayNode?.addEventListener("click", (event) => {
+  if (event.target === registrationOverlayNode) {
+    closeAccountEditor();
+  }
 });
 
 startChatButton?.addEventListener("click", () => {

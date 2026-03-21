@@ -1,6 +1,11 @@
 import { Router } from "express";
 
 import { samsarAdapter } from "../adapters/samsar.js";
+import {
+  getSamsarErrorContext,
+  getSamsarErrorMessage,
+  getSamsarErrorStatus
+} from "../lib/samsar-errors.js";
 
 function createEmbeddingName(title: string | undefined, url: string) {
   try {
@@ -17,6 +22,54 @@ function createEmbeddingName(title: string | undefined, url: string) {
 
 function readOptionalString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function isPrivateHostname(hostname: string) {
+  const normalized = hostname.toLowerCase();
+
+  if (
+    normalized === "localhost" ||
+    normalized === "::1" ||
+    normalized === "[::1]" ||
+    normalized.endsWith(".local")
+  ) {
+    return true;
+  }
+
+  if (/^127\./.test(normalized) || /^10\./.test(normalized)) {
+    return true;
+  }
+
+  if (/^192\.168\./.test(normalized)) {
+    return true;
+  }
+
+  const match = normalized.match(/^172\.(\d{1,3})\./);
+
+  if (!match) {
+    return false;
+  }
+
+  const secondOctet = Number(match[1]);
+  return Number.isInteger(secondOctet) && secondOctet >= 16 && secondOctet <= 31;
+}
+
+function getAnalyzeUrlError(rawUrl: string) {
+  try {
+    const parsedUrl = new URL(rawUrl);
+
+    if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+      return "Only http and https URLs can be analyzed.";
+    }
+
+    if (isPrivateHostname(parsedUrl.hostname)) {
+      return "Only public URLs can be analyzed. Localhost and private network pages are not supported.";
+    }
+
+    return undefined;
+  } catch {
+    return "url must be a valid URL";
+  }
 }
 
 export const webpagesRouter = Router();
@@ -105,6 +158,16 @@ webpagesRouter.post("/analyze", async (request, response) => {
     return;
   }
 
+  const urlError = getAnalyzeUrlError(url);
+
+  if (urlError) {
+    response.status(400).json({
+      ok: false,
+      error: urlError
+    });
+    return;
+  }
+
   const analyzedAt = new Date().toISOString();
 
   if (!samsarAdapter.isConfigured()) {
@@ -143,12 +206,17 @@ webpagesRouter.post("/analyze", async (request, response) => {
       }
     });
   } catch (error) {
-    response.status(502).json({
+    console.error("Failed to analyze webpage with Samsar", {
+      url,
+      samsar: getSamsarErrorContext(error)
+    });
+
+    response.status(getSamsarErrorStatus(error)).json({
       ok: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to analyze webpage with Samsar."
+      error: getSamsarErrorMessage(
+        error,
+        "Failed to analyze this document with Samsar."
+      )
     });
   }
 });

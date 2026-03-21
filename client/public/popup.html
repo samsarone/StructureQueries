@@ -9,10 +9,22 @@
   <body>
     <div id="registration-overlay" class="registration-overlay">
       <form id="registration-form" class="registration-dialog">
-        <p class="eyebrow">Register</p>
-        <h2>Register StructuredQueries</h2>
-        <p class="subtitle registration-copy">
-          Register this browser installation before webpage analysis and voice
+        <div class="dialog-header">
+          <div>
+            <p id="registration-eyebrow" class="eyebrow">Register</p>
+            <h2 id="registration-title">Register StructuredQueries</h2>
+          </div>
+          <button
+            id="registration-close-button"
+            class="icon-button dialog-close-button"
+            type="button"
+            aria-label="Close account dialog"
+          >
+            <span aria-hidden="true">x</span>
+          </button>
+        </div>
+        <p id="registration-subtitle" class="subtitle registration-copy">
+          Register this browser installation before document analysis and voice
           chat. Profile details are optional.
         </p>
 
@@ -45,7 +57,13 @@
         </label>
 
         <div class="action-row">
-          <button class="primary-button" type="submit">Register</button>
+          <button
+            id="registration-submit-button"
+            class="primary-button"
+            type="submit"
+          >
+            Register
+          </button>
         </div>
 
         <p id="registration-status" class="detail-line">
@@ -59,35 +77,68 @@
         <p class="eyebrow">StructuredQueries</p>
         <div class="hero-row">
           <div>
-            <h1>Webpage Voice Agent</h1>
+            <h1>Document Assistant</h1>
             <p class="subtitle">
-              Analyze the active page, then speak to the proxy-backed agent from
-              the Chrome side panel.
+              Analyze the active page, then talk to the assistant from the
+              Chrome side panel.
             </p>
           </div>
-          <button id="refresh-button" class="ghost-button" type="button">
-            Refresh
-          </button>
+          <div class="header-actions">
+            <button
+              id="account-button"
+              class="icon-button"
+              type="button"
+              aria-label="Open account settings"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="3.2"></circle>
+                <path
+                  d="M19.4 15a1 1 0 0 0 .2 1.1l.1.1a2 2 0 0 1 0 2.8l-.6.6a2 2 0 0 1-2.8 0l-.1-.1a1 1 0 0 0-1.1-.2 1 1 0 0 0-.6.9V20a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-.2a1 1 0 0 0-.6-.9 1 1 0 0 0-1.1.2l-.1.1a2 2 0 0 1-2.8 0l-.6-.6a2 2 0 0 1 0-2.8l.1-.1a1 1 0 0 0 .2-1.1 1 1 0 0 0-.9-.6H4a2 2 0 0 1-2-2v-1a2 2 0 0 1 2-2h.2a1 1 0 0 0 .9-.6 1 1 0 0 0-.2-1.1l-.1-.1a2 2 0 0 1 0-2.8l.6-.6a2 2 0 0 1 2.8 0l.1.1a1 1 0 0 0 1.1.2 1 1 0 0 0 .6-.9V4a2 2 0 0 1 2-2h1a2 2 0 0 1 2 2v.2a1 1 0 0 0 .6.9 1 1 0 0 0 1.1-.2l.1-.1a2 2 0 0 1 2.8 0l.6.6a2 2 0 0 1 0 2.8l-.1.1a1 1 0 0 0-.2 1.1 1 1 0 0 0 .9.6h.2a2 2 0 0 1 2 2v1a2 2 0 0 1-2 2h-.2a1 1 0 0 0-.9.6Z"
+                ></path>
+              </svg>
+            </button>
+            <button id="refresh-button" class="ghost-button" type="button">
+              Refresh
+            </button>
+          </div>
         </div>
       </header>
 
       <section class="panel-card">
-        <div class="status-grid">
+        <div class="section-heading account-heading">
           <div>
-            <p class="status-label">Server</p>
-            <p id="server-status" class="status-value">Checking...</p>
+            <p class="section-kicker">Account</p>
           </div>
-          <div>
-            <p class="status-label">Voice Session</p>
-            <p id="voice-session-status" class="status-value">Idle</p>
+          <p id="analysis-pill" class="status-pill">Checking...</p>
+        </div>
+        <div class="account-summary">
+          <div class="account-summary-copy">
+            <h2 id="account-name" class="page-title">Checking account...</h2>
+            <p id="account-hint" class="detail-line">
+              Loading account details for this browser session.
+            </p>
           </div>
-          <div>
-            <p class="status-label">Index Status</p>
-            <p id="index-status" class="status-value">Checking...</p>
+        </div>
+        <div class="identity-grid">
+          <div class="identity-item">
+            <p class="status-label">Email</p>
+            <p id="account-email" class="status-value">Not provided</p>
           </div>
-          <div>
-            <p class="status-label">Browser Session</p>
-            <p id="browser-session" class="status-value">Loading...</p>
+          <div class="identity-item">
+            <p class="status-label">Username</p>
+            <p id="account-username" class="status-value">Not provided</p>
+          </div>
+          <div class="identity-item identity-item-wide">
+            <p class="status-label">User ID</p>
+            <p id="account-user-id" class="status-value">Loading...</p>
           </div>
         </div>
       </section>
@@ -126,7 +177,7 @@
 
         <div class="action-row">
           <button id="analyze-button" class="primary-button" type="button">
-            Analyze Webpage
+            Analyze Document
           </button>
           <button
             id="start-chat-button"
@@ -159,7 +210,7 @@
           <article class="log-item log-item-system">
             <p class="log-role">System</p>
             <p class="log-text">
-              Analyze the webpage first. After that, start a voice chat and
+              Analyze the document first. After that, start a voice chat and
               speak into your microphone.
             </p>
           </article>

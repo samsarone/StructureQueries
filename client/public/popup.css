@@ -62,6 +62,13 @@ body {
   margin-top: 0;
 }
 
+.dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .panel-shell {
   min-height: 100vh;
   padding: 22px 18px 24px;
@@ -79,6 +86,12 @@ body {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .eyebrow,
@@ -123,13 +136,6 @@ body {
   padding: 16px;
 }
 
-.status-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.status-grid > div,
 .field,
 .log-item {
   padding: 12px;
@@ -162,6 +168,46 @@ body {
 
 .section-heading {
   margin-bottom: 12px;
+}
+
+.account-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.account-summary {
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(255, 248, 236, 0.84);
+  border: 1px solid rgba(84, 63, 40, 0.08);
+}
+
+.account-summary-copy .detail-line {
+  margin-top: 8px;
+}
+
+.identity-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.identity-item {
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--panel);
+  border: 1px solid rgba(84, 63, 40, 0.09);
+}
+
+.identity-item-wide {
+  grid-column: 1 / -1;
+}
+
+.identity-item .status-value {
+  overflow-wrap: anywhere;
 }
 
 .control-grid {
@@ -254,6 +300,46 @@ button:disabled {
   padding-inline: 14px;
 }
 
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid rgba(84, 63, 40, 0.14);
+  background: rgba(255, 250, 240, 0.84);
+  color: var(--ink);
+}
+
+.icon-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.dialog-close-button {
+  width: 38px;
+  height: 38px;
+}
+
+.dialog-close-button span {
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.status-pill {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(166, 63, 33, 0.12);
+  color: var(--accent-deep);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
 .conversation-log {
   display: grid;
   gap: 10px;
@@ -289,7 +375,7 @@ button:disabled {
 
   .hero-row,
   .control-grid,
-  .status-grid {
+  .identity-grid {
     grid-template-columns: 1fr;
     display: grid;
   }
@@ -298,6 +384,11 @@ button:disabled {
     gap: 10px;
   }
 
+  .header-actions {
+    justify-content: stretch;
+  }
+
+  .icon-button,
   .ghost-button {
     width: 100%;
   }
