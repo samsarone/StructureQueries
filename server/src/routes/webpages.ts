@@ -2,6 +2,11 @@ import { Router } from "express";
 
 import { samsarAdapter } from "../adapters/samsar.js";
 import {
+  crawlUrlsForPlainTextEmbeddings,
+  getUrlEmbeddingFieldOptions,
+  isFirecrawlConfigured
+} from "../lib/url-embedding-crawl.js";
+import {
   getSamsarErrorContext,
   getSamsarErrorMessage,
   getSamsarErrorStatus
@@ -170,6 +175,14 @@ webpagesRouter.post("/analyze", async (request, response) => {
 
   const analyzedAt = new Date().toISOString();
 
+  if (!isFirecrawlConfigured()) {
+    response.status(503).json({
+      ok: false,
+      error: "FIRECRAWL_API_KEY is not configured."
+    });
+    return;
+  }
+
   if (!samsarAdapter.isConfigured()) {
     response.status(503).json({
       ok: false,
@@ -179,9 +192,11 @@ webpagesRouter.post("/analyze", async (request, response) => {
   }
 
   try {
-    const result = await samsarAdapter.createEmbeddingFromUrl({
+    const crawlResult = await crawlUrlsForPlainTextEmbeddings([url]);
+    const result = await samsarAdapter.generateEmbeddingsFromPlainText({
       name: createEmbeddingName(title || undefined, url),
-      urls: [url]
+      plain_text: crawlResult.records,
+      field_options: getUrlEmbeddingFieldOptions()
     });
 
     response.json({
@@ -199,6 +214,28 @@ webpagesRouter.post("/analyze", async (request, response) => {
         analyzedAt,
         raw: {
           ...result.data,
+          status: result.data.status ?? "completed",
+          input_url_count: crawlResult.inputUrlCount,
+          processed_url_count: crawlResult.processedUrlCount,
+          firecrawl_credits_used: crawlResult.firecrawlCreditsUsed,
+          crawl_levels: crawlResult.crawlLevels,
+          max_links: crawlResult.maxLinks,
+          firecrawl_job_id: crawlResult.firecrawlJobId,
+          ...(crawlResult.firecrawlJobIds.length > 1
+            ? {
+                firecrawl_job_ids: crawlResult.firecrawlJobIds
+              }
+            : {}),
+          ...(crawlResult.skippedUrls.length > 0
+            ? {
+                skipped_urls: crawlResult.skippedUrls
+              }
+            : {}),
+          ...(crawlResult.crawlErrors.length > 0
+            ? {
+                crawl_errors: crawlResult.crawlErrors
+              }
+            : {}),
           statusCode: result.status,
           creditsCharged: result.creditsCharged,
           creditsRemaining: result.creditsRemaining
@@ -208,10 +245,32 @@ webpagesRouter.post("/analyze", async (request, response) => {
   } catch (error) {
     console.error("Failed to analyze webpage with Samsar", {
       url,
+      firecrawl:
+        error && typeof error === "object"
+          ? {
+              statusCode:
+                typeof (error as { statusCode?: unknown }).statusCode === "number"
+                  ? (error as { statusCode: number }).statusCode
+                  : undefined,
+              code:
+                typeof (error as { code?: unknown }).code === "string"
+                  ? (error as { code: string }).code
+                  : undefined,
+              details:
+                (error as { details?: unknown }).details ?? undefined
+            }
+          : undefined,
       samsar: getSamsarErrorContext(error)
     });
 
-    response.status(getSamsarErrorStatus(error)).json({
+    const statusCode =
+      error &&
+      typeof error === "object" &&
+      typeof (error as { statusCode?: unknown }).statusCode === "number"
+        ? (error as { statusCode: number }).statusCode
+        : getSamsarErrorStatus(error);
+
+    response.status(statusCode).json({
       ok: false,
       error: getSamsarErrorMessage(
         error,

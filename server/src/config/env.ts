@@ -12,12 +12,41 @@ const DEFAULT_SAMSAR_SIMILARITY_LIMIT = 8;
 const DEFAULT_SAMSAR_EXTERNAL_USER_PROVIDER = "structuredqueries";
 const DEFAULT_SAMSAR_EXTERNAL_ASSISTANT_PROMPT_VERSION =
   "structuredqueries-rag-voice-v1";
+const DEFAULT_FIRECRAWL_API_URL = "https://api.firecrawl.dev";
+const DEFAULT_FIRECRAWL_CRAWL_LEVELS = 2;
+const DEFAULT_FIRECRAWL_MAX_LINKS = 50;
+const DEFAULT_FIRECRAWL_POLL_INTERVAL_SECONDS = 5;
+const DEFAULT_FIRECRAWL_TIMEOUT_SECONDS = 120;
 
 function parsePort(value: string | undefined) {
   const parsed = Number(value ?? DEFAULT_PORT);
 
   if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
     return DEFAULT_PORT;
+  }
+
+  return parsed;
+}
+
+function parsePositiveInteger(
+  value: string | undefined,
+  fallback: number,
+  options?: {
+    min?: number;
+    max?: number;
+  }
+) {
+  const parsed = Number.parseInt(value ?? "", 10);
+
+  if (!Number.isInteger(parsed)) {
+    return fallback;
+  }
+
+  const min = options?.min ?? 1;
+  const max = options?.max ?? Number.MAX_SAFE_INTEGER;
+
+  if (parsed < min || parsed > max) {
+    return fallback;
   }
 
   return parsed;
@@ -40,6 +69,34 @@ export const env = {
       defaultVoiceId: readOptional(process.env.ELEVENLABS_DEFAULT_VOICE_ID),
       defaultModelId: DEFAULT_ELEVENLABS_MODEL_ID,
       timeoutSeconds: DEFAULT_TIMEOUT_SECONDS
+    },
+    firecrawl: {
+      apiKey: readOptional(process.env.FIRECRAWL_API_KEY),
+      apiUrl: readOptional(process.env.FIRECRAWL_API_URL) ?? DEFAULT_FIRECRAWL_API_URL,
+      crawlLevels: parsePositiveInteger(
+        process.env.FIRECRAWL_CRAWL_LEVELS,
+        DEFAULT_FIRECRAWL_CRAWL_LEVELS,
+        {
+          min: 1,
+          max: 3
+        }
+      ),
+      maxLinks: parsePositiveInteger(
+        process.env.FIRECRAWL_MAX_LINKS,
+        DEFAULT_FIRECRAWL_MAX_LINKS,
+        {
+          min: 1,
+          max: DEFAULT_FIRECRAWL_MAX_LINKS
+        }
+      ),
+      pollIntervalSeconds: parsePositiveInteger(
+        process.env.FIRECRAWL_POLL_INTERVAL_SECONDS,
+        DEFAULT_FIRECRAWL_POLL_INTERVAL_SECONDS
+      ),
+      timeoutSeconds: parsePositiveInteger(
+        process.env.FIRECRAWL_TIMEOUT_SECONDS,
+        DEFAULT_FIRECRAWL_TIMEOUT_SECONDS
+      )
     },
     samsar: {
       apiKey: readOptional(process.env.SAMSAR_API_KEY),
