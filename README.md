@@ -20,6 +20,13 @@ npm run dev:client
 
 Then load the unpacked extension from `client/dist` in Chrome.
 
+The extension client defaults to `http://localhost:3000`.
+Set `STRUCTUREDQUERIES_SERVER_ORIGIN` before building the client if you want a different backend origin, for example:
+
+```bash
+STRUCTUREDQUERIES_SERVER_ORIGIN=https://structuredqueries.samsar.one npm run build:client
+```
+
 ## Structure
 
 ```text
@@ -37,7 +44,6 @@ The server workspace now includes typed connectors and adapters for:
 
 - ElevenLabs via `@elevenlabs/elevenlabs-js`
 - Samsar via `samsar-js`
-- Firecrawl via `firecrawl-cli`
 - MongoDB via `mongodb`
 - Mongoose via `mongoose`
 

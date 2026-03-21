@@ -20,10 +20,10 @@
     "tabs"
   ],
   "host_permissions": [
-    "https://structuredqueries.samsar.one/*"
+    "http://localhost:3000/*"
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://structuredqueries.samsar.one wss://structuredqueries.samsar.one;"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' http://localhost:3000 ws://localhost:3000;"
   },
   "content_scripts": [
     {

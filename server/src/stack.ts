@@ -1,14 +1,12 @@
 import { env } from "./config/env.js";
 import {
   elevenLabsAdapter,
-  firecrawlCliAdapter,
   mongoDbAdapter,
   mongooseAdapter,
   samsarAdapter
 } from "./adapters/index.js";
 import {
   elevenLabsConnector,
-  firecrawlCliConnector,
   mongoDbConnector,
   mongooseConnector,
   samsarConnector
@@ -16,7 +14,6 @@ import {
 
 export const backendConnectors = {
   elevenLabs: elevenLabsConnector,
-  firecrawlCli: firecrawlCliConnector,
   mongodb: mongoDbConnector,
   mongoose: mongooseConnector,
   samsar: samsarConnector
@@ -24,7 +21,6 @@ export const backendConnectors = {
 
 export const backendAdapters = {
   elevenLabs: elevenLabsAdapter,
-  firecrawlCli: firecrawlCliAdapter,
   mongodb: mongoDbAdapter,
   mongoose: mongooseAdapter,
   samsar: samsarAdapter
@@ -60,19 +56,6 @@ export function getStackManifest() {
       configured: samsarConnector.isConfigured(),
       env: {
         required: ["SAMSAR_API_KEY"],
-        optional: []
-      }
-    },
-    {
-      id: "firecrawl-cli",
-      category: "crawling-and-search",
-      runtime: "cli",
-      packageName: "firecrawl-cli",
-      connector: "firecrawlCliConnector",
-      adapter: "firecrawlCliAdapter",
-      configured: firecrawlCliConnector.isConfigured(),
-      env: {
-        required: ["FIRECRAWL_API_KEY"],
         optional: []
       }
     },

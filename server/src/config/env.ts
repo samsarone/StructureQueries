@@ -5,7 +5,6 @@ const DEFAULT_SERVICE_NAME = "structuredqueries-server";
 const DEFAULT_ELEVENLABS_MODEL_ID = "eleven_multilingual_v2";
 const DEFAULT_TIMEOUT_SECONDS = 60;
 const DEFAULT_TIMEOUT_MS = 60_000;
-const DEFAULT_FIRECRAWL_TIMEOUT_MS = 120_000;
 const DEFAULT_SAMSAR_ASSISTANT_MAX_OUTPUT_TOKENS = 500;
 const DEFAULT_SAMSAR_ASSISTANT_IMAGE_SIZE = "1024x1024";
 const DEFAULT_SAMSAR_RETRIEVAL_LIMIT = 6;
@@ -58,11 +57,6 @@ export const env = {
       externalCompanyId: undefined,
       externalAssistantPromptVersion:
         DEFAULT_SAMSAR_EXTERNAL_ASSISTANT_PROMPT_VERSION
-    },
-    firecrawl: {
-      apiKey: readOptional(process.env.FIRECRAWL_API_KEY),
-      apiUrl: undefined,
-      timeoutMs: DEFAULT_FIRECRAWL_TIMEOUT_MS
     }
   }
 };

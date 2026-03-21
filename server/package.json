@@ -14,10 +14,9 @@
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
-    "firecrawl-cli": "^1.11.2",
     "mongodb": "^6.21.0",
     "mongoose": "^8.23.0",
-    "samsar-js": "^0.48.9",
+    "samsar-js": "^0.48.10",
     "ws": "^8.19.0"
   },
   "devDependencies": {

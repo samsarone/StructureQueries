@@ -1,7 +1,10 @@
 export {};
 
-const SERVER_HTTP_ORIGIN = "https://structuredqueries.samsar.one";
-const SERVER_WS_URL = "wss://structuredqueries.samsar.one/ws/plugin";
+declare const __STRUCTUREDQUERIES_SERVER_HTTP_ORIGIN__: string;
+declare const __STRUCTUREDQUERIES_SERVER_WS_URL__: string;
+
+const SERVER_HTTP_ORIGIN = __STRUCTUREDQUERIES_SERVER_HTTP_ORIGIN__;
+const SERVER_WS_URL = __STRUCTUREDQUERIES_SERVER_WS_URL__;
 const ANALYZED_PAGES_STORAGE_KEY = "structuredqueries.analyzedPages";
 const REGISTRATION_STORAGE_KEY = "structuredqueries.registration";
 const LEGACY_ANALYZED_PAGES_STORAGE_KEY = "telepathy.analyzedPages";
@@ -254,6 +257,28 @@ function getCurrentUserId() {
     state.currentUser?.externalUserId ??
     state.browserSessionId ??
     "Unavailable"
+  );
+}
+
+function isInjectableTabUrl(rawUrl?: string) {
+  if (!rawUrl) {
+    return false;
+  }
+
+  try {
+    const url = new URL(rawUrl);
+    return ["http:", "https:"].includes(url.protocol);
+  } catch {
+    return false;
+  }
+}
+
+function isMissingReceiverError(error: unknown) {
+  return (
+    error instanceof Error &&
+    /Receiving end does not exist|Could not establish connection/i.test(
+      error.message
+    )
   );
 }
 
@@ -609,6 +634,12 @@ async function getExtensionSession() {
   }) as Promise<ExtensionSessionPayload>;
 }
 
+async function requestPageContextFromTab(tabId: number) {
+  return (await chrome.tabs.sendMessage(tabId, {
+    type: "GET_PAGE_CONTEXT"
+  })) as PageContext;
+}
+
 async function fetchPageContext() {
   const [activeTab] = await chrome.tabs.query({
     active: true,
@@ -623,11 +654,26 @@ async function fetchPageContext() {
 
   if (typeof activeTab.id === "number") {
     try {
-      pageContext = (await chrome.tabs.sendMessage(activeTab.id, {
-        type: "GET_PAGE_CONTEXT"
-      })) as PageContext;
+      pageContext = await requestPageContextFromTab(activeTab.id);
     } catch (error) {
-      console.warn("Content script unavailable for this tab", error);
+      if (isMissingReceiverError(error) && isInjectableTabUrl(activeTab.url)) {
+        try {
+          await chrome.scripting.executeScript({
+            target: {
+              tabId: activeTab.id
+            },
+            files: ["content.js"]
+          });
+          pageContext = await requestPageContextFromTab(activeTab.id);
+        } catch (retryError) {
+          console.warn(
+            "Failed to inject content script into active tab",
+            retryError
+          );
+        }
+      } else if (!isMissingReceiverError(error)) {
+        console.warn("Failed to fetch page context from active tab", error);
+      }
     }
   }
 
