@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>StructuredQueries Panel</title>
+    <title>StructuredQueries Overlay</title>
     <link rel="stylesheet" href="./popup.css" />
   </head>
   <body>
@@ -23,9 +23,9 @@
             <span aria-hidden="true">x</span>
           </button>
         </div>
-        <p id="registration-subtitle" class="subtitle registration-copy">
-          Register this browser installation before document analysis and voice
-          chat. Profile details are optional.
+
+        <p id="registration-subtitle" class="registration-copy">
+          Register this browser installation to continue.
         </p>
 
         <label class="field">
@@ -56,7 +56,7 @@
           />
         </label>
 
-        <div class="action-row">
+        <div class="dialog-actions">
           <button
             id="registration-submit-button"
             class="primary-button"
@@ -66,105 +66,74 @@
           </button>
         </div>
 
-        <p id="registration-status" class="detail-line">
-          Register this browser installation. These profile fields are optional.
+        <p id="registration-status" class="registration-status">
+          Register this browser installation.
         </p>
       </form>
     </div>
 
-    <main class="panel-shell">
-      <header class="hero">
-        <p class="eyebrow">StructuredQueries</p>
-        <div class="hero-row">
-          <div>
-            <h1>Document Assistant</h1>
-            <p class="subtitle">
-              Analyze the active page, then talk to the assistant from the
-              Chrome side panel.
-            </p>
-          </div>
-          <div class="header-actions">
-            <button
-              id="account-button"
-              class="icon-button"
-              type="button"
-              aria-label="Open account settings"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                aria-hidden="true"
-              >
-                <circle cx="12" cy="12" r="3.2"></circle>
-                <path
-                  d="M19.4 15a1 1 0 0 0 .2 1.1l.1.1a2 2 0 0 1 0 2.8l-.6.6a2 2 0 0 1-2.8 0l-.1-.1a1 1 0 0 0-1.1-.2 1 1 0 0 0-.6.9V20a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-.2a1 1 0 0 0-.6-.9 1 1 0 0 0-1.1.2l-.1.1a2 2 0 0 1-2.8 0l-.6-.6a2 2 0 0 1 0-2.8l.1-.1a1 1 0 0 0 .2-1.1 1 1 0 0 0-.9-.6H4a2 2 0 0 1-2-2v-1a2 2 0 0 1 2-2h.2a1 1 0 0 0 .9-.6 1 1 0 0 0-.2-1.1l-.1-.1a2 2 0 0 1 0-2.8l.6-.6a2 2 0 0 1 2.8 0l.1.1a1 1 0 0 0 1.1.2 1 1 0 0 0 .6-.9V4a2 2 0 0 1 2-2h1a2 2 0 0 1 2 2v.2a1 1 0 0 0 .6.9 1 1 0 0 0 1.1-.2l.1-.1a2 2 0 0 1 2.8 0l.6.6a2 2 0 0 1 0 2.8l-.1.1a1 1 0 0 0-.2 1.1 1 1 0 0 0 .9.6h.2a2 2 0 0 1 2 2v1a2 2 0 0 1-2 2h-.2a1 1 0 0 0-.9.6Z"
-                ></path>
-              </svg>
-            </button>
-            <button id="refresh-button" class="ghost-button" type="button">
-              Refresh
-            </button>
-          </div>
+    <main class="overlay-shell">
+      <header class="topbar">
+        <div class="brand-stack">
+          <p class="eyebrow">StructuredQueries</p>
+          <h1 id="page-title" class="page-title">Loading...</h1>
+        </div>
+
+        <div class="topbar-actions">
+          <p id="analysis-pill" class="status-pill">Checking...</p>
+          <button
+            id="refresh-button"
+            class="icon-button"
+            type="button"
+            aria-label="Refresh session"
+          >
+            <span aria-hidden="true">↻</span>
+          </button>
+          <button
+            id="account-button"
+            class="icon-button"
+            type="button"
+            aria-label="Open account settings"
+          >
+            <span aria-hidden="true">⚙</span>
+          </button>
+          <button
+            id="close-overlay-button"
+            class="icon-button icon-danger"
+            type="button"
+            aria-label="Close overlay"
+          >
+            <span aria-hidden="true">×</span>
+          </button>
         </div>
       </header>
 
-      <section class="panel-card">
-        <div class="section-heading account-heading">
-          <div>
-            <p class="section-kicker">Account</p>
-          </div>
-          <p id="analysis-pill" class="status-pill">Checking...</p>
-        </div>
-        <div class="account-summary">
-          <div class="account-summary-copy">
-            <h2 id="account-name" class="page-title">Checking account...</h2>
-            <p id="account-hint" class="detail-line">
-              Loading account details for this browser session.
-            </p>
-          </div>
-        </div>
-        <div class="identity-grid">
-          <div class="identity-item">
-            <p class="status-label">Email</p>
-            <p id="account-email" class="status-value">Not provided</p>
-          </div>
-          <div class="identity-item">
-            <p class="status-label">Username</p>
-            <p id="account-username" class="status-value">Not provided</p>
-          </div>
-          <div class="identity-item identity-item-wide">
-            <p class="status-label">User ID</p>
-            <p id="account-user-id" class="status-value">Loading...</p>
-          </div>
-        </div>
-      </section>
+      <section class="voice-surface">
+        <div class="voice-surface-glow"></div>
 
-      <section class="panel-card">
-        <div class="section-heading">
-          <p class="section-kicker">Current Page</p>
-        </div>
-        <h2 id="page-title" class="page-title">Loading...</h2>
-        <p id="page-url" class="page-url">Loading...</p>
-        <p id="page-language" class="detail-line">Document language: unknown</p>
-      </section>
+        <div class="voice-stage">
+          <div class="voice-orb-shell" aria-hidden="true">
+            <div class="voice-ring voice-ring-one"></div>
+            <div class="voice-ring voice-ring-two"></div>
+            <div class="voice-orb">
+              <div class="voice-orb-core"></div>
+            </div>
+          </div>
 
-      <section class="panel-card">
-        <div class="section-heading">
-          <p class="section-kicker">Controls</p>
+          <div class="surface-copy">
+            <p class="surface-label">Live page voice retrieval</p>
+          </div>
         </div>
-        <div class="control-grid">
-          <label class="field">
+
+        <div class="control-row">
+          <label class="control-pill">
             <span>Speaker</span>
             <select id="voice-select"></select>
           </label>
-          <label class="field">
-            <span>Speech Language</span>
+          <label class="control-pill">
+            <span>Language</span>
             <select id="language-select">
-              <option value="auto">Auto-detect</option>
+              <option value="auto">Auto</option>
               <option value="en">English</option>
               <option value="es">Spanish</option>
               <option value="fr">French</option>
@@ -175,17 +144,12 @@
           </label>
         </div>
 
-        <div class="action-row">
-          <button id="analyze-button" class="primary-button" type="button">
-            Analyze Document
+        <div class="button-row">
+          <button id="analyze-button" class="secondary-button" type="button">
+            Analyze
           </button>
-          <button
-            id="start-chat-button"
-            class="secondary-button"
-            type="button"
-            disabled
-          >
-            Start Voice Chat
+          <button id="start-chat-button" class="primary-button" type="button">
+            Talk
           </button>
           <button
             id="stop-chat-button"
@@ -193,29 +157,56 @@
             type="button"
             disabled
           >
-            Stop Recording
+            Stop
           </button>
         </div>
-
-        <p id="analysis-status" class="detail-line">
-          Waiting for index check before enabling analysis.
-        </p>
       </section>
 
-      <section class="panel-card">
-        <div class="section-heading">
-          <p class="section-kicker">Conversation</p>
+      <details class="drawer">
+        <summary>
+          <span>Session drawer</span>
+          <span class="drawer-hint">status, transcript, page</span>
+        </summary>
+
+        <div class="drawer-body">
+          <div class="meta-grid">
+            <article class="meta-card">
+              <p class="status-label">User</p>
+              <p id="account-name" class="status-value">Checking...</p>
+              <p id="account-hint" class="detail-line">
+                Loading account details.
+              </p>
+            </article>
+            <article class="meta-card">
+              <p class="status-label">Email</p>
+              <p id="account-email" class="status-value">Not provided</p>
+            </article>
+            <article class="meta-card">
+              <p class="status-label">Username</p>
+              <p id="account-username" class="status-value">Not provided</p>
+            </article>
+            <article class="meta-card meta-card-wide">
+              <p class="status-label">Status</p>
+              <p id="analysis-status" class="detail-line">Waiting...</p>
+            </article>
+            <article class="meta-card meta-card-wide">
+              <p class="status-label">Page</p>
+              <p id="page-url" class="detail-line">Loading...</p>
+              <p id="page-language" class="detail-line">
+                Document language: unknown
+              </p>
+              <p id="account-user-id" class="detail-line">Loading...</p>
+            </article>
+          </div>
+
+          <div id="conversation-log" class="conversation-log">
+            <article class="log-item log-item-system">
+              <p class="log-role">System</p>
+              <p class="log-text">Analyze, then tap Talk.</p>
+            </article>
+          </div>
         </div>
-        <div id="conversation-log" class="conversation-log">
-          <article class="log-item log-item-system">
-            <p class="log-role">System</p>
-            <p class="log-text">
-              Analyze the document first. After that, start a voice chat and
-              speak into your microphone.
-            </p>
-          </article>
-        </div>
-      </section>
+      </details>
     </main>
 
     <script src="./popup.js"></script>

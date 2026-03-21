@@ -79,6 +79,7 @@ interface AnalyzedPageCacheEntry {
 interface VoicesPayload {
   ok: boolean;
   provider: "elevenlabs" | "placeholder";
+  warnings?: string[];
   voices: Array<{
     voiceId: string;
     name: string;
@@ -112,6 +113,8 @@ interface AppState {
   websocketDetail: string;
   voices: VoicesPayload["voices"];
   pendingAssistantText?: string;
+  conversationActive: boolean;
+  assistantSpeaking: boolean;
   recording: boolean;
 }
 
@@ -160,6 +163,8 @@ const startChatButton =
   document.querySelector<HTMLButtonElement>("#start-chat-button");
 const stopChatButton =
   document.querySelector<HTMLButtonElement>("#stop-chat-button");
+const closeOverlayButton =
+  document.querySelector<HTMLButtonElement>("#close-overlay-button");
 const voiceSelect = document.querySelector<HTMLSelectElement>("#voice-select");
 const languageSelect =
   document.querySelector<HTMLSelectElement>("#language-select");
@@ -176,14 +181,17 @@ const state: AppState = {
   websocketState: "disconnected",
   websocketDetail: "Idle",
   voices: [],
+  conversationActive: false,
+  assistantSpeaking: false,
   recording: false
 };
 
 let activeSocket: WebSocket | undefined;
 let activeSocketPromise: Promise<WebSocket> | undefined;
-let mediaRecorder: MediaRecorder | undefined;
-let mediaStream: MediaStream | undefined;
-let recordedChunks: Blob[] = [];
+let activeAssistantAudio: HTMLAudioElement | undefined;
+let activeAssistantAudioObjectUrl: string | undefined;
+let resumeConversationTimer: number | undefined;
+let assistantAudioReceivedForTurn = false;
 
 function normalizeUrl(rawUrl: string) {
   try {
@@ -258,6 +266,45 @@ function getCurrentUserId() {
     state.browserSessionId ??
     "Unavailable"
   );
+}
+
+function clearResumeConversationTimer() {
+  if (typeof resumeConversationTimer === "number") {
+    window.clearTimeout(resumeConversationTimer);
+  }
+
+  resumeConversationTimer = undefined;
+}
+
+function stopAssistantPlayback() {
+  clearResumeConversationTimer();
+  state.assistantSpeaking = false;
+
+  if (activeAssistantAudio) {
+    activeAssistantAudio.pause();
+    activeAssistantAudio.src = "";
+    activeAssistantAudio = undefined;
+  }
+
+  if (activeAssistantAudioObjectUrl) {
+    URL.revokeObjectURL(activeAssistantAudioObjectUrl);
+    activeAssistantAudioObjectUrl = undefined;
+  }
+
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+  }
+}
+
+function requestOverlayClose() {
+  if (window.parent && window.parent !== window) {
+    window.parent.postMessage({
+      type: "STRUCTUREDQUERIES_CLOSE_OVERLAY"
+    }, "*");
+    return;
+  }
+
+  window.close();
 }
 
 function isInjectableTabUrl(rawUrl?: string) {
@@ -356,7 +403,7 @@ function resetConversationLog() {
   conversationLogNode.innerHTML = "";
   appendLog(
     "system",
-    "Analyze the document first. After that, start a voice chat and speak into your microphone."
+    "Analyze, then tap Talk."
   );
 }
 
@@ -379,7 +426,7 @@ function renderVoiceOptions() {
   if (state.voices.length === 0) {
     const option = document.createElement("option");
     option.value = "";
-    option.textContent = "No voices available";
+    option.textContent = "Browser voice fallback";
     voiceSelect.append(option);
   }
 
@@ -387,6 +434,12 @@ function renderVoiceOptions() {
     ? previousValue
     : state.voices[0]?.voiceId ?? "";
   voiceSelect.value = matchingValue;
+}
+
+function getSelectedVoiceId() {
+  const value = voiceSelect?.value?.trim();
+
+  return value ? value : undefined;
 }
 
 function syncRegistrationForm() {
@@ -426,39 +479,68 @@ function render() {
     readOptionalString(state.currentUser?.email) ??
     (state.registrationRequired ? "Registration required" : "StructuredQueries user");
   const analysisPill = state.isAnalyzing
-    ? "Analyzing"
+    ? "Scanning"
     : !state.serverOnline
-      ? "Server offline"
+      ? "Offline"
       : state.registrationRequired
-        ? "Register first"
+        ? "Register"
         : analyzeUrlError
-          ? "Unsupported page"
-          : state.analysisReady
-            ? "Ready for voice chat"
-            : "Needs analysis";
+          ? "Blocked"
+          : state.recording
+            ? "Listening"
+            : state.assistantSpeaking
+              ? "Speaking"
+              : state.conversationActive
+                ? "Live"
+                : state.analysisReady
+                  ? "Ready"
+                  : "Scan";
   const analysisDetail = !state.serverOnline
-    ? "The StructuredQueries server is offline. Reconnect before continuing."
+    ? "Server offline."
     : state.registrationRequired
-      ? "Register this browser installation before document analysis and voice chat are enabled."
+      ? "Register to continue."
       : analyzeUrlError
         ? analyzeUrlError
         : state.isAnalyzing
-          ? "Analyzing the current document with Samsar."
-          : state.analysisReady
-            ? "This document has already been analyzed, so voice chat can use grounded retrieval."
-            : "Analyze this document to prepare grounded voice chat.";
+          ? "Scanning page context."
+          : state.recording
+            ? "Listening for your turn."
+            : state.assistantSpeaking
+              ? "Responding."
+              : state.conversationActive
+                ? "Voice chat live."
+                : state.analysisReady
+                  ? "Ready on this page."
+                  : "Analyze this page first.";
   const registrationDialogOpen =
     state.registrationRequired || state.accountEditorOpen;
   const registrationMode = state.registrationRequired ? "register" : "edit";
+  const voiceMode = !state.serverOnline
+    ? "offline"
+    : state.isAnalyzing
+      ? "analyzing"
+      : state.recording
+        ? "listening"
+        : state.assistantSpeaking
+          ? "speaking"
+          : state.websocketState === "connecting"
+            ? "connecting"
+            : state.conversationActive
+              ? "armed"
+              : state.analysisReady
+                ? "ready"
+                : analyzeUrlError
+                  ? "error"
+                  : "idle";
 
   setText(accountNameNode, accountName);
   setText(
     accountHintNode,
     state.registrationRequired
-      ? "Register this browser installation to unlock document analysis and voice chat."
+      ? "Register to unlock voice chat."
       : state.currentUser?.email
-        ? "Your saved account details will be used for this client session."
-        : "This client session is registered. Add or update email and username from the account menu."
+        ? "Active session ready."
+        : "Session registered."
   );
   setText(
     accountEmailNode,
@@ -496,21 +578,23 @@ function render() {
   setText(
     registrationSubtitleNode,
     registrationMode === "register"
-      ? "Register this browser installation before document analysis and voice chat. Profile details are optional."
-      : "Update the external user details used by this client session."
+      ? "Register this browser installation to continue."
+      : "Update the session profile."
   );
   setText(
     registrationStatusNode,
     !state.serverOnline
-      ? "The StructuredQueries server must be online before account changes can be saved."
+      ? "Server must be online."
       : state.registrationSubmitting
         ? registrationMode === "register"
           ? "Creating your account..."
           : "Saving account changes..."
         : registrationMode === "register"
-          ? "Register this browser installation. These profile fields are optional."
-          : "Save changes to update the name, email, or username for this external user."
+          ? "Profile fields are optional."
+          : "Save profile changes."
   );
+
+  document.body.dataset.voiceMode = voiceMode;
 
   if (registrationOverlayNode) {
     registrationOverlayNode.classList.toggle("is-hidden", !registrationDialogOpen);
@@ -542,10 +626,10 @@ function render() {
       Boolean(analyzeUrlError) ||
       state.isAnalyzing;
     analyzeButton.textContent = state.isAnalyzing
-      ? "Analyzing..."
+      ? "Scanning..."
       : state.analysisReady
-        ? "Re-analyze Document"
-        : "Analyze Document";
+        ? "Reanalyze"
+        : "Analyze";
   }
 
   if (startChatButton) {
@@ -554,26 +638,29 @@ function render() {
       state.registrationSubmitting ||
       !state.serverOnline ||
       !state.analysisReady ||
-      state.voices.length === 0 ||
       !state.currentPage?.url ||
-      state.recording ||
+      state.conversationActive ||
       state.websocketState === "connecting";
     startChatButton.textContent =
       state.websocketState === "connecting"
-        ? "Connecting..."
-        : "Start Voice Chat";
+        ? "Syncing"
+        : state.conversationActive
+          ? "Live"
+          : "Talk";
   }
 
   if (stopChatButton) {
     stopChatButton.disabled =
-      state.registrationRequired || state.registrationSubmitting || !state.recording;
+      state.registrationRequired ||
+      state.registrationSubmitting ||
+      !state.conversationActive;
+    stopChatButton.textContent = "Stop";
   }
 
   if (voiceSelect) {
     voiceSelect.disabled =
       state.registrationSubmitting ||
-      state.registrationRequired ||
-      state.voices.length === 0;
+      state.registrationRequired;
   }
 
   if (languageSelect) {
@@ -640,11 +727,42 @@ async function requestPageContextFromTab(tabId: number) {
   })) as PageContext;
 }
 
-async function fetchPageContext() {
+async function getActiveTab() {
   const [activeTab] = await chrome.tabs.query({
     active: true,
     currentWindow: true
   });
+
+  return activeTab;
+}
+
+async function sendMessageToActiveTab<T>(message: RuntimeMessage) {
+  const activeTab = await getActiveTab();
+
+  if (!activeTab || typeof activeTab.id !== "number") {
+    throw new Error("No active browser tab is available.");
+  }
+
+  try {
+    return (await chrome.tabs.sendMessage(activeTab.id, message)) as T;
+  } catch (error) {
+    if (isMissingReceiverError(error) && isInjectableTabUrl(activeTab.url)) {
+      await chrome.scripting.executeScript({
+        target: {
+          tabId: activeTab.id
+        },
+        files: ["content.js"]
+      });
+
+      return (await chrome.tabs.sendMessage(activeTab.id, message)) as T;
+    }
+
+    throw error;
+  }
+}
+
+async function fetchPageContext() {
+  const activeTab = await getActiveTab();
 
   if (!activeTab) {
     return undefined;
@@ -807,7 +925,7 @@ async function syncBrowserSession() {
       externalUserApiKey: state.externalUserApiKey,
       extensionId: state.extensionId,
       preferredLanguage: languageSelect?.value ?? "auto",
-      preferredVoiceId: voiceSelect?.value
+      preferredVoiceId: getSelectedVoiceId()
     })
   });
 
@@ -843,7 +961,7 @@ async function submitAccountProfile() {
         email: registrationEmailNode?.value ?? "",
         username: registrationUsernameNode?.value ?? "",
         preferredLanguage: languageSelect?.value ?? "auto",
-        preferredVoiceId: voiceSelect?.value
+        preferredVoiceId: getSelectedVoiceId()
       })
     });
 
@@ -906,6 +1024,10 @@ async function refreshVoices() {
   try {
     const payload = await fetchJson<VoicesPayload>("/api/voices");
     state.voices = payload.voices;
+
+    for (const warning of payload.warnings ?? []) {
+      console.warn("StructuredQueries voices warning:", warning);
+    }
   } catch (error) {
     console.error("Failed to fetch voices", error);
     state.voices = [];
@@ -915,12 +1037,19 @@ async function refreshVoices() {
 }
 
 function closeWebSocketSession() {
+  clearResumeConversationTimer();
+  stopAssistantPlayback();
+
   if (activeSocket) {
     activeSocket.close();
   }
 
   activeSocket = undefined;
   activeSocketPromise = undefined;
+  assistantAudioReceivedForTurn = false;
+  state.conversationActive = false;
+  state.recording = false;
+  state.assistantSpeaking = false;
   state.websocketState = "disconnected";
   state.websocketDetail = "Idle";
   state.pendingAssistantText = undefined;
@@ -958,7 +1087,7 @@ async function refreshIndexStatus() {
     state.currentTemplateId = payload.templateId ?? state.currentTemplateId;
   } catch (error) {
     console.error("Failed to check webpage status", error);
-    state.analysisReady = false;
+    state.analysisReady = Boolean(localAnalysis?.analyzed);
   }
 }
 
@@ -991,27 +1120,114 @@ function bytesFromBase64(base64: string) {
   return bytes;
 }
 
+function handleConversationLoopError(error: unknown) {
+  console.error("Voice chat loop error", error);
+  state.conversationActive = false;
+  state.recording = false;
+  state.assistantSpeaking = false;
+  state.websocketDetail = "Voice chat stopped";
+  closeWebSocketSession();
+  render();
+  appendLog("system", normalizeRecordingError(error));
+}
+
+async function startConversationTurn() {
+  if (
+    !state.conversationActive ||
+    state.recording ||
+    state.assistantSpeaking
+  ) {
+    return;
+  }
+
+  if (state.registrationRequired) {
+    throw new Error("Register this browser installation before starting voice chat.");
+  }
+
+  state.websocketDetail = "Listening...";
+  render();
+  await ensureWebSocketSession();
+  const response = await sendMessageToActiveTab<{
+    ok?: boolean;
+    error?: string;
+  }>({
+    type: "START_PAGE_RECORDING"
+  });
+
+  if (!response?.ok) {
+    throw new Error(response?.error || "Failed to start microphone recording.");
+  }
+}
+
+function scheduleConversationResume(delayMs = 250) {
+  clearResumeConversationTimer();
+
+  if (!state.conversationActive) {
+    return;
+  }
+
+  resumeConversationTimer = window.setTimeout(() => {
+    void startConversationTurn().catch((error) => {
+      handleConversationLoopError(error);
+    });
+  }, delayMs);
+}
+
 async function playAssistantAudio(audioBase64: string, mimeType: string) {
+  stopAssistantPlayback();
+
   const bytes = bytesFromBase64(audioBase64);
   const blob = new Blob([bytes], {
     type: mimeType
   });
   const objectUrl = URL.createObjectURL(blob);
   const audio = new Audio(objectUrl);
+  activeAssistantAudio = audio;
+  activeAssistantAudioObjectUrl = objectUrl;
+  state.assistantSpeaking = true;
+  state.websocketDetail = "Assistant speaking...";
+  render();
 
-  try {
-    await audio.play();
-  } catch (error) {
-    console.error("Failed to play assistant audio", error);
-  }
+  return new Promise<void>(async (resolve, reject) => {
+    const cleanup = () => {
+      if (activeAssistantAudio === audio) {
+        activeAssistantAudio = undefined;
+      }
 
-  audio.addEventListener(
-    "ended",
-    () => {
-      URL.revokeObjectURL(objectUrl);
-    },
-    { once: true }
-  );
+      if (activeAssistantAudioObjectUrl === objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+        activeAssistantAudioObjectUrl = undefined;
+      }
+
+      state.assistantSpeaking = false;
+      render();
+    };
+
+    audio.addEventListener(
+      "ended",
+      () => {
+        cleanup();
+        resolve();
+      },
+      { once: true }
+    );
+
+    audio.addEventListener(
+      "error",
+      () => {
+        cleanup();
+        reject(new Error("Failed to play assistant audio."));
+      },
+      { once: true }
+    );
+
+    try {
+      await audio.play();
+    } catch (error) {
+      cleanup();
+      reject(error);
+    }
+  });
 }
 
 function chooseLocalSpeechVoice() {
@@ -1033,19 +1249,44 @@ function chooseLocalSpeechVoice() {
 
 function speakLocally(text: string) {
   if (!("speechSynthesis" in window) || !text.trim()) {
-    return;
+    return Promise.resolve();
   }
 
-  window.speechSynthesis.cancel();
+  stopAssistantPlayback();
+  state.assistantSpeaking = true;
+  state.websocketDetail = "Assistant speaking...";
+  render();
 
-  const utterance = new SpeechSynthesisUtterance(text);
-  const voice = chooseLocalSpeechVoice();
+  return new Promise<void>((resolve, reject) => {
+    const utterance = new SpeechSynthesisUtterance(text);
+    const voice = chooseLocalSpeechVoice();
 
-  if (voice) {
-    utterance.voice = voice;
-  }
+    if (voice) {
+      utterance.voice = voice;
+    }
 
-  window.speechSynthesis.speak(utterance);
+    utterance.addEventListener(
+      "end",
+      () => {
+        state.assistantSpeaking = false;
+        render();
+        resolve();
+      },
+      { once: true }
+    );
+
+    utterance.addEventListener(
+      "error",
+      () => {
+        state.assistantSpeaking = false;
+        render();
+        reject(new Error("Failed to play local speech."));
+      },
+      { once: true }
+    );
+
+    window.speechSynthesis.speak(utterance);
+  });
 }
 
 function handleSocketMessage(event: MessageEvent<string>) {
@@ -1054,11 +1295,27 @@ function handleSocketMessage(event: MessageEvent<string>) {
   if (payload.type === "status") {
     const phase = typeof payload.phase === "string" ? payload.phase : "idle";
     const detail = typeof payload.detail === "string" ? payload.detail : "";
-    state.websocketDetail = detail || phase;
+    if (!state.assistantSpeaking) {
+      state.websocketDetail = detail || phase;
+    }
 
-    if (phase === "idle" && state.pendingAssistantText) {
-      speakLocally(state.pendingAssistantText);
-      state.pendingAssistantText = undefined;
+    if (phase === "idle") {
+      if (state.pendingAssistantText) {
+        const localSpeechText = state.pendingAssistantText;
+        state.pendingAssistantText = undefined;
+
+        if (state.conversationActive && !assistantAudioReceivedForTurn) {
+          void speakLocally(localSpeechText)
+            .catch((error) => {
+              console.error("Failed to play local speech", error);
+            })
+            .finally(() => {
+              scheduleConversationResume();
+            });
+        }
+      } else if (state.conversationActive && !assistantAudioReceivedForTurn) {
+        scheduleConversationResume();
+      }
     }
 
     render();
@@ -1102,14 +1359,28 @@ function handleSocketMessage(event: MessageEvent<string>) {
   }
 
   if (payload.type === "assistant_audio") {
+    const fallbackText = state.pendingAssistantText;
     state.pendingAssistantText = undefined;
+    assistantAudioReceivedForTurn = true;
     const audioBase64 =
       typeof payload.audioBase64 === "string" ? payload.audioBase64 : "";
     const mimeType =
       typeof payload.mimeType === "string" ? payload.mimeType : "audio/mpeg";
 
-    if (audioBase64) {
-      void playAssistantAudio(audioBase64, mimeType);
+    if (audioBase64 && state.conversationActive) {
+      void playAssistantAudio(audioBase64, mimeType)
+        .catch((error) => {
+          console.error("Failed to play assistant audio", error);
+
+          if (fallbackText && state.conversationActive) {
+            return speakLocally(fallbackText);
+          }
+
+          return Promise.resolve();
+        })
+        .finally(() => {
+          scheduleConversationResume();
+        });
     }
 
     return;
@@ -1144,6 +1415,10 @@ function handleSocketMessage(event: MessageEvent<string>) {
         ? payload.message
         : "Unexpected websocket error."
     );
+
+    if (state.conversationActive) {
+      scheduleConversationResume(600);
+    }
   }
 }
 
@@ -1179,6 +1454,9 @@ async function ensureWebSocketSession() {
     socket.addEventListener("close", () => {
       if (activeSocket === socket) {
         activeSocket = undefined;
+        state.conversationActive = false;
+        state.recording = false;
+        state.assistantSpeaking = false;
         state.websocketState = "disconnected";
         state.websocketDetail = "Disconnected";
         render();
@@ -1201,7 +1479,7 @@ async function ensureWebSocketSession() {
         pageUrl: state.currentPage?.url,
         pageTitle: state.currentPage?.title,
         templateId: state.currentTemplateId,
-        voiceId: voiceSelect?.value,
+        voiceId: getSelectedVoiceId(),
         language: languageSelect?.value ?? "auto",
         userAgent: navigator.userAgent
       });
@@ -1227,37 +1505,94 @@ function getPreferredRecordingMimeType() {
 
 async function submitRecordedAudio(blob: Blob) {
   const bytes = new Uint8Array(await blob.arrayBuffer());
+  await submitRecordedAudioBase64(base64FromBytes(bytes), blob.type || "audio/webm");
+}
+
+async function submitRecordedAudioBase64(audioBase64: string, mimeType: string) {
   const socket = await ensureWebSocketSession();
 
   if (socket.readyState !== WebSocket.OPEN) {
     throw new Error("Voice session is not connected.");
   }
 
+  assistantAudioReceivedForTurn = false;
+  state.recording = false;
+  state.websocketDetail = "Processing audio...";
+  render();
+
   sendSocketMessage({
     type: "submit_audio",
-    audioBase64: base64FromBytes(bytes),
-    mimeType: blob.type || "audio/webm",
+    audioBase64,
+    mimeType,
     language: languageSelect?.value ?? "auto",
     templateId: state.currentTemplateId,
-    voiceId: voiceSelect?.value
+    voiceId: getSelectedVoiceId()
   });
 }
 
-function cleanupRecording() {
-  mediaRecorder = undefined;
+function normalizeRecordingError(error: unknown) {
+  if (error instanceof DOMException) {
+    if (error.name === "NotAllowedError") {
+      return "Microphone access was blocked or dismissed. Click Start Voice Chat again and allow microphone access in Chrome.";
+    }
 
-  if (mediaStream) {
-    for (const track of mediaStream.getTracks()) {
-      track.stop();
+    if (error.name === "NotFoundError") {
+      return "No microphone was found on this device.";
+    }
+
+    if (error.name === "NotReadableError") {
+      return "The microphone is already in use by another app or could not be opened.";
     }
   }
 
-  mediaStream = undefined;
-  recordedChunks = [];
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  return "Failed to start recording.";
+}
+
+async function getMicrophonePermissionState() {
+  if (!navigator.permissions?.query) {
+    return undefined;
+  }
+
+  try {
+    const permissionStatus = await navigator.permissions.query({
+      name: "microphone" as PermissionName
+    });
+    return permissionStatus.state;
+  } catch {
+    return undefined;
+  }
+}
+
+async function requestMicrophonePermissionFromPanel() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: true
+    });
+
+    for (const track of stream.getTracks()) {
+      track.stop();
+    }
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "NotAllowedError") {
+      const permissionState = await getMicrophonePermissionState();
+
+      if (permissionState === "denied") {
+        throw new Error(
+          "Chrome is currently blocking microphone access for this extension. Open the extension site settings, allow Microphone, then click Start Voice Chat again."
+        );
+      }
+    }
+
+    throw error;
+  }
 }
 
 async function startRecording() {
-  if (state.recording) {
+  if (state.conversationActive) {
     return;
   }
 
@@ -1265,79 +1600,59 @@ async function startRecording() {
     throw new Error("Register this browser installation before starting voice chat.");
   }
 
-  if (state.voices.length === 0) {
-    throw new Error("No ElevenLabs voice configuration is available for this server.");
-  }
-
-  await ensureWebSocketSession();
-
-  if (!navigator.mediaDevices?.getUserMedia) {
-    throw new Error("getUserMedia is not available in this Chrome context.");
-  }
-
-  mediaStream = await navigator.mediaDevices.getUserMedia({
-    audio: true
-  });
-  recordedChunks = [];
-
-  const mimeType = getPreferredRecordingMimeType();
-  mediaRecorder = mimeType
-    ? new MediaRecorder(mediaStream, {
-        mimeType
-      })
-    : new MediaRecorder(mediaStream);
-
-  mediaRecorder.addEventListener("dataavailable", (event) => {
-    if (event.data.size > 0) {
-      recordedChunks.push(event.data);
-    }
-  });
-
-  mediaRecorder.addEventListener(
-    "stop",
-    () => {
-      const blob = new Blob(recordedChunks, {
-        type: mediaRecorder?.mimeType || mimeType || "audio/webm"
-      });
-      cleanupRecording();
-      state.recording = false;
-      render();
-
-      if (blob.size === 0) {
-        appendLog("system", "No audio was captured for this turn.");
-        return;
-      }
-
-      appendLog("system", "Audio captured. Uploading turn to the proxy...");
-      void submitRecordedAudio(blob).catch((error) => {
-        console.error("Failed to submit recorded audio", error);
-        appendLog(
-          "system",
-          error instanceof Error
-            ? error.message
-            : "Failed to submit recorded audio."
-        );
-      });
-    },
-    { once: true }
+  state.conversationActive = true;
+  state.websocketDetail = "Starting voice chat...";
+  render();
+  appendLog(
+    "system",
+    "Voice chat live."
   );
 
-  mediaRecorder.start();
-  state.recording = true;
-  state.websocketDetail = "Recording...";
-  appendLog("system", "Recording started.");
-  render();
+  try {
+    await startConversationTurn();
+  } catch (error) {
+    state.conversationActive = false;
+
+    try {
+      await requestMicrophonePermissionFromPanel();
+    } catch {
+      // Prefer the page-context error below because it better reflects
+      // the origin Chrome evaluated for microphone access.
+    }
+
+    throw error;
+  }
 }
 
-function stopRecording() {
-  if (!mediaRecorder || mediaRecorder.state === "inactive") {
+async function stopRecording() {
+  if (!state.conversationActive && !state.recording && !state.assistantSpeaking) {
     return;
   }
 
-  mediaRecorder.stop();
+  clearResumeConversationTimer();
+  state.conversationActive = false;
   state.recording = false;
-  state.websocketDetail = "Processing audio...";
+  state.websocketDetail = "Voice chat stopped";
+  stopAssistantPlayback();
   render();
+  appendLog("system", "Voice chat stopped.");
+
+  try {
+    const response = await sendMessageToActiveTab<{
+      ok?: boolean;
+      error?: string;
+    }>({
+      type: "STOP_PAGE_RECORDING"
+    });
+
+    if (!response?.ok && response?.error) {
+      console.warn("Failed to stop page recording", response.error);
+    }
+  } catch (error) {
+    console.warn("Failed to stop page recording", error);
+  } finally {
+    closeWebSocketSession();
+  }
 }
 
 async function analyzeCurrentPage() {
@@ -1377,7 +1692,7 @@ async function analyzeCurrentPage() {
         url: state.currentPage.url,
         title: state.currentPage.title,
         preferredLanguage: languageSelect?.value ?? "auto",
-        preferredVoiceId: voiceSelect?.value
+        preferredVoiceId: getSelectedVoiceId()
       })
     });
 
@@ -1421,7 +1736,11 @@ async function refreshAll() {
   state.currentPage = await fetchPageContext();
 
   if (previousPageUrl && previousPageUrl !== state.currentPage?.url) {
-    closeWebSocketSession();
+    if (state.conversationActive || state.recording || state.assistantSpeaking) {
+      await stopRecording();
+    } else {
+      closeWebSocketSession();
+    }
     resetConversationLog();
     state.currentTemplateId = undefined;
   }
@@ -1435,6 +1754,78 @@ async function refreshAll() {
   await refreshIndexStatus();
   render();
 }
+
+chrome.runtime.onMessage.addListener((message) => {
+  if (
+    message?.type === "OFFSCREEN_RECORDING_STARTED" ||
+    message?.type === "PAGE_RECORDING_STARTED"
+  ) {
+    state.recording = true;
+    state.websocketDetail = "Listening...";
+    render();
+    return false;
+  }
+
+  if (message?.type === "PAGE_RECORDING_STOPPED") {
+    state.recording = false;
+    state.websocketDetail = "Processing audio...";
+    render();
+    return false;
+  }
+
+  if (
+    message?.type === "OFFSCREEN_AUDIO_READY" ||
+    message?.type === "PAGE_AUDIO_READY"
+  ) {
+    appendLog("system", "Audio captured. Uploading turn to the proxy...");
+    void submitRecordedAudioBase64(
+      typeof message.audioBase64 === "string" ? message.audioBase64 : "",
+      typeof message.mimeType === "string" ? message.mimeType : "audio/webm"
+    ).catch((error) => {
+      console.error("Failed to submit recorded audio", error);
+      appendLog(
+        "system",
+        error instanceof Error
+          ? error.message
+          : "Failed to submit recorded audio."
+      );
+    });
+    return false;
+  }
+
+  if (message?.type === "PAGE_RECORDING_CANCELLED") {
+    state.recording = false;
+    state.websocketDetail = state.conversationActive
+      ? "Listening..."
+      : "Idle";
+    render();
+
+    if (state.conversationActive) {
+      scheduleConversationResume(100);
+    }
+
+    return false;
+  }
+
+  if (
+    message?.type === "OFFSCREEN_RECORDING_ERROR" ||
+    message?.type === "PAGE_RECORDING_ERROR"
+  ) {
+    state.recording = false;
+    state.conversationActive = false;
+    state.websocketDetail = "Microphone unavailable";
+    render();
+    appendLog(
+      "system",
+      typeof message.message === "string"
+        ? message.message
+        : "Failed to start recording."
+    );
+    return false;
+  }
+
+  return false;
+});
 
 refreshButton?.addEventListener("click", () => {
   void refreshAll();
@@ -1468,20 +1859,24 @@ startChatButton?.addEventListener("click", () => {
     console.error("Failed to start recording", error);
     appendLog(
       "system",
-      error instanceof Error ? error.message : "Failed to start recording."
+      normalizeRecordingError(error)
     );
   });
 });
 
 stopChatButton?.addEventListener("click", () => {
-  stopRecording();
+  void stopRecording();
+});
+
+closeOverlayButton?.addEventListener("click", () => {
+  requestOverlayClose();
 });
 
 voiceSelect?.addEventListener("change", () => {
   if (activeSocket?.readyState === WebSocket.OPEN) {
     sendSocketMessage({
       type: "set_voice",
-      voiceId: voiceSelect.value
+      voiceId: getSelectedVoiceId()
     });
   }
 });
@@ -1490,6 +1885,16 @@ languageSelect?.addEventListener("change", () => {
   void syncBrowserSession().catch((error) => {
     console.error("Failed to update browser session", error);
   });
+});
+
+window.addEventListener("pagehide", () => {
+  void stopRecording();
+});
+
+window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    requestOverlayClose();
+  }
 });
 
 resetConversationLog();

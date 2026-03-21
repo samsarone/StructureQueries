@@ -19,7 +19,7 @@ function getServerHttpOrigin() {
   const rawValue =
     process.env.STRUCTUREDQUERIES_SERVER_ORIGIN ??
     process.env.STRUCTUREDQUERIES_SERVER_HTTP_ORIGIN ??
-    "http://localhost:3000";
+    "https://structuredqueries.samsar.one";
 
   return trimTrailingSlash(rawValue.trim());
 }
@@ -46,6 +46,7 @@ const buildConfig = {
   entryPoints: {
     background: resolve(rootDir, "src/background.ts"),
     content: resolve(rootDir, "src/content.ts"),
+    offscreen: resolve(rootDir, "src/offscreen.ts"),
     popup: resolve(rootDir, "src/popup.ts")
   },
   bundle: true,
@@ -67,7 +68,16 @@ async function copyPublicAssets() {
   const manifestPath = resolve(distDir, "manifest.json");
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
 
-  manifest.host_permissions = [`${serverHttpOrigin}/*`];
+  manifest.host_permissions = [
+    ...new Set([
+      ...(Array.isArray(manifest.host_permissions)
+        ? manifest.host_permissions
+        : []),
+      "http://*/*",
+      "https://*/*",
+      `${serverHttpOrigin}/*`
+    ])
+  ];
   manifest.content_security_policy = {
     ...manifest.content_security_policy,
     extension_pages: `script-src 'self'; object-src 'self'; connect-src 'self' ${serverHttpOrigin} ${serverWsOrigin};`

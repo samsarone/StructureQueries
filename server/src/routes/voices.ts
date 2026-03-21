@@ -1,6 +1,7 @@
 import { Router } from "express";
 
 import { elevenLabsAdapter } from "../adapters/elevenlabs.js";
+import { env } from "../config/env.js";
 
 interface VoiceOption {
   voiceId: string;
@@ -13,14 +14,32 @@ interface VoiceOption {
 
 export const voicesRouter = Router();
 
+function createFallbackVoicesPayload(reason?: string) {
+  const defaultVoiceId = env.integrations.elevenLabs.defaultVoiceId;
+
+  return {
+    ok: true,
+    provider: "placeholder" as const,
+    voices: [
+      {
+        voiceId: defaultVoiceId ?? "",
+        name: defaultVoiceId ? "Server default voice" : "Browser voice fallback",
+        description: defaultVoiceId
+          ? "Uses the proxy default voice when ElevenLabs voice listing is unavailable."
+          : "Uses browser speech fallback when no remote voice can be selected."
+      }
+    ],
+    warnings: reason ? [reason] : []
+  };
+}
+
 voicesRouter.get("/", async (_request, response) => {
   if (!elevenLabsAdapter.isConfigured()) {
-    response.status(503).json({
-      ok: false,
-      error: "ELEVENLABS_API_KEY is not configured.",
-      provider: "elevenlabs",
-      voices: []
-    });
+    response.json(
+      createFallbackVoicesPayload(
+        "ELEVENLABS_API_KEY is not configured. Using browser voice fallback."
+      )
+    );
     return;
   }
 
@@ -41,14 +60,12 @@ voicesRouter.get("/", async (_request, response) => {
       voices
     });
   } catch (error) {
-    response.status(502).json({
-      ok: false,
-      error:
+    response.json(
+      createFallbackVoicesPayload(
         error instanceof Error
           ? error.message
-          : "Failed to fetch ElevenLabs voices.",
-      provider: "elevenlabs",
-      voices: []
-    });
+          : "Failed to fetch ElevenLabs voices."
+      )
+    );
   }
 });

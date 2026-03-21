@@ -9,21 +9,20 @@
   "background": {
     "service_worker": "background.js"
   },
-  "side_panel": {
-    "default_path": "popup.html"
-  },
   "permissions": [
     "activeTab",
+    "offscreen",
     "scripting",
-    "sidePanel",
     "storage",
     "tabs"
   ],
   "host_permissions": [
-    "http://localhost:3000/*"
+    "http://*/*",
+    "https://*/*",
+    "https://structuredqueries.samsar.one/*"
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' http://localhost:3000 ws://localhost:3000;"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://structuredqueries.samsar.one wss://structuredqueries.samsar.one;"
   },
   "content_scripts": [
     {
@@ -34,6 +33,18 @@
         "content.js"
       ],
       "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "popup.html",
+        "popup.css",
+        "popup.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ]
 }

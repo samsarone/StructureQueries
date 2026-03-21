@@ -31,23 +31,67 @@ async function ensureBrowserSessionId() {
   return browserSessionId;
 }
 
-async function configureSidePanel() {
-  if (!chrome.sidePanel?.setPanelBehavior) {
+function isInjectableTabUrl(rawUrl?: string) {
+  if (!rawUrl) {
+    return false;
+  }
+
+  try {
+    const url = new URL(rawUrl);
+    return ["http:", "https:"].includes(url.protocol);
+  } catch {
+    return false;
+  }
+}
+
+function isMissingReceiverError(error: unknown) {
+  return (
+    error instanceof Error &&
+    /Receiving end does not exist|Could not establish connection/i.test(
+      error.message
+    )
+  );
+}
+
+async function sendToggleOverlayMessage(tabId: number) {
+  return chrome.tabs.sendMessage(tabId, {
+    type: "TOGGLE_PAGE_OVERLAY"
+  });
+}
+
+async function toggleOverlayForTab(tab: chrome.tabs.Tab) {
+  if (typeof tab.id !== "number" || !isInjectableTabUrl(tab.url)) {
     return;
   }
 
-  await chrome.sidePanel.setPanelBehavior({
-    openPanelOnActionClick: true
-  });
+  try {
+    await sendToggleOverlayMessage(tab.id);
+  } catch (error) {
+    if (!isMissingReceiverError(error)) {
+      throw error;
+    }
+
+    await chrome.scripting.executeScript({
+      target: {
+        tabId: tab.id
+      },
+      files: ["content.js"]
+    });
+
+    await sendToggleOverlayMessage(tab.id);
+  }
 }
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log("StructuredQueries extension installed.");
-  void configureSidePanel();
   void ensureBrowserSessionId();
 });
 
-void configureSidePanel();
+chrome.action.onClicked.addListener((tab) => {
+  void toggleOverlayForTab(tab).catch((error) => {
+    console.error("Failed to toggle StructuredQueries overlay", error);
+  });
+});
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "PING_BACKGROUND") {

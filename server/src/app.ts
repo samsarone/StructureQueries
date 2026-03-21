@@ -20,20 +20,6 @@ import { backendStack } from "./stack.js";
 
 export function createApp() {
   const app = express();
-  const endpointItems = [
-    ["/api/health", "Health and dependency status"],
-    ["/api/browser-sessions", "Browser session management"],
-    ["/api/messages", "Structured message operations"],
-    ["/api/stack", "Runtime backend stack summary"],
-    ["/api/voices", "Voice provider endpoints"],
-    ["/api/webpages", "Webpage ingestion endpoints"],
-    ["/v1/chat/completions", "OpenAI-compatible chat completions"]
-  ]
-    .map(
-      ([path, description]) =>
-        `<li><a href="${path}">${path}</a><span>${description}</span></li>`
-    )
-    .join("");
 
   app.locals.stack = backendStack;
 
@@ -53,8 +39,8 @@ export function createApp() {
     <title>${env.serviceName}</title>
     <style>
       :root {
-        color-scheme: light;
-        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        color-scheme: dark;
+        font-family: "Avenir Next", "Segoe UI", sans-serif;
       }
 
       * {
@@ -65,89 +51,118 @@ export function createApp() {
         margin: 0;
         min-height: 100vh;
         background:
-          radial-gradient(circle at top, rgba(68, 94, 145, 0.18), transparent 38%),
-          linear-gradient(180deg, #f5f2eb 0%, #efe7d9 100%);
-        color: #162133;
+          radial-gradient(circle at 18% 18%, rgba(70, 191, 255, 0.22), transparent 24%),
+          radial-gradient(circle at 78% 16%, rgba(57, 216, 129, 0.18), transparent 22%),
+          radial-gradient(circle at 76% 84%, rgba(251, 113, 133, 0.14), transparent 18%),
+          linear-gradient(160deg, #07111d 0%, #0a1627 52%, #060d18 100%);
+        color: #eef9ff;
       }
 
       main {
-        max-width: 880px;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        max-width: 980px;
         margin: 0 auto;
-        padding: 48px 24px 64px;
+        padding: 32px 24px;
       }
 
       .panel {
-        padding: 32px;
-        border: 1px solid rgba(22, 33, 51, 0.12);
-        border-radius: 24px;
-        background: rgba(255, 255, 255, 0.82);
-        backdrop-filter: blur(10px);
-        box-shadow: 0 18px 45px rgba(22, 33, 51, 0.08);
+        width: min(100%, 760px);
+        padding: 36px;
+        border: 1px solid rgba(122, 177, 211, 0.16);
+        border-radius: 32px;
+        background:
+          radial-gradient(circle at top left, rgba(70, 191, 255, 0.16), transparent 28%),
+          linear-gradient(180deg, rgba(8, 18, 31, 0.94), rgba(8, 16, 28, 0.96));
+        backdrop-filter: blur(18px);
+        box-shadow:
+          0 26px 80px rgba(0, 0, 0, 0.38),
+          0 0 0 1px rgba(122, 177, 211, 0.08) inset;
+      }
+
+      .eyebrow {
+        margin: 0 0 14px;
+        color: rgba(151, 222, 255, 0.78);
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
       }
 
       h1 {
-        margin: 0 0 12px;
-        font-size: clamp(2.5rem, 5vw, 4.5rem);
-        line-height: 0.96;
+        margin: 0;
+        max-width: 10ch;
+        font-size: clamp(3rem, 7vw, 5.5rem);
+        line-height: 0.94;
         letter-spacing: -0.04em;
       }
 
       p {
         margin: 0;
-        max-width: 46rem;
-        font-size: 1.05rem;
-        line-height: 1.7;
+        max-width: 32rem;
+        font-size: 1rem;
+        line-height: 1.6;
+        color: rgba(164, 203, 223, 0.88);
       }
 
-      ul {
-        list-style: none;
-        margin: 32px 0 0;
-        padding: 0;
-        display: grid;
-        gap: 12px;
-      }
-
-      li {
+      .cta-row {
+        margin-top: 28px;
         display: flex;
         flex-wrap: wrap;
-        justify-content: space-between;
         gap: 12px;
-        padding: 16px 18px;
-        border-radius: 16px;
-        background: rgba(245, 242, 235, 0.9);
       }
 
-      a {
-        color: #0f5dd7;
+      .install-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 54px;
+        padding: 0 22px;
+        border-radius: 18px;
+        border: 1px solid rgba(57, 216, 129, 0.72);
+        background: linear-gradient(135deg, rgba(70, 191, 255, 0.92), rgba(57, 216, 129, 0.98));
+        color: #041015;
+        font-size: 0.96rem;
         font-weight: 700;
         text-decoration: none;
+        pointer-events: none;
+        box-shadow: 0 16px 44px rgba(57, 216, 129, 0.16);
       }
 
-      a:hover {
-        text-decoration: underline;
-      }
-
-      span {
-        color: #51607a;
+      .install-button::after {
+        content: "Soon";
+        margin-left: 10px;
+        padding: 5px 8px;
+        border-radius: 999px;
+        background: rgba(4, 16, 21, 0.12);
+        font-size: 0.68rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
       }
 
       .meta {
-        margin-top: 28px;
-        color: #51607a;
-        font-size: 0.95rem;
+        margin-top: 12px;
+        font-size: 0.92rem;
+        color: rgba(191, 231, 245, 0.72);
+      }
+
+      @media (max-width: 640px) {
+        .panel {
+          padding: 28px 22px;
+        }
       }
     </style>
   </head>
   <body>
     <main>
       <section class="panel">
+        <p class="eyebrow">StructuredQueries</p>
         <h1>Structured Queries</h1>
-        <p>
-          ${env.serviceName} is running and ready to serve the API, browser
-          session gateway, and provider-backed chat workflows behind this host.
-        </p>
-        <ul>${endpointItems}</ul>
-        <p class="meta">Production target port: ${env.port}</p>
+        <div class="cta-row">
+          <a class="install-button" href="#" aria-disabled="true">Install Chrome extension</a>
+        </div>
+        <p class="meta">Voice-first retrieval for live webpages. Chrome install link will be added here next.</p>
       </section>
     </main>
   </body>
