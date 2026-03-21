@@ -30,11 +30,67 @@ function readStringValue(value: unknown) {
 }
 
 function readBooleanValue(value: unknown) {
-  return typeof value === "boolean" ? value : undefined;
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+
+    if (["true", "1", "yes", "y"].includes(normalized)) {
+      return true;
+    }
+
+    if (["false", "0", "no", "n"].includes(normalized)) {
+      return false;
+    }
+  }
+
+  return undefined;
 }
 
 function readObjectValue(value: unknown) {
-  return value && typeof value === "object" ? (value as Record<string, unknown>) : undefined;
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function readStringAlias(
+  record: Record<string, unknown> | undefined,
+  keys: string[]
+) {
+  if (!record) {
+    return undefined;
+  }
+
+  for (const key of keys) {
+    const value = readStringValue(record[key]);
+
+    if (value) {
+      return value;
+    }
+  }
+
+  return undefined;
+}
+
+function readObjectAlias(
+  record: Record<string, unknown> | undefined,
+  keys: string[]
+) {
+  if (!record) {
+    return undefined;
+  }
+
+  for (const key of keys) {
+    const value = readObjectValue(record[key]);
+
+    if (value) {
+      return value;
+    }
+  }
+
+  return undefined;
 }
 
 function limitText(value: string, maxLength = 1_600) {
@@ -189,7 +245,10 @@ export class GroundedAssistantError extends Error {
 
 function resolveTemplateId(input: GenerateGroundedAssistantReplyInput) {
   const metadata = input.metadata ?? {};
-  return readStringValue(input.templateId) ?? readStringValue(metadata.templateId);
+  return (
+    readStringValue(input.templateId) ??
+    readStringAlias(metadata, ["templateId", "template_id"])
+  );
 }
 
 function normalizeAssistantMessages(messages: ChatMessage[] = []) {
@@ -285,27 +344,37 @@ export async function generateGroundedAssistantReply(
   const metadata = input.metadata ?? {};
   const browserSessionId =
     readStringValue(input.browserSessionId) ??
-    readStringValue(metadata.browserSessionId);
+    readStringAlias(metadata, ["browserSessionId", "browser_session_id"]);
   const conversationId =
     readStringValue(input.conversationId) ??
-    readStringValue(metadata.conversationId);
-  const pageUrl = readStringValue(input.pageUrl) ?? readStringValue(metadata.pageUrl);
+    readStringAlias(metadata, ["conversationId", "conversation_id"]);
+  const pageUrl =
+    readStringValue(input.pageUrl) ??
+    readStringAlias(metadata, ["pageUrl", "page_url"]);
   const pageTitle =
-    readStringValue(input.pageTitle) ?? readStringValue(metadata.pageTitle);
+    readStringValue(input.pageTitle) ??
+    readStringAlias(metadata, ["pageTitle", "page_title"]);
   const language =
     readStringValue(input.language ?? undefined) ??
-    readStringValue(metadata.language) ??
+    readStringAlias(metadata, ["language"]) ??
     null;
   const query =
     readStringValue(input.transcript) ?? getLastUserMessage(input.messages);
   const templateId = resolveTemplateId(input);
   const externalUserApiKey =
     readStringValue(input.externalUserApiKey) ??
-    readStringValue(metadata.externalUserApiKey);
+    readStringAlias(metadata, [
+      "externalUserApiKey",
+      "external_user_api_key"
+    ]);
   const samsarSessionId =
     readStringValue(input.samsarSessionId) ??
-    readStringValue(metadata.samsarSessionId) ??
-    readStringValue(metadata.assistantSessionId);
+    readStringAlias(metadata, [
+      "samsarSessionId",
+      "samsar_session_id",
+      "assistantSessionId",
+      "assistant_session_id"
+    ]);
 
   if (!query) {
     throw new GroundedAssistantError("No user query was found in the request body.", 400);
@@ -341,10 +410,37 @@ export async function generateGroundedAssistantReply(
 
   const warnings: string[] = [];
   const rerank =
-    readBooleanValue(metadata.rerank) ?? env.integrations.samsar.rerankResults;
-  const structuredFilters =
-    readObjectValue(metadata.structuredFilters) ?? readObjectValue(metadata.filters);
-  const searchParams = readObjectValue(metadata.searchParams);
+    readBooleanValue(metadata.rerank) ??
+    readBooleanValue(metadata.rerankResults) ??
+    env.integrations.samsar.rerankResults;
+  const structuredFilters = readObjectAlias(metadata, [
+    "structuredFilters",
+    "structured_filters",
+    "filters"
+  ]);
+  const searchParams = readObjectAlias(metadata, [
+    "searchParams",
+    "search_params",
+    "searchFilters",
+    "search_filters",
+    "filterPayload",
+    "filter_payload",
+    "preFilter",
+    "pre_filter",
+    "prefilter"
+  ]);
+  const searchRecord = readObjectAlias(metadata, [
+    "searchRecord",
+    "search_record",
+    "searchJson",
+    "search_json",
+    "structuredQuery",
+    "structured_query"
+  ]);
+  const searchDate = readStringAlias(metadata, [
+    "searchDate",
+    "search_date"
+  ]);
   const similarityLimit = env.integrations.samsar.similarityLimit;
   const retrievalLimit = env.integrations.samsar.retrievalLimit;
 
@@ -358,7 +454,9 @@ export async function generateGroundedAssistantReply(
     const similarityResult = await samsarAdapter.similarToEmbedding({
       template_id: templateId,
       search_term: query,
-      filters: structuredFilters,
+      search_date: searchDate,
+      search_json: searchRecord,
+      structured_filters: structuredFilters,
       limit: similarityLimit,
       num_candidates: Math.max(similarityLimit, retrievalLimit)
     });
@@ -379,7 +477,8 @@ export async function generateGroundedAssistantReply(
     const searchResult = await samsarAdapter.searchEmbeddings({
       template_id: templateId,
       search_term: query,
-      filters: structuredFilters,
+      search_date: searchDate,
+      structured_filters: structuredFilters,
       search_params: searchParams,
       include_raw: true,
       limit: retrievalLimit,
