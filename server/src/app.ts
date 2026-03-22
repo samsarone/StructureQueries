@@ -157,8 +157,8 @@ export function createApp() {
   <body>
     <main>
       <section class="panel">
-        <p class="eyebrow">StructuredQueries</p>
-        <h1>Structured Queries</h1>
+        <p class="eyebrow">Structure Queries</p>
+        <h1>Structure Queries</h1>
         <div class="cta-row">
           <a class="install-button" href="#" aria-disabled="true">Install Chrome extension</a>
         </div>

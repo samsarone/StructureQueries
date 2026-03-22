@@ -1,6 +1,6 @@
-# StructuredQueries
+# Structure Queries
 
-Monorepo scaffold with:
+Monorepo scaffold for Structure Queries with:
 
 - `client/`: Chrome extension (Manifest V3) built with TypeScript + esbuild
 - `server/`: Node.js API built with TypeScript + Express

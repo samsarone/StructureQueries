@@ -34,7 +34,7 @@ function deriveWebSocketOrigin(httpOrigin) {
   }
 
   throw new Error(
-    `Unsupported StructuredQueries server origin: ${httpOrigin}. Expected http:// or https://.`
+    `Unsupported Structure Queries server origin: ${httpOrigin}. Expected http:// or https://.`
   );
 }
 

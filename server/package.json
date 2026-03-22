@@ -17,7 +17,7 @@
     "express": "^5.2.1",
     "mongodb": "^6.21.0",
     "mongoose": "^8.23.0",
-    "samsar-js": "^0.48.11",
+    "samsar-js": "^0.48.12",
     "ws": "^8.19.0"
   },
   "devDependencies": {

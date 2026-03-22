@@ -353,7 +353,7 @@ input {
 }
 
 .control-row {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .control-pill {
@@ -628,6 +628,24 @@ select {
   background: rgba(10, 24, 38, 0.76);
 }
 
+.field-select {
+  position: relative;
+  padding-right: 28px;
+}
+
+.field-select::after {
+  content: "";
+  position: absolute;
+  right: 12px;
+  bottom: 16px;
+  width: 8px;
+  height: 8px;
+  border-right: 1.5px solid rgba(191, 231, 245, 0.68);
+  border-bottom: 1.5px solid rgba(191, 231, 245, 0.68);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
 .field span {
   font-size: 0.7rem;
   font-weight: 700;
@@ -704,7 +722,7 @@ body[data-loading="true"] .overlay-shell > :not(.loading-shell) {
 
 .loading-control-row,
 .loading-button-row {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
 }
 
 .loading-drawer {

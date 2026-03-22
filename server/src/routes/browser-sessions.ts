@@ -2,9 +2,9 @@ import { Router } from "express";
 
 import { samsarAdapter } from "../adapters/samsar.js";
 import {
-  buildStructuredQueriesAssistantSystemPrompt,
-  buildStructuredQueriesExternalUser,
-  summarizeStructuredQueriesExternalUser
+  buildStructureQueriesAssistantSystemPrompt,
+  buildStructureQueriesExternalUser,
+  summarizeStructureQueriesExternalUser
 } from "../lib/external-user.js";
 import {
   getSamsarErrorContext,
@@ -40,7 +40,7 @@ async function upsertExternalUserProfile(
     throw new Error("browserSessionId is required");
   }
 
-  const externalUserIdentity = buildStructuredQueriesExternalUser({
+  const externalUserIdentity = buildStructureQueriesExternalUser({
     browserSessionId: session.browserSessionId,
     extensionId: session.extensionId ?? undefined,
     email: readOptionalString(body.email),
@@ -60,7 +60,7 @@ async function upsertExternalUserProfile(
 
   await samsarAdapter.setExternalAssistantSystemPrompt(
     {
-      system_prompt: buildStructuredQueriesAssistantSystemPrompt()
+      system_prompt: buildStructureQueriesAssistantSystemPrompt()
     },
     externalUserIdentity,
     externalUserApiKey ? { externalUserApiKey } : undefined
@@ -73,7 +73,7 @@ async function upsertExternalUserProfile(
     const assistantSession = await samsarAdapter.createExternalAssistantSession(
       externalUserIdentity,
       {
-        session_name: `StructuredQueries voice assistant ${session.browserSessionId.slice(-8)}`,
+        session_name: `Structure Queries voice assistant ${session.browserSessionId.slice(-8)}`,
         metadata: {
           browser_session_id: session.browserSessionId,
           extension_id: session.extensionId,
@@ -96,7 +96,7 @@ async function upsertExternalUserProfile(
     session,
     externalUserApiKey,
     assistantSessionId,
-    externalUser: summarizeStructuredQueriesExternalUser(
+    externalUser: summarizeStructureQueriesExternalUser(
       (externalSession.data.external_user ??
         externalSession.data.externalUser ??
         externalUserIdentity) as Record<string, unknown>
@@ -125,7 +125,7 @@ browserSessionsRouter.post("/", async (request, response) => {
   const assistantSessionId = readOptionalString(body.assistantSessionId);
   const externalUser =
     body.externalUser && typeof body.externalUser === "object"
-      ? summarizeStructuredQueriesExternalUser(
+      ? summarizeStructureQueriesExternalUser(
           body.externalUser as Record<string, unknown>
         )
       : null;

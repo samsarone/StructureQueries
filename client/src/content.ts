@@ -20,6 +20,7 @@ const OVERLAY_FRAME_URL = chrome.runtime.getURL("popup.html");
 let mediaRecorder: MediaRecorder | undefined;
 let mediaStream: MediaStream | undefined;
 let recordedChunks: Blob[] = [];
+let recordingStartedAt = 0;
 let analyserNode: AnalyserNode | undefined;
 let analyserTimeData: Uint8Array<ArrayBuffer> | undefined;
 let analyserFrequencyData: Uint8Array<ArrayBuffer> | undefined;
@@ -85,6 +86,7 @@ function cleanupRecording() {
 
   mediaStream = undefined;
   recordedChunks = [];
+  recordingStartedAt = 0;
   resetSpeechActivity();
 }
 
@@ -311,6 +313,7 @@ async function startPageRecording() {
     }
   });
   recordedChunks = [];
+  recordingStartedAt = Date.now();
   resetSpeechActivity();
   startSpeechMonitor(mediaStream);
 
@@ -334,6 +337,8 @@ async function startPageRecording() {
         type: mediaRecorder?.mimeType || mimeType || "audio/webm"
       });
       const hasSpeech = Boolean(speechDetectedAt);
+      const durationMs =
+        recordingStartedAt > 0 ? Math.max(0, Date.now() - recordingStartedAt) : undefined;
       cleanupRecording();
 
       if (blob.size === 0 || !hasSpeech) {
@@ -347,6 +352,7 @@ async function startPageRecording() {
       await chrome.runtime.sendMessage({
         type: "PAGE_AUDIO_READY",
         audioBase64: base64FromBytes(bytes),
+        durationMs,
         mimeType: blob.type || "audio/webm"
       });
     },
@@ -446,7 +452,7 @@ function createOverlay() {
       <iframe
         class="sq-frame"
         src="${OVERLAY_FRAME_URL}"
-        title="StructuredQueries overlay"
+        title="Structure Queries overlay"
         allow="microphone"
       ></iframe>
     </div>

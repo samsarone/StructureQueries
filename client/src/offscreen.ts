@@ -3,6 +3,7 @@ export {};
 let mediaRecorder: MediaRecorder | undefined;
 let mediaStream: MediaStream | undefined;
 let recordedChunks: Blob[] = [];
+let recordingStartedAt = 0;
 
 function cleanupRecording() {
   mediaRecorder = undefined;
@@ -15,6 +16,7 @@ function cleanupRecording() {
 
   mediaStream = undefined;
   recordedChunks = [];
+  recordingStartedAt = 0;
 }
 
 function getPreferredRecordingMimeType() {
@@ -75,6 +77,7 @@ async function startRecording() {
         mimeType
       })
     : new MediaRecorder(mediaStream);
+  recordingStartedAt = Date.now();
 
   mediaRecorder.addEventListener("dataavailable", (event) => {
     if (event.data.size > 0) {
@@ -88,6 +91,8 @@ async function startRecording() {
       const blob = new Blob(recordedChunks, {
         type: mediaRecorder?.mimeType || mimeType || "audio/webm"
       });
+      const durationMs =
+        recordingStartedAt > 0 ? Math.max(0, Date.now() - recordingStartedAt) : undefined;
       cleanupRecording();
 
       if (blob.size === 0) {
@@ -102,6 +107,7 @@ async function startRecording() {
       await chrome.runtime.sendMessage({
         type: "OFFSCREEN_AUDIO_READY",
         audioBase64: base64FromBytes(bytes),
+        durationMs,
         mimeType: blob.type || "audio/webm"
       });
     },

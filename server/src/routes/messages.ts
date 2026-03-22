@@ -10,6 +10,6 @@ messagesRouter.post("/", (request, response) => {
     ok: true,
     received: message,
     reply:
-      message ? `Echo: ${message}` : "StructuredQueries server scaffold is ready."
+      message ? `Echo: ${message}` : "Structure Queries server scaffold is ready."
   });
 });

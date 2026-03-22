@@ -14,6 +14,53 @@ interface VoiceOption {
 
 export const voicesRouter = Router();
 
+function readOptionalString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function readVoiceOptions(value: unknown): VoiceOption[] {
+  const payload =
+    value && typeof value === "object" && "data" in value
+      ? (value as { data?: unknown }).data
+      : value;
+  const voices =
+    payload && typeof payload === "object" && "voices" in payload
+      ? (payload as { voices?: unknown }).voices
+      : [];
+
+  if (!Array.isArray(voices)) {
+    return [];
+  }
+
+  return voices.flatMap((voice) => {
+    if (!voice || typeof voice !== "object") {
+      return [];
+    }
+
+    const candidate = voice as Record<string, unknown>;
+    const voiceId =
+      readOptionalString(candidate.voiceId) ??
+      readOptionalString(candidate.voice_id);
+
+    if (!voiceId) {
+      return [];
+    }
+
+    return [
+      {
+        voiceId,
+        name: readOptionalString(candidate.name) ?? voiceId,
+        description: readOptionalString(candidate.description),
+        category: readOptionalString(candidate.category),
+        previewUrl:
+          readOptionalString(candidate.previewUrl) ??
+          readOptionalString(candidate.preview_url),
+        provider: "elevenlabs"
+      }
+    ];
+  });
+}
+
 function createFallbackVoicesPayload(reason?: string) {
   const defaultVoiceId = env.integrations.elevenLabs.defaultVoiceId;
 
@@ -45,14 +92,7 @@ voicesRouter.get("/", async (_request, response) => {
 
   try {
     const result = await elevenLabsAdapter.listVoices();
-    const voices = ("voices" in result ? result.voices : []).map((voice) => ({
-      voiceId: voice.voiceId,
-      name: voice.name ?? voice.voiceId,
-      description: voice.description,
-      category: voice.category,
-      previewUrl: voice.previewUrl,
-      provider: "elevenlabs" as const
-    }));
+    const voices = readVoiceOptions(result);
 
     response.json({
       ok: true,

@@ -2,7 +2,7 @@ import type { ExternalUserIdentity } from "samsar-js";
 
 import { env } from "../config/env.js";
 
-export interface StructuredQueriesRegistrationInput {
+export interface StructureQueriesRegistrationInput {
   browserSessionId: string;
   extensionId?: string;
   email?: string;
@@ -13,7 +13,7 @@ export interface StructuredQueriesRegistrationInput {
   userAgent?: string;
 }
 
-export interface StructuredQueriesExternalUserSummary {
+export interface StructureQueriesExternalUserSummary {
   provider?: string | null;
   externalUserId?: string | null;
   externalAppId?: string | null;
@@ -31,9 +31,9 @@ function readOptionalString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-export function buildStructuredQueriesAssistantSystemPrompt() {
+export function buildStructureQueriesAssistantSystemPrompt() {
   return [
-    "You are the StructuredQueries assistant for question answering over dense documents and webpages.",
+    "You are the Structure Queries assistant for question answering over dense documents and webpages.",
     "Always answer in the same language as the user's latest message unless the user explicitly asks to switch languages.",
     "Use the retrieved document context provided in the conversation as your primary evidence and synthesize across relevant sections when helpful.",
     "Give the most useful answer supported by that context. When the context is partial, ambiguous, or incomplete, say what is directly supported and clearly label any brief inference or uncertainty.",
@@ -44,8 +44,8 @@ export function buildStructuredQueriesAssistantSystemPrompt() {
   ].join("\n");
 }
 
-export function buildStructuredQueriesExternalUser(
-  input: StructuredQueriesRegistrationInput
+export function buildStructureQueriesExternalUser(
+  input: StructureQueriesRegistrationInput
 ): ExternalUserIdentity {
   const assistantPromptVersion =
     env.integrations.samsar.externalAssistantPromptVersion;
@@ -66,7 +66,7 @@ export function buildStructuredQueriesExternalUser(
     username: readOptionalString(input.username) ?? input.browserSessionId,
     display_name:
       readOptionalString(input.displayName) ??
-      `StructuredQueries ${input.browserSessionId.slice(-8)}`,
+      `Structure Queries ${input.browserSessionId.slice(-8)}`,
     user_type: "chrome_extension",
     browser_installation: browserInstallation,
     metadata: {
@@ -81,9 +81,9 @@ export function buildStructuredQueriesExternalUser(
   };
 }
 
-export function summarizeStructuredQueriesExternalUser(
+export function summarizeStructureQueriesExternalUser(
   value: Record<string, unknown> | null | undefined
-): StructuredQueriesExternalUserSummary | null {
+): StructureQueriesExternalUserSummary | null {
   if (!value || typeof value !== "object") {
     return null;
   }

@@ -83,13 +83,13 @@ async function toggleOverlayForTab(tab: chrome.tabs.Tab) {
 }
 
 chrome.runtime.onInstalled.addListener(() => {
-  console.log("StructuredQueries extension installed.");
+  console.log("Structure Queries extension installed.");
   void ensureBrowserSessionId();
 });
 
 chrome.action.onClicked.addListener((tab) => {
   void toggleOverlayForTab(tab).catch((error) => {
-    console.error("Failed to toggle StructuredQueries overlay", error);
+    console.error("Failed to toggle Structure Queries overlay", error);
   });
 });
 

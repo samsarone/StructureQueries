@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>StructuredQueries Overlay</title>
+    <title>Structure Queries Overlay</title>
     <link rel="stylesheet" href="./popup.css" />
   </head>
   <body data-loading="true">
@@ -12,7 +12,7 @@
         <div class="dialog-header">
           <div>
             <p id="registration-eyebrow" class="eyebrow">Register</p>
-            <h2 id="registration-title">Register StructuredQueries</h2>
+            <h2 id="registration-title">Register Structure Queries</h2>
           </div>
           <button
             id="registration-close-button"
@@ -55,6 +55,10 @@
             autocomplete="username"
           />
         </label>
+        <label class="field field-select">
+          <span>Speaker</span>
+          <select id="voice-select"></select>
+        </label>
 
         <div class="dialog-actions">
           <button
@@ -75,7 +79,7 @@
     <main class="overlay-shell">
       <header class="topbar">
         <div class="brand-stack">
-          <p class="eyebrow">StructuredQueries</p>
+          <p class="eyebrow">Structure Queries</p>
           <h1 id="page-title" class="page-title">Loading...</h1>
         </div>
 
@@ -136,10 +140,6 @@
         </div>
 
         <div class="control-row">
-          <label class="control-pill">
-            <span>Voice</span>
-            <select id="voice-select"></select>
-          </label>
           <label class="control-pill">
             <span>Language</span>
             <select id="language-select">

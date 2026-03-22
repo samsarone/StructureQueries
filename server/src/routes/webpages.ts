@@ -7,6 +7,10 @@ import {
   isFirecrawlConfigured
 } from "../lib/url-embedding-crawl.js";
 import {
+  chargeExternalFirecrawlUsage,
+  isExternalUtilityBillingEnabled
+} from "../lib/external-usage-billing.js";
+import {
   getSamsarErrorContext,
   getSamsarErrorMessage,
   getSamsarErrorStatus
@@ -154,6 +158,16 @@ webpagesRouter.post("/analyze", async (request, response) => {
     typeof request.body?.url === "string" ? request.body.url.trim() : "";
   const title =
     typeof request.body?.title === "string" ? request.body.title.trim() : "";
+  const browserSessionId =
+    typeof request.body?.browserSessionId === "string"
+      ? request.body.browserSessionId.trim()
+      : "";
+  const externalUserApiKey =
+    typeof request.body?.externalUserApiKey === "string"
+      ? request.body.externalUserApiKey.trim()
+      : typeof request.body?.external_user_api_key === "string"
+        ? request.body.external_user_api_key.trim()
+        : "";
 
   if (!url) {
     response.status(400).json({
@@ -191,8 +205,29 @@ webpagesRouter.post("/analyze", async (request, response) => {
     return;
   }
 
+  if (isExternalUtilityBillingEnabled() && !externalUserApiKey) {
+    response.status(401).json({
+      ok: false,
+      error:
+        "No Samsar external-user API key was provided for production utility billing."
+    });
+    return;
+  }
+
   try {
     const crawlResult = await crawlUrlsForPlainTextEmbeddings([url]);
+
+    await chargeExternalFirecrawlUsage({
+      browserSessionId: browserSessionId || undefined,
+      externalUserApiKey: externalUserApiKey || undefined,
+      firecrawlCreditsUsed: crawlResult.firecrawlCreditsUsed,
+      firecrawlJobId: crawlResult.firecrawlJobId,
+      firecrawlJobIds: crawlResult.firecrawlJobIds,
+      inputUrlCount: crawlResult.inputUrlCount,
+      pageTitle: title || undefined,
+      pageUrl: url,
+      processedUrlCount: crawlResult.processedUrlCount
+    });
 
     console.log(
       "[api][webpages][analyze] prepared plain-text payload",

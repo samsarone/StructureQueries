@@ -59,6 +59,8 @@ function readOptional(value: string | undefined) {
 }
 
 export const env = {
+  appName: readOptional(process.env.APP_NAME),
+  currentEnv: readOptional(process.env.CURRENT_ENV) ?? "development",
   nodeEnv: process.env.NODE_ENV ?? "development",
   serviceName: DEFAULT_SERVICE_NAME,
   port: parsePort(process.env.PORT),

@@ -6,6 +6,10 @@ import { WebSocketServer, type RawData, type WebSocket } from "ws";
 import { elevenLabsAdapter } from "../adapters/elevenlabs.js";
 import { env } from "../config/env.js";
 import { generateGroundedAssistantReply } from "../lib/chat-agent.js";
+import {
+  chargeExternalElevenLabsSynthesisUsage,
+  chargeExternalElevenLabsTranscriptionUsage
+} from "../lib/external-usage-billing.js";
 
 interface SessionInitMessage {
   type: "session_init";
@@ -24,6 +28,7 @@ interface SessionInitMessage {
 interface SubmitAudioMessage {
   type: "submit_audio";
   audioBase64: string;
+  durationMs?: number;
   mimeType?: string;
   language?: string | null;
   templateId?: string;
@@ -210,7 +215,7 @@ async function initializeConversation(
     sendMessage(socket, {
       type: "error",
       message:
-        "StructuredQueries registration is incomplete. Missing externalUserApiKey or assistantSessionId."
+        "Structure Queries registration is incomplete. Missing externalUserApiKey or assistantSessionId."
     });
     return;
   }
@@ -277,6 +282,16 @@ async function handleSubmitAudio(
       payload.mimeType ?? "audio/webm",
       activeLanguage
     );
+    await chargeExternalElevenLabsTranscriptionUsage({
+      assistantSessionId: state.assistantSessionId,
+      browserSessionId: state.browserSessionId,
+      durationMs: payload.durationMs,
+      externalUserApiKey: state.externalUserApiKey,
+      language: transcription.detectedLanguage ?? activeLanguage,
+      mimeType: payload.mimeType ?? "audio/webm",
+      pageTitle: state.pageTitle,
+      pageUrl: state.pageUrl
+    });
   } catch (error) {
     sendStatus(socket, "error", "Transcription failed.");
     sendMessage(socket, {
@@ -328,6 +343,37 @@ async function handleSubmitAudio(
   }
 
   const assistantText = assistantReply.text;
+  let synthesizedAudio = null;
+
+  if (assistantText.trim()) {
+    sendStatus(socket, "synthesizing", "Synthesizing assistant voice.");
+
+    try {
+      synthesizedAudio = await synthesizeAssistantAudio(assistantText, activeVoiceId);
+
+      if (synthesizedAudio) {
+        await chargeExternalElevenLabsSynthesisUsage({
+          assistantSessionId: state.assistantSessionId,
+          browserSessionId: state.browserSessionId,
+          externalUserApiKey: state.externalUserApiKey,
+          pageTitle: state.pageTitle,
+          pageUrl: state.pageUrl,
+          text: assistantText,
+          voiceId: activeVoiceId
+        });
+      }
+    } catch (error) {
+      sendStatus(socket, "error", "Assistant voice billing failed.");
+      sendMessage(socket, {
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Assistant voice billing failed."
+      });
+      return;
+    }
+  }
 
   sendMessage(socket, {
     type: "assistant_message",
@@ -349,11 +395,6 @@ async function handleSubmitAudio(
       templateId: assistantReply.templateId ?? activeTemplateId ?? null
     });
   }
-
-  sendStatus(socket, "synthesizing", "Synthesizing assistant voice.");
-  const synthesizedAudio = assistantText.trim()
-    ? await synthesizeAssistantAudio(assistantText, activeVoiceId)
-    : null;
 
   if (synthesizedAudio) {
     sendMessage(socket, {

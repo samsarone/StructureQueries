@@ -20,7 +20,7 @@ interface ServerHealthPayload {
   status?: string;
 }
 
-interface StructuredQueriesExternalUserPayload {
+interface StructureQueriesExternalUserPayload {
   provider?: string | null;
   externalUserId?: string | null;
   externalAppId?: string | null;
@@ -37,14 +37,16 @@ interface StructuredQueriesExternalUserPayload {
 interface RegistrationStatePayload {
   browserSessionId: string;
   assistantSessionId?: string;
-  externalUser?: StructuredQueriesExternalUserPayload | null;
+  externalUser?: StructureQueriesExternalUserPayload | null;
   externalUserApiKey?: string;
+  preferredVoiceId?: string;
+  preferredVoiceName?: string;
 }
 
 interface BrowserSessionPayload {
   ok: boolean;
   assistantSessionId?: string | null;
-  externalUser?: StructuredQueriesExternalUserPayload | null;
+  externalUser?: StructureQueriesExternalUserPayload | null;
   externalUserApiKey?: string | null;
   registrationRequired?: boolean;
   warnings?: string[];
@@ -106,7 +108,7 @@ interface AppState {
   assistantSessionId?: string;
   browserSessionId?: string;
   extensionId?: string;
-  currentUser?: StructuredQueriesExternalUserPayload | null;
+  currentUser?: StructureQueriesExternalUserPayload | null;
   currentPage?: PageContext;
   currentTemplateId?: string;
   externalUserApiKey?: string;
@@ -122,6 +124,8 @@ interface AppState {
   websocketPhase: WebSocketPhase;
   websocketDetail: string;
   voices: VoicesPayload["voices"];
+  preferredVoiceId?: string;
+  preferredVoiceName?: string;
   pendingAssistantText?: string;
   conversationActive: boolean;
   assistantSpeaking: boolean;
@@ -205,6 +209,8 @@ const state: AppState = {
   websocketPhase: "idle",
   websocketDetail: "Idle",
   voices: [],
+  preferredVoiceId: undefined,
+  preferredVoiceName: undefined,
   conversationActive: false,
   assistantSpeaking: false,
   recording: false
@@ -331,6 +337,31 @@ function getCurrentUserId() {
   );
 }
 
+function getPreferredVoiceIdFromUser(
+  user?: StructureQueriesExternalUserPayload | null
+) {
+  const browserInstallation = user?.browserInstallation;
+
+  if (!browserInstallation || typeof browserInstallation !== "object") {
+    return undefined;
+  }
+
+  const installation = browserInstallation as Record<string, unknown>;
+
+  return (
+    readOptionalString(
+      typeof installation.preferred_voice_id === "string"
+        ? installation.preferred_voice_id
+        : undefined
+    ) ??
+    readOptionalString(
+      typeof installation.preferredVoiceId === "string"
+        ? installation.preferredVoiceId
+        : undefined
+    )
+  );
+}
+
 function clearResumeConversationTimer() {
   if (typeof resumeConversationTimer === "number") {
     window.clearTimeout(resumeConversationTimer);
@@ -450,7 +481,7 @@ function appendLog(role: LogRole, text: string) {
     role === "user"
       ? "You"
       : role === "assistant"
-        ? "StructuredQueries"
+        ? "Structure Queries"
         : "System";
   textNode.className = "log-text";
   textNode.textContent = text;
@@ -514,7 +545,8 @@ function renderVoiceOptions() {
     return;
   }
 
-  const previousValue = voiceSelect.value;
+  const preferredVoiceId = readOptionalString(state.preferredVoiceId);
+  const preferredVoiceName = readOptionalString(state.preferredVoiceName);
   voiceSelect.innerHTML = "";
 
   for (const voice of state.voices) {
@@ -525,23 +557,49 @@ function renderVoiceOptions() {
     voiceSelect.append(option);
   }
 
-  if (state.voices.length === 0) {
+  if (
+    preferredVoiceId &&
+    !state.voices.some((voice) => voice.voiceId === preferredVoiceId)
+  ) {
+    const option = document.createElement("option");
+    option.value = preferredVoiceId;
+    option.textContent = preferredVoiceName ?? "Saved speaker";
+    option.title = preferredVoiceName ?? "Saved speaker";
+    voiceSelect.append(option);
+  }
+
+  if (voiceSelect.options.length === 0) {
     const option = document.createElement("option");
     option.value = "";
     option.textContent = "Browser voice fallback";
     voiceSelect.append(option);
   }
 
-  const matchingValue = state.voices.some((voice) => voice.voiceId === previousValue)
-    ? previousValue
+  const matchingValue =
+    preferredVoiceId &&
+    Array.from(voiceSelect.options).some((option) => option.value === preferredVoiceId)
+      ? preferredVoiceId
     : state.voices[0]?.voiceId ?? "";
   voiceSelect.value = matchingValue;
+
+  if (preferredVoiceId && matchingValue === preferredVoiceId) {
+    state.preferredVoiceName =
+      readOptionalString(voiceSelect.selectedOptions[0]?.textContent) ??
+      preferredVoiceName;
+  }
 }
 
 function getSelectedVoiceId() {
-  const value = voiceSelect?.value?.trim();
+  const value = readOptionalString(voiceSelect?.value);
 
-  return value ? value : undefined;
+  return value ?? readOptionalString(state.preferredVoiceId);
+}
+
+function getSelectedVoiceName() {
+  return (
+    readOptionalString(voiceSelect?.selectedOptions[0]?.textContent) ??
+    readOptionalString(state.preferredVoiceName)
+  );
 }
 
 function syncRegistrationForm() {
@@ -589,7 +647,7 @@ function render() {
     readOptionalString(state.currentUser?.displayName) ??
     readOptionalString(state.currentUser?.username) ??
     readOptionalString(state.currentUser?.email) ??
-    (state.registrationRequired ? "Setup required" : "StructuredQueries");
+    (state.registrationRequired ? "Setup required" : "Structure Queries");
   const analysisPill = state.isInitializing
     ? "Loading"
     : state.isAnalyzing
@@ -743,7 +801,7 @@ function render() {
   setText(
     registrationTitleNode,
     registrationMode === "register"
-      ? "Register StructuredQueries"
+      ? "Register Structure Queries"
       : "Update Account"
   );
   setText(
@@ -832,7 +890,6 @@ function render() {
   if (voiceSelect) {
     voiceSelect.disabled =
       state.registrationSubmitting ||
-      state.registrationRequired ||
       state.isInitializing;
   }
 
@@ -1062,11 +1119,27 @@ async function saveRegistrationState(
   });
 }
 
+async function savePreferredVoicePreference() {
+  if (!state.browserSessionId) {
+    return;
+  }
+
+  await saveRegistrationState(state.browserSessionId, {
+    assistantSessionId: state.assistantSessionId,
+    externalUser: state.currentUser,
+    externalUserApiKey: state.externalUserApiKey,
+    preferredVoiceId: state.preferredVoiceId,
+    preferredVoiceName: state.preferredVoiceName
+  });
+}
+
 async function loadRegistrationState() {
   if (!state.browserSessionId) {
     state.assistantSessionId = undefined;
     state.currentUser = null;
     state.externalUserApiKey = undefined;
+    state.preferredVoiceId = undefined;
+    state.preferredVoiceName = undefined;
     state.registrationRequired = true;
     syncRegistrationForm();
     return;
@@ -1077,6 +1150,10 @@ async function loadRegistrationState() {
   state.assistantSessionId = registration?.assistantSessionId;
   state.currentUser = registration?.externalUser ?? null;
   state.externalUserApiKey = registration?.externalUserApiKey;
+  state.preferredVoiceId =
+    registration?.preferredVoiceId ??
+    getPreferredVoiceIdFromUser(registration?.externalUser);
+  state.preferredVoiceName = registration?.preferredVoiceName;
   state.registrationRequired = !(
     state.externalUserApiKey && state.assistantSessionId
   );
@@ -1149,12 +1226,16 @@ async function submitAccountProfile() {
       typeof payload.externalUserApiKey === "string"
         ? payload.externalUserApiKey
         : undefined;
+    state.preferredVoiceId = getSelectedVoiceId();
+    state.preferredVoiceName = getSelectedVoiceName();
     state.registrationRequired = Boolean(payload.registrationRequired);
     state.accountEditorOpen = false;
     await saveRegistrationState(state.browserSessionId, {
       assistantSessionId: state.assistantSessionId,
       externalUser: state.currentUser,
-      externalUserApiKey: state.externalUserApiKey
+      externalUserApiKey: state.externalUserApiKey,
+      preferredVoiceId: state.preferredVoiceId,
+      preferredVoiceName: state.preferredVoiceName
     });
     appendLog(
       "system",
@@ -1164,7 +1245,7 @@ async function submitAccountProfile() {
     );
     await refreshAll();
   } catch (error) {
-    console.error("Failed to save StructuredQueries account profile", error);
+    console.error("Failed to save Structure Queries account profile", error);
     appendLog(
       "system",
       error instanceof Error
@@ -1201,7 +1282,7 @@ async function refreshVoices() {
     state.voices = payload.voices;
 
     for (const warning of payload.warnings ?? []) {
-      console.warn("StructuredQueries voices warning:", warning);
+      console.warn("Structure Queries voices warning:", warning);
     }
   } catch (error) {
     console.error("Failed to fetch voices", error);
@@ -1687,10 +1768,17 @@ function getPreferredRecordingMimeType() {
 
 async function submitRecordedAudio(blob: Blob) {
   const bytes = new Uint8Array(await blob.arrayBuffer());
-  await submitRecordedAudioBase64(base64FromBytes(bytes), blob.type || "audio/webm");
+  await submitRecordedAudioBase64(
+    base64FromBytes(bytes),
+    blob.type || "audio/webm"
+  );
 }
 
-async function submitRecordedAudioBase64(audioBase64: string, mimeType: string) {
+async function submitRecordedAudioBase64(
+  audioBase64: string,
+  mimeType: string,
+  durationMs?: number
+) {
   const socket = await ensureWebSocketSession();
 
   if (socket.readyState !== WebSocket.OPEN) {
@@ -1706,6 +1794,7 @@ async function submitRecordedAudioBase64(audioBase64: string, mimeType: string) 
   sendSocketMessage({
     type: "submit_audio",
     audioBase64,
+    durationMs,
     mimeType,
     language: languageSelect?.value ?? "auto",
     templateId: state.currentTemplateId,
@@ -1869,6 +1958,7 @@ async function analyzeCurrentPage() {
       },
       body: JSON.stringify({
         browserSessionId: state.browserSessionId,
+        externalUserApiKey: state.externalUserApiKey,
         url: state.currentPage.url,
         title: state.currentPage.title,
         preferredLanguage: languageSelect?.value ?? "auto",
@@ -1913,6 +2003,7 @@ async function refreshAll() {
     state.browserSessionId = extensionSession.browserSessionId;
     state.extensionId = extensionSession.extensionId;
 
+    await loadRegistrationState();
     await refreshServerStatus();
     await refreshVoices();
     state.currentPage = await fetchPageContext();
@@ -1926,8 +2017,6 @@ async function refreshAll() {
       resetConversationLog();
       state.currentTemplateId = undefined;
     }
-
-    await loadRegistrationState();
 
     if (state.serverOnline) {
       await syncBrowserSession();
@@ -1968,7 +2057,8 @@ chrome.runtime.onMessage.addListener((message) => {
   ) {
     void submitRecordedAudioBase64(
       typeof message.audioBase64 === "string" ? message.audioBase64 : "",
-      typeof message.mimeType === "string" ? message.mimeType : "audio/webm"
+      typeof message.mimeType === "string" ? message.mimeType : "audio/webm",
+      typeof message.durationMs === "number" ? message.durationMs : undefined
     ).catch((error) => {
       console.error("Failed to submit recorded audio", error);
       appendLog(
@@ -2064,12 +2154,23 @@ closeOverlayButton?.addEventListener("click", () => {
 });
 
 voiceSelect?.addEventListener("change", () => {
+  state.preferredVoiceId = getSelectedVoiceId();
+  state.preferredVoiceName = getSelectedVoiceName();
+
+  void savePreferredVoicePreference().catch((error) => {
+    console.error("Failed to persist preferred speaker", error);
+  });
+
   if (activeSocket?.readyState === WebSocket.OPEN) {
     sendSocketMessage({
       type: "set_voice",
       voiceId: getSelectedVoiceId()
     });
   }
+
+  void syncBrowserSession().catch((error) => {
+    console.error("Failed to update preferred speaker", error);
+  });
 });
 
 languageSelect?.addEventListener("change", () => {

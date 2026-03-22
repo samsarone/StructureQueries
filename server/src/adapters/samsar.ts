@@ -24,6 +24,9 @@ type SamsarCreateAssistantCompletionInput = Parameters<
 type SamsarCreateExternalAssistantCompletionInput = Parameters<
   ReturnType<typeof getSamsarClient>["createExternalAssistantCompletion"]
 >[0];
+type SamsarChargeExternalUserUtilityUsageInput = Parameters<
+  ReturnType<typeof getSamsarClient>["chargeExternalUserUtilityUsage"]
+>[0];
 type SamsarCreateExternalAssistantSessionInput = Parameters<
   ReturnType<typeof getSamsarClient>["createExternalAssistantSession"]
 >[1];
@@ -88,6 +91,18 @@ export async function createSamsarExternalAssistantCompletion(
   options?: SamsarRequestOptions
 ) {
   return getSamsarClient().createExternalAssistantCompletion(
+    input,
+    externalUser,
+    options
+  );
+}
+
+export async function chargeSamsarExternalUserUtilityUsage(
+  input: SamsarChargeExternalUserUtilityUsageInput,
+  externalUser?: SamsarExternalUserIdentity | null,
+  options?: SamsarRequestOptions
+) {
+  return getSamsarClient().chargeExternalUserUtilityUsage(
     input,
     externalUser,
     options
@@ -160,6 +175,7 @@ export const samsarAdapter = {
   createAssistantCompletion: createSamsarAssistantCompletion,
   createExternalAssistantSession: createSamsarExternalAssistantSession,
   createExternalAssistantCompletion: createSamsarExternalAssistantCompletion,
+  chargeExternalUserUtilityUsage: chargeSamsarExternalUserUtilityUsage,
   createExternalUserSession: createSamsarExternalUserSession,
   createVideoFromImageList: createSamsarVideoFromImageList,
   createVideoFromText: createSamsarVideoFromText,
