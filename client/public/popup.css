@@ -79,9 +79,9 @@ select option {
   z-index: 0;
   min-height: 100vh;
   display: grid;
-  gap: 14px;
-  padding: 16px;
-  border-radius: 30px;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 26px;
   overflow: hidden;
   background:
     radial-gradient(circle at 14% 14%, rgba(89, 188, 255, 0.16), transparent 30%),
@@ -132,9 +132,9 @@ select option {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: 22px;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 18px;
   border: 1px solid rgba(143, 223, 255, 0.14);
   background:
     linear-gradient(180deg, rgba(10, 19, 32, 0.9), rgba(7, 13, 24, 0.88)),
@@ -155,10 +155,14 @@ select option {
   flex: 1;
 }
 
-.topbar-wordmark {
-  width: min(100%, 176px);
-  height: auto;
-  filter: drop-shadow(0 0 14px rgba(96, 194, 245, 0.1));
+.topbar-emblem {
+  width: 38px;
+  height: 38px;
+  padding: 4px;
+  border-radius: 14px;
+  box-shadow:
+    0 10px 24px rgba(0, 0, 0, 0.18),
+    0 0 0 1px rgba(255, 255, 255, 0.02) inset;
 }
 
 .brand-emblem {
@@ -223,7 +227,7 @@ select option {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
   flex-shrink: 0;
 }
@@ -232,12 +236,12 @@ select option {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .header-credit {
   margin: 0;
-  font-size: 0.74rem;
+  font-size: 0.7rem;
   font-weight: 700;
   line-height: 1;
   white-space: nowrap;
@@ -245,14 +249,14 @@ select option {
 }
 
 .status-pill {
-  max-width: 124px;
+  max-width: 112px;
   margin: 0;
-  padding: 7px 10px;
+  padding: 5px 8px;
   overflow: hidden;
   border-radius: 999px;
   border: 1px solid rgba(143, 223, 255, 0.18);
   background: rgba(9, 17, 30, 0.64);
-  font-size: 0.68rem;
+  font-size: 0.64rem;
   font-weight: 800;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -260,10 +264,10 @@ select option {
 }
 
 .icon-button.topbar-settings-button {
-  width: 42px;
-  height: 42px;
-  border-radius: 16px;
-  font-size: 1.2rem;
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  font-size: 1.12rem;
 }
 
 .topbar-settings-button span {
@@ -320,9 +324,9 @@ select option {
   position: relative;
   z-index: 0;
   display: grid;
-  gap: 12px;
-  padding: 18px;
-  border-radius: 28px;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 22px;
   border: 1px solid var(--line);
   background:
     linear-gradient(180deg, rgba(8, 15, 26, 0.94), rgba(7, 12, 22, 0.96)),
@@ -338,9 +342,9 @@ select option {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 7px 10px;
-  border-radius: 14px;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 12px;
   border: 1px solid rgba(251, 113, 133, 0.18);
   background:
     radial-gradient(circle at top right, rgba(251, 113, 133, 0.12), transparent 40%),
@@ -370,9 +374,9 @@ select option {
 
 .page-summary {
   display: grid;
-  gap: 6px;
-  padding: 12px 14px;
-  border-radius: 20px;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 16px;
   border: 1px solid rgba(143, 223, 255, 0.12);
   background:
     linear-gradient(180deg, rgba(10, 18, 31, 0.76), rgba(7, 13, 24, 0.8)),
@@ -428,9 +432,9 @@ select option {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
-  font-size: clamp(1.02rem, 3.8vw, 1.3rem);
+  font-size: clamp(0.96rem, 3.4vw, 1.18rem);
   font-weight: 780;
-  line-height: 1.14;
+  line-height: 1.12;
   letter-spacing: -0.03em;
   color: var(--text);
   text-wrap: balance;
@@ -438,9 +442,9 @@ select option {
 
 .surface-status {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: 0.76rem;
   font-weight: 600;
-  line-height: 1.5;
+  line-height: 1.4;
   color: var(--muted);
 }
 
@@ -451,8 +455,8 @@ select option {
 
 .hero-emblem {
   position: relative;
-  width: min(100%, 280px);
-  height: 214px;
+  width: min(100%, 248px);
+  height: 186px;
   display: grid;
   place-items: center;
 }
@@ -472,20 +476,20 @@ select option {
 
 .hero-mark {
   position: absolute;
-  width: 208px;
-  height: 208px;
+  width: 182px;
+  height: 182px;
   opacity: 0.96;
   filter: drop-shadow(0 22px 52px rgba(0, 0, 0, 0.24));
 }
 
 .voice-orb-shell {
   position: relative;
-  width: 150px;
-  height: 150px;
+  width: 130px;
+  height: 130px;
   display: grid;
   place-items: center;
   z-index: 1;
-  margin-top: 10px;
+  margin-top: 6px;
 }
 
 .voice-orb-shell::before {
@@ -521,8 +525,8 @@ select option {
 
 .voice-orb {
   position: relative;
-  width: 92px;
-  height: 92px;
+  width: 82px;
+  height: 82px;
   display: grid;
   place-items: center;
   background:
@@ -558,20 +562,20 @@ select option {
 
 .voice-eq {
   position: absolute;
-  bottom: 19px;
+  bottom: 17px;
   left: 50%;
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  gap: 5px;
-  width: 48px;
-  height: 28px;
+  gap: 4px;
+  width: 42px;
+  height: 24px;
   transform: translateX(-50%) scale(0.82);
   opacity: 0;
 }
 
 .voice-eq span {
-  width: 5px;
+  width: 4px;
   min-height: 8px;
   border-radius: 999px;
   background: linear-gradient(180deg, rgba(240, 250, 255, 0.96), rgba(123, 226, 255, 0.56));
@@ -599,8 +603,8 @@ select option {
 }
 
 .voice-orb-core {
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   background: linear-gradient(160deg, rgba(240, 250, 255, 0.96), rgba(123, 226, 255, 0.38));
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.34),
@@ -610,7 +614,7 @@ select option {
 .control-row,
 .button-row {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .control-row {
@@ -1448,15 +1452,15 @@ body[data-voice-mode="offline"] .voice-orb {
 @media (max-width: 500px) {
   .overlay-shell,
   .loading-shell {
-    padding: 14px;
+    padding: 12px;
   }
 
   .overlay-shell {
-    border-radius: 26px;
+    border-radius: 24px;
   }
 
   .topbar {
-    padding: 10px;
+    padding: 8px;
   }
 
   .topbar-actions {
@@ -1467,19 +1471,24 @@ body[data-voice-mode="offline"] .voice-orb {
     gap: 6px;
   }
 
-  .topbar-wordmark {
-    width: min(100%, 152px);
+  .topbar-emblem {
+    width: 34px;
+    height: 34px;
+    border-radius: 12px;
   }
 
   .header-credit {
-    font-size: 0.7rem;
+    font-size: 0.68rem;
   }
 
   .status-pill {
-    max-width: 108px;
+    max-width: 96px;
   }
 
-  .hero-surface,
+  .hero-surface {
+    padding: 12px;
+  }
+
   .registration-dialog {
     padding: 16px;
   }
@@ -1503,13 +1512,13 @@ body[data-voice-mode="offline"] .voice-orb {
   }
 
   .hero-mark {
-    width: 196px;
-    height: 196px;
+    width: 166px;
+    height: 166px;
   }
 
   .voice-orb-shell {
-    width: 140px;
-    height: 140px;
+    width: 118px;
+    height: 118px;
   }
 }
 
