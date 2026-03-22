@@ -650,6 +650,19 @@ function setButtonVariant(
   button.classList.toggle("danger-button", variant === "danger");
 }
 
+function dismissCreditBanner(event?: Event) {
+  event?.preventDefault();
+  event?.stopPropagation();
+  state.creditBannerDismissed = true;
+
+  if (creditWarningNode) {
+    creditWarningNode.hidden = true;
+    creditWarningNode.style.display = "none";
+  }
+
+  render();
+}
+
 function normalizeWebSocketPhase(phase: string): WebSocketPhase {
   switch (phase) {
     case "connected":
@@ -1160,6 +1173,7 @@ function render() {
 
   if (creditWarningNode) {
     creditWarningNode.hidden = !showCreditBanner;
+    creditWarningNode.style.display = showCreditBanner ? "" : "none";
   }
 
   document.body.dataset.loading = state.isInitializing ? "true" : "false";
@@ -2715,17 +2729,8 @@ creditWarningButton?.addEventListener("click", () => {
   void openSamsarClientLogin();
 });
 
-creditWarningDismissButton?.addEventListener("click", (event) => {
-  event.preventDefault();
-  event.stopPropagation();
-  state.creditBannerDismissed = true;
-
-  if (creditWarningNode) {
-    creditWarningNode.hidden = true;
-  }
-
-  render();
-});
+creditWarningDismissButton?.addEventListener("pointerdown", dismissCreditBanner);
+creditWarningDismissButton?.addEventListener("click", dismissCreditBanner);
 
 voiceToggleButton?.addEventListener("click", () => {
   if (state.conversationActive || state.recording || state.assistantSpeaking) {

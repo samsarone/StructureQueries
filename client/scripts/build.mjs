@@ -68,16 +68,7 @@ async function copyPublicAssets() {
   const manifestPath = resolve(distDir, "manifest.json");
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
 
-  manifest.host_permissions = [
-    ...new Set([
-      ...(Array.isArray(manifest.host_permissions)
-        ? manifest.host_permissions
-        : []),
-      "http://*/*",
-      "https://*/*",
-      `${serverHttpOrigin}/*`
-    ])
-  ];
+  manifest.host_permissions = [`${serverHttpOrigin}/*`];
   manifest.content_security_policy = {
     ...manifest.content_security_policy,
     extension_pages: `script-src 'self'; object-src 'self'; connect-src 'self' ${serverHttpOrigin} ${serverWsOrigin};`
