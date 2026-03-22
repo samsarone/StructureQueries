@@ -405,21 +405,16 @@ select option {
   flex-shrink: 0;
 }
 
-.top-credit-banner-dismiss {
+.icon-button.top-credit-banner-dismiss {
   width: 24px;
   height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   border: 1px solid rgba(255, 210, 218, 0.18);
   border-radius: 8px;
   background: rgba(56, 18, 27, 0.44);
   color: rgba(255, 232, 236, 0.9);
-  cursor: pointer;
-}
-
-.top-credit-banner-dismiss:hover:not(:disabled) {
-  transform: translateY(-1px);
+  flex-shrink: 0;
+  font-size: 0.84rem;
+  line-height: 1;
 }
 
 .page-summary {

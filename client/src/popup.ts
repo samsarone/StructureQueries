@@ -2715,8 +2715,15 @@ creditWarningButton?.addEventListener("click", () => {
   void openSamsarClientLogin();
 });
 
-creditWarningDismissButton?.addEventListener("click", () => {
+creditWarningDismissButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
   state.creditBannerDismissed = true;
+
+  if (creditWarningNode) {
+    creditWarningNode.hidden = true;
+  }
+
   render();
 });
 
