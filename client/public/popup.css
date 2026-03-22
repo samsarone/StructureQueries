@@ -17,6 +17,30 @@
   --shadow: 0 30px 100px rgba(0, 0, 0, 0.46);
 }
 
+@font-face {
+  font-family: "Poppins";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/poppins-400-latin.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Poppins";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("./fonts/poppins-600-latin.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Poppins";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./fonts/poppins-700-latin.woff2") format("woff2");
+}
+
 * {
   box-sizing: border-box;
 }
@@ -30,8 +54,8 @@ body {
 
 body {
   min-height: 100vh;
-  font-family: "Avenir Next", "Avenir Next Condensed", "SF Pro Display",
-    "Segoe UI", sans-serif;
+  font-family: "Poppins", "Avenir Next", "SF Pro Display", "Segoe UI",
+    sans-serif;
   color: var(--text);
   background: transparent;
 }
@@ -79,9 +103,9 @@ select option {
   z-index: 0;
   min-height: 100vh;
   display: grid;
-  gap: 10px;
-  padding: 12px;
-  border-radius: 26px;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 24px;
   overflow: hidden;
   background:
     radial-gradient(circle at 14% 14%, rgba(89, 188, 255, 0.16), transparent 30%),
@@ -132,9 +156,9 @@ select option {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 8px 10px;
-  border-radius: 18px;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 16px;
   border: 1px solid rgba(143, 223, 255, 0.14);
   background:
     linear-gradient(180deg, rgba(10, 19, 32, 0.9), rgba(7, 13, 24, 0.88)),
@@ -156,10 +180,10 @@ select option {
 }
 
 .topbar-emblem {
-  width: 38px;
-  height: 38px;
-  padding: 4px;
-  border-radius: 14px;
+  width: 34px;
+  height: 34px;
+  padding: 3px;
+  border-radius: 12px;
   box-shadow:
     0 10px 24px rgba(0, 0, 0, 0.18),
     0 0 0 1px rgba(255, 255, 255, 0.02) inset;
@@ -227,7 +251,7 @@ select option {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 5px;
   min-width: 0;
   flex-shrink: 0;
 }
@@ -236,12 +260,12 @@ select option {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
 }
 
 .header-credit {
   margin: 0;
-  font-size: 0.7rem;
+  font-size: 0.67rem;
   font-weight: 700;
   line-height: 1;
   white-space: nowrap;
@@ -249,14 +273,14 @@ select option {
 }
 
 .status-pill {
-  max-width: 112px;
+  max-width: 102px;
   margin: 0;
-  padding: 5px 8px;
+  padding: 4px 7px;
   overflow: hidden;
   border-radius: 999px;
   border: 1px solid rgba(143, 223, 255, 0.18);
   background: rgba(9, 17, 30, 0.64);
-  font-size: 0.64rem;
+  font-size: 0.62rem;
   font-weight: 800;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -264,10 +288,10 @@ select option {
 }
 
 .icon-button.topbar-settings-button {
-  width: 40px;
-  height: 40px;
-  border-radius: 14px;
-  font-size: 1.12rem;
+  width: 36px;
+  height: 36px;
+  border-radius: 13px;
+  font-size: 1.02rem;
 }
 
 .topbar-settings-button span {
@@ -324,9 +348,9 @@ select option {
   position: relative;
   z-index: 0;
   display: grid;
-  gap: 10px;
-  padding: 14px;
-  border-radius: 22px;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 20px;
   border: 1px solid var(--line);
   background:
     linear-gradient(180deg, rgba(8, 15, 26, 0.94), rgba(7, 12, 22, 0.96)),
@@ -342,9 +366,9 @@ select option {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
-  padding: 6px 8px;
-  border-radius: 12px;
+  gap: 5px;
+  padding: 5px 7px;
+  border-radius: 11px;
   border: 1px solid rgba(251, 113, 133, 0.18);
   background:
     radial-gradient(circle at top right, rgba(251, 113, 133, 0.12), transparent 40%),
@@ -358,7 +382,7 @@ select option {
   overflow: hidden;
   font-size: 0.73rem;
   font-weight: 600;
-  line-height: 1.2;
+  line-height: 1.28;
   white-space: nowrap;
   text-overflow: ellipsis;
   color: rgba(255, 232, 236, 0.94);
@@ -374,9 +398,9 @@ select option {
 
 .page-summary {
   display: grid;
-  gap: 4px;
-  padding: 10px 12px;
-  border-radius: 16px;
+  gap: 3px;
+  padding: 8px 10px;
+  border-radius: 14px;
   border: 1px solid rgba(143, 223, 255, 0.12);
   background:
     linear-gradient(180deg, rgba(10, 18, 31, 0.76), rgba(7, 13, 24, 0.8)),
@@ -432,7 +456,7 @@ select option {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
-  font-size: clamp(0.96rem, 3.4vw, 1.18rem);
+  font-size: clamp(0.92rem, 3.2vw, 1.1rem);
   font-weight: 780;
   line-height: 1.12;
   letter-spacing: -0.03em;
@@ -442,9 +466,9 @@ select option {
 
 .surface-status {
   margin: 0;
-  font-size: 0.76rem;
+  font-size: 0.74rem;
   font-weight: 600;
-  line-height: 1.4;
+  line-height: 1.48;
   color: var(--muted);
 }
 
@@ -455,8 +479,8 @@ select option {
 
 .hero-emblem {
   position: relative;
-  width: min(100%, 248px);
-  height: 186px;
+  width: min(100%, 224px);
+  height: 164px;
   display: grid;
   place-items: center;
 }
@@ -476,20 +500,20 @@ select option {
 
 .hero-mark {
   position: absolute;
-  width: 182px;
-  height: 182px;
+  width: 160px;
+  height: 160px;
   opacity: 0.96;
   filter: drop-shadow(0 22px 52px rgba(0, 0, 0, 0.24));
 }
 
 .voice-orb-shell {
   position: relative;
-  width: 130px;
-  height: 130px;
+  width: 114px;
+  height: 114px;
   display: grid;
   place-items: center;
   z-index: 1;
-  margin-top: 6px;
+  margin-top: 4px;
 }
 
 .voice-orb-shell::before {
@@ -525,8 +549,8 @@ select option {
 
 .voice-orb {
   position: relative;
-  width: 82px;
-  height: 82px;
+  width: 72px;
+  height: 72px;
   display: grid;
   place-items: center;
   background:
@@ -562,21 +586,21 @@ select option {
 
 .voice-eq {
   position: absolute;
-  bottom: 17px;
+  bottom: 15px;
   left: 50%;
   display: flex;
   align-items: flex-end;
   justify-content: center;
   gap: 4px;
-  width: 42px;
-  height: 24px;
+  width: 36px;
+  height: 20px;
   transform: translateX(-50%) scale(0.82);
   opacity: 0;
 }
 
 .voice-eq span {
   width: 4px;
-  min-height: 8px;
+  min-height: 6px;
   border-radius: 999px;
   background: linear-gradient(180deg, rgba(240, 250, 255, 0.96), rgba(123, 226, 255, 0.56));
   box-shadow: 0 0 10px rgba(102, 187, 255, 0.18);
@@ -603,8 +627,8 @@ select option {
 }
 
 .voice-orb-core {
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   background: linear-gradient(160deg, rgba(240, 250, 255, 0.96), rgba(123, 226, 255, 0.38));
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.34),
@@ -614,7 +638,7 @@ select option {
 .control-row,
 .button-row {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .control-row {
@@ -624,9 +648,9 @@ select option {
 .control-pill {
   position: relative;
   display: grid;
-  gap: 6px;
-  padding: 11px 30px 11px 13px;
-  border-radius: 16px;
+  gap: 5px;
+  padding: 9px 28px 9px 12px;
+  border-radius: 14px;
   border: 1px solid var(--line);
   background:
     linear-gradient(180deg, rgba(10, 19, 32, 0.86), rgba(7, 13, 24, 0.84)),
@@ -648,7 +672,7 @@ select option {
 }
 
 .control-pill::after {
-  bottom: 17px;
+  bottom: 14px;
 }
 
 .control-pill span,
@@ -671,10 +695,10 @@ select option {
 .primary-button,
 .secondary-button,
 .danger-button {
-  min-height: 48px;
-  padding: 0 14px;
-  border-radius: 16px;
-  font-size: 0.84rem;
+  min-height: 42px;
+  padding: 0 12px;
+  border-radius: 14px;
+  font-size: 0.8rem;
   font-weight: 800;
 }
 
@@ -709,7 +733,7 @@ select option {
 }
 
 .button-chip {
-  min-height: 44px;
+  min-height: 40px;
 }
 
 .button-live {
@@ -732,7 +756,7 @@ select option {
 }
 
 .drawer {
-  border-radius: 24px;
+  border-radius: 20px;
   border: 1px solid var(--line);
   background: rgba(8, 16, 28, 0.72);
   overflow: hidden;
@@ -744,9 +768,9 @@ select option {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 13px 14px;
+  padding: 10px 12px;
   cursor: pointer;
-  font-size: 0.8rem;
+  font-size: 0.76rem;
   font-weight: 800;
   color: var(--text);
 }
@@ -795,7 +819,7 @@ select option {
 .detail-line,
 .log-text {
   margin: 7px 0 0;
-  line-height: 1.5;
+  line-height: 1.58;
 }
 
 .status-value {
@@ -892,7 +916,7 @@ select option {
 .registration-status {
   margin: 0;
   color: var(--muted);
-  line-height: 1.55;
+  line-height: 1.62;
 }
 
 .dialog-actions {
@@ -1452,15 +1476,15 @@ body[data-voice-mode="offline"] .voice-orb {
 @media (max-width: 500px) {
   .overlay-shell,
   .loading-shell {
-    padding: 12px;
+    padding: 10px;
   }
 
   .overlay-shell {
-    border-radius: 24px;
+    border-radius: 22px;
   }
 
   .topbar {
-    padding: 8px;
+    padding: 6px;
   }
 
   .topbar-actions {
@@ -1472,21 +1496,21 @@ body[data-voice-mode="offline"] .voice-orb {
   }
 
   .topbar-emblem {
-    width: 34px;
-    height: 34px;
-    border-radius: 12px;
+    width: 32px;
+    height: 32px;
+    border-radius: 11px;
   }
 
   .header-credit {
-    font-size: 0.68rem;
+    font-size: 0.66rem;
   }
 
   .status-pill {
-    max-width: 96px;
+    max-width: 92px;
   }
 
   .hero-surface {
-    padding: 12px;
+    padding: 10px;
   }
 
   .registration-dialog {
@@ -1512,13 +1536,13 @@ body[data-voice-mode="offline"] .voice-orb {
   }
 
   .hero-mark {
-    width: 166px;
-    height: 166px;
+    width: 148px;
+    height: 148px;
   }
 
   .voice-orb-shell {
-    width: 118px;
-    height: 118px;
+    width: 104px;
+    height: 104px;
   }
 }
 

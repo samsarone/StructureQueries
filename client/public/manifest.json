@@ -41,6 +41,9 @@
         "popup.html",
         "popup.css",
         "popup.js",
+        "fonts/poppins-400-latin.woff2",
+        "fonts/poppins-600-latin.woff2",
+        "fonts/poppins-700-latin.woff2",
         "structured-queries-monogram.svg",
         "structured-queries-wordmark.svg"
       ],
