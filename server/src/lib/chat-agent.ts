@@ -276,6 +276,75 @@ function normalizeAssistantMessages(messages: ChatMessage[] = []) {
     );
 }
 
+function buildGroundedTurnContent(input: {
+  query: string;
+  pageTitle?: string;
+  pageUrl?: string;
+  language?: string | null;
+  groundingBlock: string;
+}) {
+  const parts = [
+    input.query.trim(),
+    [
+      "Retrieved document context:",
+      `Page title: ${input.pageTitle ?? "unknown"}`,
+      `Page URL: ${input.pageUrl ?? "unknown"}`,
+      `Language: ${input.language ?? "unknown"}`,
+      "",
+      input.groundingBlock
+    ].join("\n")
+  ].filter(Boolean);
+
+  return parts.join("\n\n");
+}
+
+function attachGroundingContextToMessages(
+  messages: Array<{
+    role: "assistant" | "developer" | "system" | "user";
+    content: string;
+  }>,
+  input: {
+    query: string;
+    pageTitle?: string;
+    pageUrl?: string;
+    language?: string | null;
+    groundingBlock: string;
+  }
+) {
+  const groundedTurnContent = buildGroundedTurnContent(input);
+
+  if (messages.length === 0) {
+    return [
+      {
+        role: "user" as const,
+        content: groundedTurnContent
+      }
+    ];
+  }
+
+  const normalizedMessages = [...messages];
+
+  for (let index = normalizedMessages.length - 1; index >= 0; index -= 1) {
+    if (normalizedMessages[index]?.role !== "user") {
+      continue;
+    }
+
+    normalizedMessages[index] = {
+      ...normalizedMessages[index]!,
+      content: groundedTurnContent
+    };
+
+    return normalizedMessages;
+  }
+
+  normalizedMessages.push({
+    role: "user",
+    content: groundedTurnContent
+  });
+
+  return normalizedMessages;
+}
+
 function extractAssistantText(response: {
   output_text?: string;
   output?: Array<{
@@ -499,14 +568,16 @@ export async function generateGroundedAssistantReply(
   }
 
   const groundingBlock = buildGroundingBlock(retrievedChunks);
-  const assistantMessages = normalizeAssistantMessages(input.messages);
-
-  if (assistantMessages.length === 0) {
-    assistantMessages.push({
-      role: "user",
-      content: query
-    });
-  }
+  const assistantMessages = attachGroundingContextToMessages(
+    normalizeAssistantMessages(input.messages),
+    {
+      query,
+      pageTitle,
+      pageUrl,
+      language,
+      groundingBlock
+    }
+  );
 
   const imageResponseEnabled =
     env.integrations.samsar.imageToolEnabled &&
@@ -518,22 +589,7 @@ export async function generateGroundedAssistantReply(
       previous_response_id:
         readStringValue(input.previousResponseId) ??
         readStringValue(metadata.previousResponseId),
-      input: [
-        {
-          role: "developer",
-          content:
-            "You are the StructuredQueries backend voice agent. Use the retrieved webpage context as the only grounding source for this turn. Answer in the same language as the user's latest message unless they ask to switch languages. If the answer is not supported by the retrieved chunks, say that clearly instead of inventing details. Keep answers concise, direct, and useful. Only generate an image when the user explicitly asks for a visual asset."
-        },
-        {
-          role: "developer",
-          content: `Page title: ${pageTitle ?? "unknown"}\nPage URL: ${pageUrl ?? "unknown"}\nLanguage: ${language ?? "unknown"}\nTemplate ID: ${templateId}`
-        },
-        {
-          role: "developer",
-          content: `Retrieved webpage context:\n${groundingBlock}`
-        },
-        ...assistantMessages
-      ],
+      input: assistantMessages,
       max_output_tokens: env.integrations.samsar.assistantMaxOutputTokens,
       metadata: {
         browserSessionId,

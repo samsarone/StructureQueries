@@ -8,18 +8,29 @@ import {
 
 const MAX_EMBEDDING_INPUT_CHARS = 6_000;
 const MAX_URL_SEEDS_PER_REQUEST = 50;
-const MAX_URL_CRAWL_LINKS_PER_REQUEST = 10;
+const MAX_URL_CRAWL_LINKS_PER_REQUEST = 5;
 const FIRECRAWL_MIN_REQUEST_INTERVAL_MS = 500;
 const FIRECRAWL_MIN_JOB_START_INTERVAL_MS = 8_000;
 const FIRECRAWL_MAX_RATE_LIMIT_RETRIES = 8;
 const FIRECRAWL_RETRY_DELAY_BUFFER_MS = 1_000;
 const FIRECRAWL_MAX_RETRY_DELAY_MS = 60_000;
+const RELATED_SECTION_PATTERN =
+  /\b(related|related links|see also|further reading|additional resources|learn more|next steps)\b/i;
+const EXCLUDED_SECTION_PATTERN =
+  /\b(nav|navigation|menu|footer|header|breadcrumb|legal|privacy|terms|cookie|social|share)\b/i;
+const IMPORTANT_LINK_PATTERN =
+  /\b(overview|introduction|quickstart|getting started|guide|tutorial|reference|api|configuration|setup|install|example|examples|concept|concepts|architecture|details|faq|troubleshooting)\b/i;
+const DEPRIORITIZED_LINK_PATTERN =
+  /\b(sign in|signin|log in|login|register|sign up|signup|pricing|billing|blog|news|press|careers|contact|support|privacy|terms|cookie|cookies|legal|facebook|twitter|linkedin|youtube|github)\b/i;
+const NON_HTML_PATH_PATTERN =
+  /\.(?:png|jpe?g|gif|svg|webp|ico|pdf|zip|gz|tgz|mp4|mp3|mov|avi|pptx?|docx?|xlsx?)$/i;
 
 type FirecrawlDocument = {
   markdown?: unknown;
   summary?: unknown;
   html?: unknown;
   rawHtml?: unknown;
+  links?: unknown;
   url?: unknown;
   sourceURL?: unknown;
   sourceUrl?: unknown;
@@ -54,6 +65,14 @@ type FirecrawlDocumentSection = {
   publishedTime: string | null;
   modifiedTime: string | null;
   sectionText: string;
+};
+
+type PrioritizedLinkSource = "related" | "main" | "generic";
+
+type PrioritizedLinkCandidate = {
+  url: string;
+  source: PrioritizedLinkSource;
+  score: number;
 };
 
 type UrlPlainTextRecordBuildResult = {
@@ -353,6 +372,225 @@ function normalizeUrlList(urls: string | string[]) {
   return normalized;
 }
 
+function resolveUrlValue(
+  value: unknown,
+  baseUrl: string | null = null
+) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const parsed = baseUrl ? new URL(trimmed, baseUrl) : new URL(trimmed);
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+function upsertPrioritizedLinkCandidate(
+  candidates: Map<string, PrioritizedLinkCandidate>,
+  candidate: PrioritizedLinkCandidate | null
+) {
+  if (!candidate) {
+    return;
+  }
+
+  const existing = candidates.get(candidate.url);
+
+  if (!existing || candidate.score > existing.score) {
+    candidates.set(candidate.url, candidate);
+  }
+}
+
+function isAllowedCrawlCandidateUrl(seedUrl: string, candidateUrl: string) {
+  try {
+    const seed = new URL(seedUrl);
+    const candidate = new URL(candidateUrl);
+
+    if (seed.toString() === candidate.toString()) {
+      return false;
+    }
+
+    if (seed.hostname !== candidate.hostname) {
+      return false;
+    }
+
+    if (NON_HTML_PATH_PATTERN.test(candidate.pathname)) {
+      return false;
+    }
+
+    if (
+      DEPRIORITIZED_LINK_PATTERN.test(candidate.pathname) ||
+      DEPRIORITIZED_LINK_PATTERN.test(candidate.search)
+    ) {
+      return false;
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function scorePrioritizedLinkCandidate(input: {
+  seedUrl: string;
+  candidateUrl: string;
+  source: PrioritizedLinkSource;
+  anchorText?: string | null;
+  sectionHeading?: string | null;
+}) {
+  if (!isAllowedCrawlCandidateUrl(input.seedUrl, input.candidateUrl)) {
+    return null;
+  }
+
+  const seed = new URL(input.seedUrl);
+  const candidate = new URL(input.candidateUrl);
+  const anchorText = normalizeOptionalString(input.anchorText)?.toLowerCase() ?? "";
+  const sectionHeading =
+    normalizeOptionalString(input.sectionHeading)?.toLowerCase() ?? "";
+  const comparableText = `${anchorText} ${sectionHeading} ${candidate.pathname}`.trim();
+  let score =
+    input.source === "related"
+      ? 300
+      : input.source === "main"
+        ? 200
+        : 100;
+
+  if (candidate.pathname.startsWith(seed.pathname.replace(/[^/]+$/, ""))) {
+    score += 30;
+  }
+
+  if (IMPORTANT_LINK_PATTERN.test(comparableText)) {
+    score += 25;
+  }
+
+  if (RELATED_SECTION_PATTERN.test(sectionHeading)) {
+    score += 40;
+  }
+
+  if (DEPRIORITIZED_LINK_PATTERN.test(comparableText)) {
+    score -= 120;
+  }
+
+  if (candidate.search) {
+    score -= 5;
+  }
+
+  return {
+    url: candidate.toString(),
+    source: input.source,
+    score
+  };
+}
+
+function extractMarkdownLinkCandidates(
+  seedUrl: string,
+  markdown: string
+) {
+  const candidates = new Map<string, PrioritizedLinkCandidate>();
+  const lines = markdown.split(/\r?\n/);
+  let currentHeading: string | null = null;
+
+  lines.forEach((line) => {
+    const trimmedLine = line.trim();
+
+    if (!trimmedLine) {
+      return;
+    }
+
+    const headingMatch = /^(#{1,6})\s+(.+)$/.exec(trimmedLine);
+
+    if (headingMatch) {
+      currentHeading = headingMatch[2]?.trim() ?? null;
+      return;
+    }
+
+    const matches = trimmedLine.matchAll(
+      /\[([^\]]+)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g
+    );
+
+    for (const match of matches) {
+      const resolvedUrl = resolveUrlValue(match[2], seedUrl);
+
+      if (!resolvedUrl) {
+        continue;
+      }
+
+      const source: PrioritizedLinkSource =
+        currentHeading && RELATED_SECTION_PATTERN.test(currentHeading)
+          ? "related"
+          : currentHeading && !EXCLUDED_SECTION_PATTERN.test(currentHeading)
+            ? "main"
+            : "generic";
+
+      upsertPrioritizedLinkCandidate(
+        candidates,
+        scorePrioritizedLinkCandidate({
+          seedUrl,
+          candidateUrl: resolvedUrl,
+          source,
+          anchorText: match[1],
+          sectionHeading: currentHeading
+        })
+      );
+    }
+  });
+
+  return candidates;
+}
+
+function selectPrioritizedChildLinks(
+  seedUrl: string,
+  document: FirecrawlDocument,
+  maxLinks: number
+) {
+  if (maxLinks <= 0) {
+    return [];
+  }
+
+  const candidates = new Map<string, PrioritizedLinkCandidate>();
+  const markdown =
+    typeof document.markdown === "string" ? document.markdown : "";
+
+  if (markdown.trim()) {
+    extractMarkdownLinkCandidates(seedUrl, markdown).forEach((candidate, url) => {
+      candidates.set(url, candidate);
+    });
+  }
+
+  const discoveredLinks = Array.isArray(document.links) ? document.links : [];
+
+  discoveredLinks.forEach((link) => {
+    const resolvedUrl = resolveUrlValue(link, seedUrl);
+
+    if (!resolvedUrl) {
+      return;
+    }
+
+    upsertPrioritizedLinkCandidate(
+      candidates,
+      scorePrioritizedLinkCandidate({
+        seedUrl,
+        candidateUrl: resolvedUrl,
+        source: "generic"
+      })
+    );
+  });
+
+  return [...candidates.values()]
+    .sort((left, right) => right.score - left.score || left.url.localeCompare(right.url))
+    .slice(0, maxLinks)
+    .map((candidate) => candidate.url);
+}
+
 function getFirecrawlMetadata(document: FirecrawlDocument) {
   return document.metadata && typeof document.metadata === "object"
     ? document.metadata
@@ -641,7 +879,7 @@ async function scrapePrimaryDocument(client: Firecrawl, url: string) {
     const document = (await firecrawlWithRetry(
       () =>
         client.scrape(url, {
-          formats: ["markdown"],
+          formats: ["markdown", "links"],
           onlyMainContent: true
         }) as Promise<FirecrawlDocument>,
       {
@@ -652,6 +890,152 @@ async function scrapePrimaryDocument(client: Firecrawl, url: string) {
     return document;
   } catch {
     return null;
+  }
+}
+
+async function batchScrapeDocuments(client: Firecrawl, urls: string[]) {
+  const job = (await firecrawlWithRetry(
+    () =>
+      client.batchScrape(urls, {
+        options: {
+          formats: ["markdown"],
+          onlyMainContent: true
+        },
+        pollInterval: env.integrations.firecrawl.pollIntervalSeconds,
+        timeout: env.integrations.firecrawl.timeoutSeconds
+      }) as Promise<FirecrawlCrawlJob>,
+    {
+      isJobStart: true
+    }
+  )) as FirecrawlCrawlJob;
+
+  let crawlErrors: FirecrawlCrawlErrors = {
+    errors: [],
+    robotsBlocked: []
+  };
+
+  if (job.id) {
+    try {
+      crawlErrors = (await firecrawlWithRetry(
+        () => client.getBatchScrapeErrors(job.id!) as Promise<FirecrawlCrawlErrors>,
+        {
+          isJobStart: false
+        }
+      )) as FirecrawlCrawlErrors;
+    } catch {
+      crawlErrors = {
+        errors: [],
+        robotsBlocked: []
+      };
+    }
+  }
+
+  return {
+    job,
+    crawlErrors
+  };
+}
+
+async function crawlSeedUrlWithFallback(
+  client: Firecrawl,
+  seedUrl: string,
+  crawlLevels: number,
+  crawlLimit: number
+) {
+  const genericCrawl = async () => {
+    const job = (await firecrawlWithRetry(
+      () =>
+        client.crawl(seedUrl, {
+          limit: crawlLimit,
+          maxDiscoveryDepth: Math.max(0, crawlLevels - 1),
+          sitemap: "skip",
+          crawlEntireDomain: true,
+          allowExternalLinks: false,
+          allowSubdomains: false,
+          ignoreQueryParameters: true,
+          scrapeOptions: {
+            formats: ["markdown"],
+            onlyMainContent: true
+          },
+          pollInterval: env.integrations.firecrawl.pollIntervalSeconds,
+          timeout: env.integrations.firecrawl.timeoutSeconds
+        }) as Promise<FirecrawlCrawlJob>,
+      {
+        isJobStart: true
+      }
+    )) as FirecrawlCrawlJob;
+
+    let crawlErrors: FirecrawlCrawlErrors = {
+      errors: [],
+      robotsBlocked: []
+    };
+
+    if (job.id) {
+      try {
+        crawlErrors = (await firecrawlWithRetry(
+          () => client.getCrawlErrors(job.id!) as Promise<FirecrawlCrawlErrors>,
+          {
+            isJobStart: false
+          }
+        )) as FirecrawlCrawlErrors;
+      } catch {
+        crawlErrors = {
+          errors: [],
+          robotsBlocked: []
+        };
+      }
+    }
+
+    return {
+      job,
+      crawlErrors
+    };
+  };
+
+  if (crawlLevels !== 2 || crawlLimit <= 1) {
+    return genericCrawl();
+  }
+
+  const primaryDocument = await scrapePrimaryDocument(client, seedUrl);
+
+  if (!primaryDocument) {
+    return genericCrawl();
+  }
+
+  const childUrls = selectPrioritizedChildLinks(
+    seedUrl,
+    primaryDocument,
+    Math.max(0, crawlLimit - 1)
+  );
+
+  if (childUrls.length === 0) {
+    return genericCrawl();
+  }
+
+  try {
+    const batchResult = await batchScrapeDocuments(client, childUrls);
+    const childDocuments = Array.isArray(batchResult.job.data)
+      ? batchResult.job.data
+      : [];
+
+    return {
+      job: {
+        id: batchResult.job.id,
+        status:
+          batchResult.job.status ??
+          (childDocuments.length > 0 ? "completed" : "failed"),
+        creditsUsed:
+          1 +
+          (typeof batchResult.job.creditsUsed === "number"
+            ? batchResult.job.creditsUsed
+            : childDocuments.length),
+        completed: childDocuments.length + 1,
+        data: [primaryDocument, ...childDocuments]
+      } satisfies FirecrawlCrawlJob,
+      crawlErrors: batchResult.crawlErrors
+    };
+  } catch {
+    return genericCrawl();
   }
 }
 
@@ -694,29 +1078,20 @@ export async function crawlUrlsForPlainTextEmbeddings(
         : Math.max(1, Math.ceil(remainingLinks / remainingSeedUrls));
 
     let job: FirecrawlCrawlJob;
+    let jobErrors: FirecrawlCrawlErrors = {
+      errors: [],
+      robotsBlocked: []
+    };
 
     try {
-      job = (await firecrawlWithRetry(
-        () =>
-          client.crawl(seedUrl, {
-            limit: crawlLimit,
-            maxDiscoveryDepth: Math.max(0, crawlLevels - 1),
-            sitemap: "skip",
-            crawlEntireDomain: true,
-            allowExternalLinks: false,
-            allowSubdomains: false,
-            ignoreQueryParameters: true,
-            scrapeOptions: {
-              formats: ["markdown"],
-              onlyMainContent: true
-            },
-            pollInterval: env.integrations.firecrawl.pollIntervalSeconds,
-            timeout: env.integrations.firecrawl.timeoutSeconds
-          }) as Promise<FirecrawlCrawlJob>,
-        {
-          isJobStart: true
-        }
-      )) as FirecrawlCrawlJob;
+      const crawlResult = await crawlSeedUrlWithFallback(
+        client,
+        seedUrl,
+        crawlLevels,
+        crawlLimit
+      );
+      job = crawlResult.job;
+      jobErrors = crawlResult.crawlErrors;
     } catch (error) {
       const issue = {
         url: seedUrl,
@@ -748,41 +1123,28 @@ export async function crawlUrlsForPlainTextEmbeddings(
     firecrawlCreditsUsed += creditsUsed;
     remainingLinks = Math.max(0, remainingLinks - Math.max(0, creditsUsed));
 
-    if (job.id) {
-      try {
-        const jobErrors = (await firecrawlWithRetry(
-          () => client.getCrawlErrors(job.id!) as Promise<FirecrawlCrawlErrors>,
-          {
-            isJobStart: false
-          }
-        )) as FirecrawlCrawlErrors;
+    (jobErrors.errors ?? [])
+      .map((entry) =>
+        normalizeCrawlError(entry, "Firecrawl failed to crawl URL.")
+      )
+      .filter((entry): entry is UrlEmbeddingIssue => Boolean(entry))
+      .forEach((entry) => {
+        crawlErrors.push(entry);
+        skippedUrlMap.set(entry.url, entry.message);
+      });
 
-        (jobErrors.errors ?? [])
-          .map((entry) =>
-            normalizeCrawlError(entry, "Firecrawl failed to crawl URL.")
-          )
-          .filter((entry): entry is UrlEmbeddingIssue => Boolean(entry))
-          .forEach((entry) => {
-            crawlErrors.push(entry);
-            skippedUrlMap.set(entry.url, entry.message);
-          });
-
-        (jobErrors.robotsBlocked ?? [])
-          .map((entry) =>
-            normalizeCrawlError(
-              entry,
-              "Firecrawl blocked the URL via robots.txt."
-            )
-          )
-          .filter((entry): entry is UrlEmbeddingIssue => Boolean(entry))
-          .forEach((entry) => {
-            crawlErrors.push(entry);
-            skippedUrlMap.set(entry.url, entry.message);
-          });
-      } catch {
-        // Ignore crawl-error lookups when Firecrawl does not provide them.
-      }
-    }
+    (jobErrors.robotsBlocked ?? [])
+      .map((entry) =>
+        normalizeCrawlError(
+          entry,
+          "Firecrawl blocked the URL via robots.txt."
+        )
+      )
+      .filter((entry): entry is UrlEmbeddingIssue => Boolean(entry))
+      .forEach((entry) => {
+        crawlErrors.push(entry);
+        skippedUrlMap.set(entry.url, entry.message);
+      });
 
     if (job.status === "failed" || job.status === "cancelled") {
       const issue = {
