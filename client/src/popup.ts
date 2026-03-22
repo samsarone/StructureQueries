@@ -9,7 +9,7 @@ const ANALYZED_PAGES_STORAGE_KEY = "structuredqueries.analyzedPages";
 const REGISTRATION_STORAGE_KEY = "structuredqueries.registration";
 const LEGACY_ANALYZED_PAGES_STORAGE_KEY = "telepathy.analyzedPages";
 const LEGACY_REGISTRATION_STORAGE_KEY = "telepathy.registration";
-const STARTER_CREDITS = 5;
+const STARTER_CREDITS = 30;
 const creditCountFormatter = new Intl.NumberFormat();
 
 interface ExtensionSessionPayload {

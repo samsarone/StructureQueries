@@ -101,6 +101,11 @@ export interface UrlPlainTextCrawlResult {
   crawlErrors: UrlEmbeddingIssue[];
 }
 
+export interface UrlPlainTextCrawlOptions {
+  crawlLevels?: number;
+  maxLinks?: number;
+}
+
 let firecrawlClient: Firecrawl | undefined;
 let firecrawlThrottleQueue = Promise.resolve();
 let firecrawlNextRequestAt = 0;
@@ -1040,14 +1045,25 @@ async function crawlSeedUrlWithFallback(
 }
 
 export async function crawlUrlsForPlainTextEmbeddings(
-  urls: string | string[]
+  urls: string | string[],
+  options?: UrlPlainTextCrawlOptions
 ): Promise<UrlPlainTextCrawlResult> {
   const client = getFirecrawlClient();
   const normalizedUrls = normalizeUrlList(urls);
-  const crawlLevels = env.integrations.firecrawl.crawlLevels;
+  const crawlLevels = Math.max(
+    1,
+    Math.min(
+      3,
+      Number.isInteger(options?.crawlLevels)
+        ? Number(options?.crawlLevels)
+        : env.integrations.firecrawl.crawlLevels
+    )
+  );
   const maxLinks = Math.min(
     MAX_URL_CRAWL_LINKS_PER_REQUEST,
-    env.integrations.firecrawl.maxLinks
+    Number.isInteger(options?.maxLinks)
+      ? Math.max(1, Number(options?.maxLinks))
+      : env.integrations.firecrawl.maxLinks
   );
 
   if (normalizedUrls.length > MAX_URL_SEEDS_PER_REQUEST) {

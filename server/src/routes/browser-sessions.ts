@@ -13,7 +13,7 @@ import {
 } from "../lib/samsar-errors.js";
 
 export const browserSessionsRouter = Router();
-const STARTER_CREDITS = 5;
+const STARTER_CREDITS = 30;
 const SAMSAR_CLIENT_REDIRECT_PATH = "/external/studio";
 
 function readOptionalString(value: unknown) {

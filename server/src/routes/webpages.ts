@@ -16,6 +16,8 @@ import {
   getSamsarErrorStatus
 } from "../lib/samsar-errors.js";
 
+const EXTENSION_STARTER_SCAN_MAX_LINKS = 2;
+
 function createEmbeddingName(title: string | undefined, url: string) {
   try {
     const parsedUrl = new URL(url);
@@ -215,7 +217,26 @@ webpagesRouter.post("/analyze", async (request, response) => {
   }
 
   try {
-    const crawlResult = await crawlUrlsForPlainTextEmbeddings([url]);
+    const crawlResult = await crawlUrlsForPlainTextEmbeddings([url], {
+      maxLinks: EXTENSION_STARTER_SCAN_MAX_LINKS
+    });
+    const crawlSummary = {
+      url,
+      inputUrlCount: crawlResult.inputUrlCount,
+      processedUrlCount: crawlResult.processedUrlCount,
+      crawlLevels: crawlResult.crawlLevels,
+      maxLinks: crawlResult.maxLinks,
+      firecrawlCreditsUsed: crawlResult.firecrawlCreditsUsed,
+      firecrawlJobId: crawlResult.firecrawlJobId,
+      firecrawlJobIds: crawlResult.firecrawlJobIds,
+      skippedUrls: crawlResult.skippedUrls,
+      crawlErrors: crawlResult.crawlErrors
+    };
+
+    console.log(
+      "[api][webpages][analyze] prepared crawl summary",
+      JSON.stringify(crawlSummary)
+    );
 
     await chargeExternalFirecrawlUsage({
       browserSessionId: browserSessionId || undefined,
@@ -232,15 +253,7 @@ webpagesRouter.post("/analyze", async (request, response) => {
     console.log(
       "[api][webpages][analyze] prepared plain-text payload",
       JSON.stringify({
-        url,
-        inputUrlCount: crawlResult.inputUrlCount,
-        processedUrlCount: crawlResult.processedUrlCount,
-        crawlLevels: crawlResult.crawlLevels,
-        firecrawlCreditsUsed: crawlResult.firecrawlCreditsUsed,
-        firecrawlJobId: crawlResult.firecrawlJobId,
-        firecrawlJobIds: crawlResult.firecrawlJobIds,
-        skippedUrls: crawlResult.skippedUrls,
-        crawlErrors: crawlResult.crawlErrors,
+        ...crawlSummary,
         records: crawlResult.records
       })
     );
