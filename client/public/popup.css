@@ -53,6 +53,8 @@ body {
 }
 
 body {
+  width: 336px;
+  max-width: 100vw;
   min-height: 100vh;
   font-family: "Poppins", "Avenir Next", "SF Pro Display", "Segoe UI",
     sans-serif;
@@ -104,7 +106,7 @@ select option {
   min-height: 100vh;
   display: grid;
   gap: 8px;
-  padding: 10px;
+  padding: 0 10px 10px;
   border-radius: 24px;
   overflow: hidden;
   background:
@@ -458,7 +460,7 @@ select option {
   -webkit-line-clamp: 2;
   font-size: clamp(0.92rem, 3.2vw, 1.1rem);
   font-weight: 780;
-  line-height: 1.12;
+  line-height: 1.18;
   letter-spacing: -0.03em;
   color: var(--text);
   text-wrap: balance;
@@ -1004,8 +1006,8 @@ select option {
   inset: 0;
   z-index: 6;
   display: grid;
-  gap: 14px;
-  padding: 16px;
+  gap: 8px;
+  padding: 0 10px 10px;
   opacity: 0;
   pointer-events: none;
   transition: opacity 180ms ease;
@@ -1476,7 +1478,7 @@ body[data-voice-mode="offline"] .voice-orb {
 @media (max-width: 500px) {
   .overlay-shell,
   .loading-shell {
-    padding: 10px;
+    padding: 0 10px 10px;
   }
 
   .overlay-shell {
