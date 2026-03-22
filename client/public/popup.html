@@ -25,11 +25,12 @@
           </div>
           <button
             id="registration-close-button"
-            class="icon-button dialog-close-button"
+            class="secondary-button dialog-back-button"
             type="button"
-            aria-label="Close account dialog"
+            aria-label="Back to main view"
           >
-            <span aria-hidden="true">×</span>
+            <span aria-hidden="true">←</span>
+            <span>Back</span>
           </button>
         </div>
 
@@ -130,25 +131,36 @@
         </div>
 
         <div class="topbar-actions">
-          <p id="analysis-pill" class="status-pill">Checking...</p>
+          <div class="topbar-metrics">
+            <p id="header-credits" class="header-credit">-- cr</p>
+            <p id="analysis-pill" class="status-pill">Checking...</p>
+          </div>
           <button
             id="account-button"
-            class="icon-button"
+            class="icon-button topbar-settings-button"
             type="button"
             aria-label="Open account settings"
           >
             <span aria-hidden="true">⚙</span>
           </button>
-          <button
-            id="close-overlay-button"
-            class="icon-button icon-danger"
-            type="button"
-            aria-label="Close overlay"
-          >
-            <span aria-hidden="true">×</span>
-          </button>
         </div>
       </header>
+
+      <section
+        id="credit-warning"
+        class="top-credit-banner"
+        aria-live="polite"
+        hidden
+      >
+        <p id="credit-warning-message" class="top-credit-banner-message"></p>
+        <button
+          id="credit-warning-button"
+          class="secondary-button top-credit-banner-button"
+          type="button"
+        >
+          Recharge Credits
+        </button>
+      </section>
 
       <section class="hero-surface">
         <div class="hero-stage">
@@ -190,22 +202,6 @@
             </select>
           </label>
         </div>
-
-        <section
-          id="credit-warning"
-          class="credit-warning-card"
-          aria-live="assertive"
-          hidden
-        >
-          <p id="credit-warning-message" class="credit-warning-message"></p>
-          <button
-            id="credit-warning-button"
-            class="secondary-button credit-warning-button"
-            type="button"
-          >
-            Recharge Credits
-          </button>
-        </section>
 
         <section class="page-summary" aria-live="polite">
           <p class="surface-label">Current Page</p>
@@ -295,8 +291,8 @@
             <span class="skeleton skeleton-wordmark"></span>
           </div>
           <div class="loading-topbar-actions">
+            <span class="skeleton skeleton-page-label"></span>
             <span class="skeleton skeleton-pill"></span>
-            <span class="skeleton skeleton-icon"></span>
             <span class="skeleton skeleton-icon"></span>
           </div>
         </div>

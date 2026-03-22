@@ -10,6 +10,7 @@ const REGISTRATION_STORAGE_KEY = "structuredqueries.registration";
 const LEGACY_ANALYZED_PAGES_STORAGE_KEY = "telepathy.analyzedPages";
 const LEGACY_REGISTRATION_STORAGE_KEY = "telepathy.registration";
 const STARTER_CREDITS = 50;
+const LOW_CREDIT_WARNING_THRESHOLD = 100;
 const creditCountFormatter = new Intl.NumberFormat();
 
 interface ExtensionSessionPayload {
@@ -161,6 +162,7 @@ const accountUsernameNode =
   document.querySelector<HTMLElement>("#account-username");
 const accountUserIdNode =
   document.querySelector<HTMLElement>("#account-user-id");
+const headerCreditsNode = document.querySelector<HTMLElement>("#header-credits");
 const analysisPillNode = document.querySelector<HTMLElement>("#analysis-pill");
 const pageTitleNode = document.querySelector<HTMLElement>("#page-title");
 const pageUrlNode = document.querySelector<HTMLElement>("#page-url");
@@ -207,8 +209,6 @@ const analyzeButtonIcon =
   document.querySelector<HTMLElement>("#analyze-button-icon");
 const buttonRowNode =
   document.querySelector<HTMLElement>("#button-row");
-const closeOverlayButton =
-  document.querySelector<HTMLButtonElement>("#close-overlay-button");
 const surfaceStatusNode =
   document.querySelector<HTMLElement>("#surface-status");
 const creditWarningNode =
@@ -910,11 +910,21 @@ function render() {
     state.assistantSpeaking ||
     waitingForAssistant;
   const creditsRemaining = getCreditsRemaining();
+  const lowCreditsActive =
+    !state.registrationRequired &&
+    creditsRemaining !== null &&
+    creditsRemaining < LOW_CREDIT_WARNING_THRESHOLD;
+  const showCreditBanner = creditIssueActive || lowCreditsActive;
   const accountName =
     readOptionalString(state.currentUser?.displayName) ??
     readOptionalString(state.currentUser?.username) ??
     readOptionalString(state.currentUser?.email) ??
     (state.registrationRequired ? "Setup required" : "Structured Queries");
+  const headerCreditsValue = state.registrationRequired
+    ? `${STARTER_CREDITS} starter`
+    : creditsRemaining === null
+      ? "-- cr"
+      : `${creditCountFormatter.format(creditsRemaining)} cr`;
   const settingsCreditsValue = state.registrationRequired
     ? `${STARTER_CREDITS} starter credits`
     : creditsRemaining === null
@@ -1046,6 +1056,17 @@ function render() {
     : state.analysisReady
       ? "Redo scan"
       : "Prepare page";
+  const creditBannerMessage = creditIssueActive
+    ? creditsRemaining === null
+      ? "Recharge needed."
+      : creditsRemaining === 0
+        ? "0 credits left."
+        : `${creditCountFormatter.format(creditsRemaining)} credits left.`
+    : lowCreditsActive && creditsRemaining !== null
+      ? creditsRemaining === 0
+        ? "0 credits left."
+        : `${creditCountFormatter.format(creditsRemaining)} credits left.`
+      : "";
 
   setText(surfaceStatusNode, surfaceStatus);
   setText(accountNameNode, accountName);
@@ -1070,6 +1091,7 @@ function render() {
     readOptionalString(state.currentUser?.username) ?? "Not provided"
   );
   setText(accountUserIdNode, getCurrentUserId());
+  setText(headerCreditsNode, headerCreditsValue);
   setText(analysisPillNode, analysisPill);
   setText(
     pageTitleNode,
@@ -1119,14 +1141,14 @@ function render() {
   setText(settingsCreditsRemainingNode, settingsCreditsValue);
   setText(settingsCreditsCaptionNode, settingsCreditsCaption);
   setText(voiceWarningNode, state.voiceWarning ?? "");
-  setText(creditWarningMessageNode, state.creditIssueMessage ?? "");
+  setText(creditWarningMessageNode, creditBannerMessage);
 
   if (voiceWarningNode) {
     voiceWarningNode.hidden = !state.voiceWarning;
   }
 
   if (creditWarningNode) {
-    creditWarningNode.hidden = !creditIssueActive;
+    creditWarningNode.hidden = !showCreditBanner;
   }
 
   document.body.dataset.loading = state.isInitializing ? "true" : "false";
@@ -2696,10 +2718,6 @@ voiceToggleButton?.addEventListener("click", () => {
   });
 });
 
-closeOverlayButton?.addEventListener("click", () => {
-  requestOverlayClose();
-});
-
 voicePreviewButton?.addEventListener("click", () => {
   void toggleVoicePreviewPlayback().catch((error) => {
     console.error("Failed to play speaker preview", error);
@@ -2757,6 +2775,11 @@ window.addEventListener("focus", () => {
 
 window.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
+    if (state.accountEditorOpen && !state.registrationRequired) {
+      closeAccountEditor();
+      return;
+    }
+
     requestOverlayClose();
   }
 });

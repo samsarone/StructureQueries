@@ -224,7 +224,24 @@ select option {
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
+  min-width: 0;
   flex-shrink: 0;
+}
+
+.topbar-metrics {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-credit {
+  margin: 0;
+  font-size: 0.74rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  color: rgba(214, 232, 245, 0.78);
 }
 
 .status-pill {
@@ -240,6 +257,17 @@ select option {
   white-space: nowrap;
   text-overflow: ellipsis;
   color: #e6f6ff;
+}
+
+.icon-button.topbar-settings-button {
+  width: 42px;
+  height: 42px;
+  border-radius: 16px;
+  font-size: 1.2rem;
+}
+
+.topbar-settings-button span {
+  line-height: 1;
 }
 
 .icon-button,
@@ -302,6 +330,42 @@ select option {
   text-align: center;
   overflow: hidden;
   isolation: isolate;
+}
+
+.top-credit-banner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(251, 113, 133, 0.18);
+  background:
+    radial-gradient(circle at top right, rgba(251, 113, 133, 0.12), transparent 40%),
+    linear-gradient(180deg, rgba(30, 11, 18, 0.82), rgba(20, 10, 18, 0.88)),
+    rgba(33, 11, 18, 0.8);
+}
+
+.top-credit-banner-message {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.73rem;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: rgba(255, 232, 236, 0.94);
+}
+
+.secondary-button.top-credit-banner-button {
+  min-height: 28px;
+  padding: 0 10px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  font-size: 0.7rem;
 }
 
 .page-summary {
@@ -600,29 +664,6 @@ select option {
   grid-template-columns: minmax(118px, auto) minmax(0, 1fr);
 }
 
-.credit-warning-card {
-  display: grid;
-  gap: 10px;
-  padding: 13px;
-  border-radius: 18px;
-  border: 1px solid rgba(251, 113, 133, 0.22);
-  background:
-    radial-gradient(circle at top right, rgba(251, 113, 133, 0.14), transparent 42%),
-    rgba(47, 11, 20, 0.76);
-  text-align: left;
-}
-
-.credit-warning-message {
-  margin: 0;
-  font-size: 0.8rem;
-  line-height: 1.55;
-  color: rgba(255, 226, 232, 0.94);
-}
-
-.credit-warning-button {
-  min-height: 42px;
-}
-
 .primary-button,
 .secondary-button,
 .danger-button {
@@ -831,6 +872,16 @@ select option {
 
 .dialog-close-button {
   flex-shrink: 0;
+}
+
+.secondary-button.dialog-back-button {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  flex-shrink: 0;
+  font-size: 0.76rem;
 }
 
 .registration-copy,
@@ -1391,8 +1442,16 @@ body[data-voice-mode="offline"] .voice-orb {
     gap: 6px;
   }
 
+  .topbar-metrics {
+    gap: 6px;
+  }
+
   .topbar-wordmark {
     width: min(100%, 152px);
+  }
+
+  .header-credit {
+    font-size: 0.7rem;
   }
 
   .status-pill {
