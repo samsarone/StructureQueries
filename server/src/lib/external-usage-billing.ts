@@ -1,6 +1,8 @@
 import { samsarAdapter } from "../adapters/samsar.js";
 import { env } from "../config/env.js";
 
+const AUXILIARY_UTILITY_PRICING_MULTIPLIER = 1.25;
+
 function readOptionalString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
@@ -67,6 +69,7 @@ export async function chargeExternalFirecrawlUsage(input: {
     {
       utility_type: "firecrawl",
       firecrawl_credits_used: firecrawlCreditsUsed,
+      pricing_multiplier: AUXILIARY_UTILITY_PRICING_MULTIPLIER,
       metadata: {
         source: "structuredqueries_proxy",
         interactionType: "webpage_scan",
@@ -108,6 +111,7 @@ export async function chargeExternalElevenLabsTranscriptionUsage(input: {
       utility_type: "elevenlabs_stt",
       model: "scribe_v2",
       duration_ms: durationMs,
+      pricing_multiplier: AUXILIARY_UTILITY_PRICING_MULTIPLIER,
       metadata: {
         source: "structuredqueries_proxy",
         interactionType: "voicebot_qa_transcription",
@@ -146,6 +150,7 @@ export async function chargeExternalElevenLabsSynthesisUsage(input: {
     {
       utility_type: "elevenlabs_tts",
       model: env.integrations.elevenLabs.defaultModelId,
+      pricing_multiplier: AUXILIARY_UTILITY_PRICING_MULTIPLIER,
       ...(charactersUsed > 0
         ? {
             character_count: charactersUsed

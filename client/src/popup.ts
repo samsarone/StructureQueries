@@ -9,7 +9,7 @@ const ANALYZED_PAGES_STORAGE_KEY = "structuredqueries.analyzedPages";
 const REGISTRATION_STORAGE_KEY = "structuredqueries.registration";
 const LEGACY_ANALYZED_PAGES_STORAGE_KEY = "telepathy.analyzedPages";
 const LEGACY_REGISTRATION_STORAGE_KEY = "telepathy.registration";
-const STARTER_CREDITS = 30;
+const STARTER_CREDITS = 50;
 const creditCountFormatter = new Intl.NumberFormat();
 
 interface ExtensionSessionPayload {
@@ -142,6 +142,7 @@ interface AppState {
   websocketDetail: string;
   voices: VoicesPayload["voices"];
   voiceWarning?: string;
+  creditIssueMessage?: string;
   preferredVoiceId?: string;
   preferredVoiceName?: string;
   voicePreviewState: "idle" | "loading" | "playing";
@@ -211,6 +212,12 @@ const closeOverlayButton =
   document.querySelector<HTMLButtonElement>("#close-overlay-button");
 const surfaceStatusNode =
   document.querySelector<HTMLElement>("#surface-status");
+const creditWarningNode =
+  document.querySelector<HTMLElement>("#credit-warning");
+const creditWarningMessageNode =
+  document.querySelector<HTMLElement>("#credit-warning-message");
+const creditWarningButton =
+  document.querySelector<HTMLButtonElement>("#credit-warning-button");
 const voiceToggleButton =
   document.querySelector<HTMLButtonElement>("#voice-toggle-button");
 const voiceToggleButtonLabel =
@@ -240,6 +247,7 @@ const state: AppState = {
   websocketDetail: "Idle",
   voices: [],
   voiceWarning: undefined,
+  creditIssueMessage: undefined,
   preferredVoiceId: undefined,
   preferredVoiceName: undefined,
   voicePreviewState: "idle",
@@ -380,6 +388,41 @@ function getCreditsRemaining() {
 function formatCreditsLabel(value: number) {
   const amount = creditCountFormatter.format(value);
   return `${amount} ${value === 1 ? "credit" : "credits"}`;
+}
+
+function syncCreditIssueStateWithBalance() {
+  const creditsRemaining = getCreditsRemaining();
+
+  if (creditsRemaining !== null && creditsRemaining > 0) {
+    state.creditIssueMessage = undefined;
+  }
+}
+
+function isInsufficientCreditsMessage(
+  message: string | null | undefined
+) {
+  const normalized = readOptionalString(message);
+
+  return Boolean(
+    normalized &&
+      /not enough .*credits?|insufficient .*credits?|credits? are available|credits? remaining: 0|recharge credits?/i.test(
+        normalized
+      )
+  );
+}
+
+function formatInsufficientCreditsMessage(
+  message: string | null | undefined
+) {
+  const normalized = readOptionalString(message);
+
+  if (!normalized) {
+    return "Not enough credits are available for this request. Recharge credits in Samsar and then try again.";
+  }
+
+  return /recharge/i.test(normalized)
+    ? normalized
+    : `${normalized} Recharge credits in Samsar and then try again.`;
 }
 
 function getPreferredVoiceIdFromUser(
@@ -855,6 +898,7 @@ function closeAccountEditor() {
 }
 
 function render() {
+  const creditIssueActive = Boolean(state.creditIssueMessage);
   const analyzeUrlError = getAnalyzeUrlError(state.currentPage?.url);
   const waitingForAssistant =
     state.conversationActive &&
@@ -879,6 +923,8 @@ function render() {
       : formatCreditsLabel(creditsRemaining);
   const settingsCreditsCaption = state.registrationRequired
     ? "Granted once when this Chrome client finishes registration."
+    : creditIssueActive
+      ? "Recharge in Samsar, then return here and refresh the session."
     : creditsRemaining === null
       ? "Refresh the session to load your latest balance."
       : "Open the Samsar app to recharge when you need more.";
@@ -890,6 +936,8 @@ function render() {
         ? "Offline"
         : state.registrationRequired
           ? "Register"
+          : creditIssueActive
+            ? "Recharge"
           : analyzeUrlError
             ? "Blocked"
             : state.recording
@@ -909,6 +957,8 @@ function render() {
       ? "Server offline."
       : state.registrationRequired
         ? "Finish setup to unlock page QA."
+        : creditIssueActive
+          ? "Recharge required."
         : analyzeUrlError
           ? analyzeUrlError
           : state.isAnalyzing
@@ -934,6 +984,8 @@ function render() {
       ? "Server unavailable."
       : state.registrationRequired
         ? "Finish setup to continue."
+        : creditIssueActive
+          ? "This client is blocked until credits are recharged in Samsar."
         : analyzeUrlError
           ? analyzeUrlError
           : state.isAnalyzing
@@ -978,6 +1030,7 @@ function render() {
     state.registrationRequired ||
     state.registrationSubmitting ||
     !state.serverOnline ||
+    creditIssueActive ||
     !state.analysisReady ||
     !state.currentPage?.url ||
     state.isAnalyzing ||
@@ -1001,6 +1054,8 @@ function render() {
     accountHintNode,
     state.registrationRequired
       ? "Setup is required."
+      : creditIssueActive
+        ? "Recharge required."
       : creditsRemaining !== null
         ? `${formatCreditsLabel(creditsRemaining)} remaining.`
       : state.currentUser?.email
@@ -1058,14 +1113,21 @@ function render() {
           ? "Opening Samsar..."
       : registrationMode === "register"
           ? `All fields are optional. You will receive ${STARTER_CREDITS} starter credits.`
+          : creditIssueActive
+            ? state.creditIssueMessage ?? "Recharge credits to continue."
           : "Save changes."
   );
   setText(settingsCreditsRemainingNode, settingsCreditsValue);
   setText(settingsCreditsCaptionNode, settingsCreditsCaption);
   setText(voiceWarningNode, state.voiceWarning ?? "");
+  setText(creditWarningMessageNode, state.creditIssueMessage ?? "");
 
   if (voiceWarningNode) {
     voiceWarningNode.hidden = !state.voiceWarning;
+  }
+
+  if (creditWarningNode) {
+    creditWarningNode.hidden = !creditIssueActive;
   }
 
   document.body.dataset.loading = state.isInitializing ? "true" : "false";
@@ -1111,12 +1173,24 @@ function render() {
       : "Recharge Credits";
   }
 
+  if (creditWarningButton) {
+    creditWarningButton.disabled =
+      state.registrationRequired ||
+      state.registrationSubmitting ||
+      state.loginLinkSubmitting ||
+      !state.serverOnline;
+    creditWarningButton.textContent = state.loginLinkSubmitting
+      ? "Opening Samsar..."
+      : "Recharge Credits";
+  }
+
   if (analyzeButton) {
     analyzeButton.disabled =
       state.isInitializing ||
       state.registrationRequired ||
       state.registrationSubmitting ||
       !state.serverOnline ||
+      creditIssueActive ||
       Boolean(analyzeUrlError) ||
       state.isAnalyzing ||
       voiceBusy;
@@ -1252,6 +1326,44 @@ async function sendMessageToActiveTab<T>(message: RuntimeMessage) {
 
     throw error;
   }
+}
+
+async function stopPageRecordingCapture() {
+  try {
+    const response = await sendMessageToActiveTab<{
+      ok?: boolean;
+      error?: string;
+    }>({
+      type: "STOP_PAGE_RECORDING"
+    });
+
+    if (!response?.ok && response?.error) {
+      console.warn("Failed to stop page recording", response.error);
+    }
+  } catch (error) {
+    console.warn("Failed to stop page recording", error);
+  }
+}
+
+function showInsufficientCreditsState(message?: string | null) {
+  const issueMessage = formatInsufficientCreditsMessage(message);
+  const shouldAppendLog = state.creditIssueMessage !== issueMessage;
+
+  state.creditIssueMessage = issueMessage;
+  void stopPageRecordingCapture();
+  closeWebSocketSession({
+    phase: "error",
+    detail: "Recharge required"
+  });
+  state.accountEditorOpen = true;
+  syncRegistrationForm();
+  render();
+
+  if (shouldAppendLog) {
+    appendLog("system", issueMessage);
+  }
+
+  openAccountEditor();
 }
 
 async function fetchPageContext() {
@@ -1418,6 +1530,7 @@ async function loadRegistrationState() {
   state.registrationRequired = !(
     state.externalUserApiKey && state.assistantSessionId
   );
+  syncCreditIssueStateWithBalance();
   syncRegistrationForm();
 }
 
@@ -1439,6 +1552,7 @@ function applyBrowserSessionPayload(payload: BrowserSessionPayload) {
         ? undefined
         : state.externalUserApiKey;
   state.registrationRequired = Boolean(payload.registrationRequired);
+  syncCreditIssueStateWithBalance();
 }
 
 async function syncBrowserSession() {
@@ -1696,7 +1810,10 @@ async function refreshVoices() {
   renderVoiceOptions();
 }
 
-function closeWebSocketSession() {
+function closeWebSocketSession(input?: {
+  phase?: WebSocketPhase;
+  detail?: string;
+}) {
   clearResumeConversationTimer();
   stopAssistantPlayback();
   stopVoicePreviewPlayback();
@@ -1712,8 +1829,8 @@ function closeWebSocketSession() {
   state.recording = false;
   state.assistantSpeaking = false;
   state.websocketState = "disconnected";
-  state.websocketPhase = "idle";
-  state.websocketDetail = "Idle";
+  state.websocketPhase = input?.phase ?? "idle";
+  state.websocketDetail = input?.detail ?? "Idle";
   state.pendingAssistantText = undefined;
 }
 
@@ -1784,14 +1901,19 @@ function bytesFromBase64(base64: string) {
 
 function handleConversationLoopError(error: unknown) {
   console.error("Voice chat loop error", error);
-  state.conversationActive = false;
-  state.recording = false;
-  state.assistantSpeaking = false;
-  state.websocketPhase = "error";
-  state.websocketDetail = "Voice chat stopped";
-  closeWebSocketSession();
+  const message = normalizeRecordingError(error);
+
+  if (isInsufficientCreditsMessage(message)) {
+    showInsufficientCreditsState(message);
+    return;
+  }
+
+  closeWebSocketSession({
+    phase: "error",
+    detail: "Voice chat stopped"
+  });
   render();
-  appendLog("system", normalizeRecordingError(error));
+  appendLog("system", message);
 }
 
 async function startConversationTurn() {
@@ -2075,17 +2197,30 @@ function handleSocketMessage(event: MessageEvent<string>) {
   }
 
   if (payload.type === "error") {
-    state.websocketPhase = "error";
-    appendLog(
-      "system",
+    const message =
       typeof payload.message === "string"
         ? payload.message
-        : "Unexpected websocket error."
-    );
+        : "Unexpected websocket error.";
+    const code =
+      typeof payload.code === "string" ? payload.code : undefined;
+
+    if (
+      code === "insufficient_credits" ||
+      isInsufficientCreditsMessage(message)
+    ) {
+      showInsufficientCreditsState(message);
+      return;
+    }
+
+    state.websocketPhase = "error";
+    state.websocketDetail = message;
+    appendLog("system", message);
 
     if (state.conversationActive) {
       scheduleConversationResume(600);
     }
+
+    render();
   }
 }
 
@@ -2315,20 +2450,12 @@ async function stopRecording() {
   render();
 
   try {
-    const response = await sendMessageToActiveTab<{
-      ok?: boolean;
-      error?: string;
-    }>({
-      type: "STOP_PAGE_RECORDING"
-    });
-
-    if (!response?.ok && response?.error) {
-      console.warn("Failed to stop page recording", response.error);
-    }
-  } catch (error) {
-    console.warn("Failed to stop page recording", error);
+    await stopPageRecordingCapture();
   } finally {
-    closeWebSocketSession();
+    closeWebSocketSession({
+      phase: "idle",
+      detail: "Stopped"
+    });
   }
 }
 
@@ -2392,10 +2519,14 @@ async function analyzeCurrentPage() {
     }
   } catch (error) {
     console.error("Failed to analyze document", error);
-    appendLog(
-      "system",
-      error instanceof Error ? error.message : "Failed to analyze document."
-    );
+    const message =
+      error instanceof Error ? error.message : "Failed to analyze document.";
+
+    if (isInsufficientCreditsMessage(message)) {
+      showInsufficientCreditsState(message);
+    } else {
+      appendLog("system", message);
+    }
   } finally {
     state.isAnalyzing = false;
     render();
@@ -2469,12 +2600,17 @@ chrome.runtime.onMessage.addListener((message) => {
       typeof message.durationMs === "number" ? message.durationMs : undefined
     ).catch((error) => {
       console.error("Failed to submit recorded audio", error);
-      appendLog(
-        "system",
+      const message =
         error instanceof Error
           ? error.message
-          : "Failed to submit recorded audio."
-      );
+          : "Failed to submit recorded audio.";
+
+      if (isInsufficientCreditsMessage(message)) {
+        showInsufficientCreditsState(message);
+        return;
+      }
+
+      appendLog("system", message);
     });
     return false;
   }
@@ -2546,6 +2682,10 @@ samsarLoginButton?.addEventListener("click", () => {
   void openSamsarClientLogin();
 });
 
+creditWarningButton?.addEventListener("click", () => {
+  void openSamsarClientLogin();
+});
+
 voiceToggleButton?.addEventListener("click", () => {
   if (state.conversationActive || state.recording || state.assistantSpeaking) {
     void stopRecording();
@@ -2606,6 +2746,18 @@ languageSelect?.addEventListener("change", () => {
 window.addEventListener("pagehide", () => {
   stopVoicePreviewPlayback();
   void stopRecording();
+});
+
+window.addEventListener("focus", () => {
+  if (
+    state.creditIssueMessage &&
+    state.serverOnline &&
+    !state.registrationRequired
+  ) {
+    void syncBrowserSession().catch((error) => {
+      console.error("Failed to refresh browser session after recharge", error);
+    });
+  }
 });
 
 window.addEventListener("keydown", (event) => {

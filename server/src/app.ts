@@ -18,6 +18,825 @@ import { voicesRouter } from "./routes/voices.js";
 import { webpagesRouter } from "./routes/webpages.js";
 import { backendStack } from "./stack.js";
 
+const CHROME_WEB_STORE_PLACEHOLDER_URL = "https://chromewebstore.google.com/";
+
+function renderLandingPage(serviceName: string) {
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Deeply analyze complex web pages and blog posts, then ask grounded follow-up questions with a conversational bot."
+    />
+    <title>${serviceName}</title>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
+
+      :root {
+        color-scheme: dark;
+        --sq-ink: #ecf3fb;
+        --sq-muted: #9ba9ba;
+        --sq-bg-start: #070b12;
+        --sq-bg-mid: #0a121d;
+        --sq-bg-end: #050a11;
+        --sq-accent: #39d881;
+        --sq-accent-cool: #46bfff;
+        --sq-card-shadow: 0 24px 90px rgba(70, 191, 255, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        color: var(--sq-ink);
+        font-family: "Space Grotesk", "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at 10% 12%, rgba(57, 216, 129, 0.12), transparent 34%),
+          radial-gradient(circle at 86% 9%, rgba(70, 191, 255, 0.11), transparent 32%),
+          repeating-linear-gradient(90deg, rgba(236, 243, 251, 0.018) 0 1px, transparent 1px 52px),
+          linear-gradient(165deg, var(--sq-bg-start) 0%, var(--sq-bg-mid) 45%, var(--sq-bg-end) 100%);
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        opacity: 0.22;
+        background-image:
+          linear-gradient(to right, rgba(148, 163, 184, 0.14) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(148, 163, 184, 0.1) 1px, transparent 1px),
+          linear-gradient(124deg, rgba(96, 194, 245, 0.1) 0%, transparent 34%);
+        background-size:
+          72px 72px,
+          72px 72px,
+          100% 100%;
+        mask-image: radial-gradient(circle at 50% 42%, black 0%, transparent 75%);
+      }
+
+      a {
+        color: inherit;
+      }
+
+      p {
+        margin: 0;
+      }
+
+      main {
+        position: relative;
+        z-index: 1;
+        width: min(1180px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 24px 0 64px;
+      }
+
+      .site-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        padding: 8px 0 22px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .brand-mark {
+        display: grid;
+        place-items: center;
+        width: 48px;
+        height: 48px;
+        border-radius: 16px;
+        background: linear-gradient(135deg, rgba(70, 191, 255, 0.98), rgba(57, 216, 129, 0.95));
+        color: #041015;
+        font-size: 1rem;
+        font-weight: 700;
+        letter-spacing: -0.05em;
+        box-shadow: 0 18px 44px rgba(70, 191, 255, 0.18);
+      }
+
+      .brand-meta {
+        display: grid;
+        gap: 4px;
+      }
+
+      .brand-overline,
+      .eyebrow,
+      .label,
+      .feature-pill,
+      .step-index {
+        font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+      }
+
+      .brand-overline,
+      .eyebrow {
+        color: rgba(151, 222, 255, 0.78);
+        font-size: 0.74rem;
+        font-weight: 600;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+      }
+
+      .brand-name {
+        color: rgba(236, 243, 251, 0.94);
+        font-size: 0.98rem;
+      }
+
+      .site-nav {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .site-nav a {
+        color: rgba(204, 219, 233, 0.84);
+        font-size: 0.94rem;
+        text-decoration: none;
+      }
+
+      .site-nav a:hover {
+        color: var(--sq-ink);
+      }
+
+      .section {
+        position: relative;
+        overflow: hidden;
+        margin-bottom: 24px;
+        padding: clamp(28px, 4vw, 48px);
+        border: 1px solid rgba(122, 177, 211, 0.16);
+        border-radius: 32px;
+        background:
+          radial-gradient(circle at top left, rgba(70, 191, 255, 0.16), transparent 28%),
+          linear-gradient(180deg, rgba(8, 18, 31, 0.94), rgba(8, 16, 28, 0.96));
+        box-shadow:
+          0 26px 80px rgba(0, 0, 0, 0.38),
+          0 0 0 1px rgba(122, 177, 211, 0.08) inset;
+        isolation: isolate;
+      }
+
+      .section::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: -2;
+        background:
+          radial-gradient(circle at 10% 14%, rgba(57, 216, 129, 0.12), transparent 36%),
+          radial-gradient(circle at 86% 11%, rgba(70, 191, 255, 0.1), transparent 34%),
+          linear-gradient(173deg, rgba(7, 11, 18, 0.98) 0%, rgba(8, 12, 20, 0.98) 42%, rgba(6, 10, 17, 0.99) 100%);
+      }
+
+      .section::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        opacity: 0.12;
+        background-image:
+          linear-gradient(to right, rgba(148, 163, 184, 0.14) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(148, 163, 184, 0.1) 1px, transparent 1px);
+        background-size: 72px 72px;
+        mask-image: radial-gradient(circle at 50% 42%, black 0%, transparent 75%);
+      }
+
+      .hero-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.12fr) minmax(320px, 0.88fr);
+        gap: 28px;
+        align-items: center;
+        min-height: min(90vh, 760px);
+      }
+
+      .hero-copy {
+        max-width: 40rem;
+      }
+
+      .hero-title {
+        margin: 0 0 18px;
+        max-width: 10ch;
+        font-size: clamp(3.25rem, 8vw, 6.75rem);
+        line-height: 0.9;
+        letter-spacing: -0.06em;
+        text-wrap: balance;
+      }
+
+      .hero-title .highlight {
+        color: var(--sq-accent-cool);
+        text-shadow: 0 0 18px rgba(96, 194, 245, 0.14);
+      }
+
+      .hero-description,
+      .section-copy,
+      .card-copy,
+      .store-note,
+      .asset-copy {
+        color: rgba(164, 203, 223, 0.88);
+        font-size: 1rem;
+        line-height: 1.6;
+      }
+
+      .cta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 28px;
+      }
+
+      .button {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 54px;
+        padding: 0 22px;
+        border-radius: 18px;
+        border: 1px solid transparent;
+        font-size: 0.96rem;
+        font-weight: 700;
+        text-decoration: none;
+        transition:
+          transform 180ms ease,
+          border-color 180ms ease,
+          background-color 180ms ease;
+      }
+
+      .button:hover {
+        transform: translate3d(0, -1px, 0);
+      }
+
+      .button-primary {
+        border-color: rgba(57, 216, 129, 0.72);
+        background: linear-gradient(135deg, rgba(70, 191, 255, 0.92), rgba(57, 216, 129, 0.98));
+        color: #041015;
+        box-shadow: 0 16px 44px rgba(57, 216, 129, 0.16);
+      }
+
+      .button-secondary {
+        border-color: rgba(148, 163, 184, 0.24);
+        background: rgba(8, 18, 29, 0.62);
+        color: rgba(236, 243, 251, 0.96);
+      }
+
+      .button-full {
+        width: 100%;
+      }
+
+      .feature-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 24px;
+      }
+
+      .feature-pill {
+        padding: 10px 14px;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 999px;
+        background: rgba(8, 18, 29, 0.54);
+        color: rgba(228, 238, 248, 0.88);
+        font-size: 0.78rem;
+        letter-spacing: 0.04em;
+      }
+
+      .preview-card,
+      .store-card,
+      .step-card,
+      .asset-card {
+        border: 1px solid rgba(122, 177, 211, 0.16);
+        border-radius: 28px;
+        background: linear-gradient(180deg, rgba(10, 18, 29, 0.92), rgba(5, 10, 18, 0.94));
+        box-shadow: var(--sq-card-shadow);
+      }
+
+      .preview-card {
+        padding: 22px;
+      }
+
+      .preview-top,
+      .label {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+        font-size: 0.72rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: rgba(161, 221, 248, 0.78);
+      }
+
+      .preview-top {
+        margin-bottom: 16px;
+      }
+
+      .message {
+        margin-bottom: 14px;
+        padding: 16px 18px;
+        border: 1px solid rgba(148, 163, 184, 0.12);
+        border-radius: 22px;
+        background: linear-gradient(180deg, rgba(11, 21, 33, 0.92), rgba(8, 16, 27, 0.92));
+      }
+
+      .message-label {
+        display: block;
+        margin-bottom: 8px;
+        font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+        font-size: 0.68rem;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: rgba(151, 222, 255, 0.72);
+      }
+
+      .message p {
+        color: rgba(236, 243, 251, 0.94);
+      }
+
+      .assistant-message {
+        border-color: rgba(57, 216, 129, 0.18);
+      }
+
+      .preview-stats {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .stat {
+        padding: 14px;
+        border: 1px solid rgba(148, 163, 184, 0.12);
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.03);
+      }
+
+      .stat strong {
+        display: block;
+        font-size: 1rem;
+        color: rgba(236, 243, 251, 0.96);
+      }
+
+      .stat span {
+        display: block;
+        margin-top: 6px;
+        color: rgba(155, 169, 186, 0.88);
+        font-size: 0.84rem;
+        line-height: 1.45;
+      }
+
+      .section-header {
+        max-width: 42rem;
+        margin-bottom: 28px;
+      }
+
+      h2,
+      h3 {
+        margin: 0;
+      }
+
+      .section-title {
+        margin: 0 0 14px;
+        max-width: 12ch;
+        font-size: clamp(2rem, 4vw, 3.6rem);
+        line-height: 0.96;
+        letter-spacing: -0.05em;
+      }
+
+      .install-shell {
+        display: grid;
+        grid-template-columns: minmax(0, 1.06fr) minmax(280px, 0.94fr);
+        gap: 18px;
+      }
+
+      .step-list {
+        display: grid;
+        gap: 14px;
+      }
+
+      .step-card {
+        padding: 22px;
+      }
+
+      .step-index {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 52px;
+        min-height: 30px;
+        padding: 0 12px;
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        border-radius: 999px;
+        color: rgba(151, 222, 255, 0.82);
+        font-size: 0.72rem;
+        letter-spacing: 0.16em;
+      }
+
+      .step-card h3,
+      .store-card h3,
+      .asset-card h3 {
+        margin-top: 16px;
+        font-size: 1.35rem;
+        line-height: 1.08;
+        letter-spacing: -0.03em;
+      }
+
+      .card-copy {
+        margin-top: 10px;
+      }
+
+      .store-card {
+        display: grid;
+        align-content: start;
+        gap: 18px;
+        padding: 24px;
+      }
+
+      .store-note {
+        font-size: 0.92rem;
+      }
+
+      .asset-grid {
+        display: grid;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        gap: 18px;
+      }
+
+      .asset-card {
+        grid-column: span 3;
+        display: grid;
+        align-content: start;
+        gap: 16px;
+        min-height: 280px;
+        padding: 22px;
+      }
+
+      .asset-card-wide {
+        grid-column: span 6;
+      }
+
+      .asset-copy {
+        font-size: 0.94rem;
+      }
+
+      .placeholder-frame,
+      .placeholder-chat,
+      .placeholder-source {
+        position: relative;
+        overflow: hidden;
+        min-height: 148px;
+        border: 1px dashed rgba(148, 163, 184, 0.24);
+        border-radius: 22px;
+        background:
+          linear-gradient(180deg, rgba(14, 22, 34, 0.82), rgba(7, 14, 22, 0.92)),
+          linear-gradient(124deg, rgba(96, 194, 245, 0.08) 0%, transparent 50%);
+      }
+
+      .placeholder-frame::before,
+      .placeholder-chat::before,
+      .placeholder-source::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        opacity: 0.14;
+        background-image:
+          linear-gradient(to right, rgba(148, 163, 184, 0.16) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(148, 163, 184, 0.1) 1px, transparent 1px);
+        background-size: 28px 28px;
+      }
+
+      .placeholder-toolbar {
+        display: flex;
+        gap: 8px;
+        padding: 14px 14px 0;
+      }
+
+      .placeholder-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: rgba(164, 203, 223, 0.45);
+      }
+
+      .placeholder-lines {
+        display: grid;
+        gap: 10px;
+        padding: 16px 14px 14px;
+      }
+
+      .placeholder-line,
+      .placeholder-bubble,
+      .placeholder-chip {
+        border-radius: 999px;
+        background: linear-gradient(90deg, rgba(70, 191, 255, 0.72), rgba(57, 216, 129, 0.54));
+      }
+
+      .placeholder-line {
+        height: 10px;
+      }
+
+      .line-long {
+        width: 88%;
+      }
+
+      .line-medium {
+        width: 72%;
+      }
+
+      .line-short {
+        width: 58%;
+      }
+
+      .placeholder-chat {
+        display: grid;
+        gap: 12px;
+        padding: 16px;
+      }
+
+      .placeholder-bubble {
+        width: 88%;
+        height: 46px;
+        opacity: 0.76;
+      }
+
+      .placeholder-bubble:nth-child(2) {
+        width: 68%;
+        justify-self: end;
+      }
+
+      .placeholder-source {
+        display: flex;
+        flex-wrap: wrap;
+        align-content: flex-start;
+        gap: 10px;
+        padding: 16px;
+      }
+
+      .placeholder-chip {
+        width: calc(50% - 5px);
+        height: 42px;
+        opacity: 0.76;
+      }
+
+      @media (max-width: 980px) {
+        .hero-grid,
+        .install-shell {
+          grid-template-columns: 1fr;
+        }
+
+        .preview-stats {
+          grid-template-columns: 1fr;
+        }
+
+        .asset-card,
+        .asset-card-wide {
+          grid-column: span 12;
+        }
+      }
+
+      @media (max-width: 720px) {
+        main {
+          width: min(100%, calc(100% - 24px));
+          padding-top: 16px;
+        }
+
+        .site-header {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .site-nav {
+          flex-wrap: wrap;
+        }
+
+        .section {
+          padding: 24px 20px;
+          border-radius: 24px;
+        }
+
+        .hero-grid {
+          min-height: auto;
+        }
+
+        .hero-title {
+          font-size: clamp(2.8rem, 15vw, 4.25rem);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header class="site-header">
+        <div class="brand">
+          <div class="brand-mark">SQ</div>
+          <div class="brand-meta">
+            <p class="brand-overline">Structure Queries</p>
+            <p class="brand-name">Deep analysis for live webpages and blog posts</p>
+          </div>
+        </div>
+
+        <nav class="site-nav" aria-label="Landing sections">
+          <a href="#install">Install</a>
+          <a href="#assets">Assets</a>
+        </nav>
+      </header>
+
+      <section class="section" id="top">
+        <div class="hero-grid">
+          <div class="hero-copy">
+            <p class="eyebrow">CTA / Deep page understanding</p>
+            <h1 class="hero-title">
+              <span class="highlight">Deeply analyze</span> complex webpages and blog posts.
+            </h1>
+            <p class="hero-description">
+              Turn dense reading into a conversational experience. Structure Queries prepares the page context,
+              surfaces the important structure, and lets users ask grounded follow-up questions through a
+              conversational bot.
+            </p>
+
+            <div class="cta-row">
+              <a class="button button-primary" href="#install">Install the extension</a>
+              <a class="button button-secondary" href="#assets">See asset-ready layout</a>
+            </div>
+
+            <div class="feature-row" aria-label="Key product capabilities">
+              <span class="feature-pill">Complex webpages</span>
+              <span class="feature-pill">Long-form blog posts</span>
+              <span class="feature-pill">Conversational Q&amp;A</span>
+            </div>
+          </div>
+
+          <div class="preview-card" aria-label="Conversational product preview">
+            <div class="preview-top">
+              <span>Live Page Context</span>
+              <span>blog.example.com/article</span>
+            </div>
+
+            <div class="message">
+              <span class="message-label">User</span>
+              <p>What are the main arguments on this page, and where does the author support them?</p>
+            </div>
+
+            <div class="message assistant-message">
+              <span class="message-label">Bot</span>
+              <p>I mapped the article structure, extracted the key claims, and can answer follow-ups while staying grounded in the live page.</p>
+            </div>
+
+            <div class="preview-stats" aria-label="Product highlights">
+              <div class="stat">
+                <strong>Page-aware</strong>
+                <span>Structured context from dense pages before the conversation starts.</span>
+              </div>
+              <div class="stat">
+                <strong>Conversational</strong>
+                <span>Ask natural follow-up questions instead of reading line by line.</span>
+              </div>
+              <div class="stat">
+                <strong>Grounded</strong>
+                <span>Answers stay anchored to the source content already on the page.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="install">
+        <div class="section-header">
+          <p class="eyebrow">Chrome Web Store</p>
+          <h2 class="section-title">Install the extension and start querying any page.</h2>
+          <p class="section-copy">
+            This section is dedicated to the Chrome Web Store install action. The link is a placeholder for now,
+            but the structure is ready for the final listing URL, badge, and store assets.
+          </p>
+        </div>
+
+        <div class="install-shell">
+          <div class="step-list" aria-label="Install workflow">
+            <article class="step-card">
+              <span class="step-index">01</span>
+              <h3>Open a dense page</h3>
+              <p class="card-copy">Use it on long blog posts, technical articles, or complex webpages where quick comprehension matters.</p>
+            </article>
+
+            <article class="step-card">
+              <span class="step-index">02</span>
+              <h3>Prepare the content</h3>
+              <p class="card-copy">The extension analyzes the page, structures the content, and gets the conversation ready for grounded questions.</p>
+            </article>
+
+            <article class="step-card">
+              <span class="step-index">03</span>
+              <h3>Ask naturally</h3>
+              <p class="card-copy">Users can ask follow-ups in plain language instead of manually scanning every section of the page.</p>
+            </article>
+          </div>
+
+          <aside class="store-card" aria-label="Chrome Web Store install">
+            <div class="label">
+              <span>Extension Install</span>
+              <span>Placeholder</span>
+            </div>
+            <div>
+              <h3>Chrome Web Store listing</h3>
+              <p class="card-copy">Swap this with the live Web Store URL once the listing is published. The layout is already ready for screenshots, ratings, and badge treatment.</p>
+            </div>
+            <a
+              class="button button-primary button-full"
+              href="${CHROME_WEB_STORE_PLACEHOLDER_URL}"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Install from Chrome Web Store
+            </a>
+            <p class="store-note">Placeholder link only. Replace with the final listing URL when it is available.</p>
+          </aside>
+        </div>
+      </section>
+
+      <section class="section" id="assets">
+        <div class="section-header">
+          <p class="eyebrow">Asset-ready section</p>
+          <h2 class="section-title">Reserved space for the landing visuals you design next.</h2>
+          <p class="section-copy">
+            The page now shares the same dark grid, cyan and green glow, glass-card surfaces, and typography
+            direction as the Samsar landing site. These placeholder frames can be replaced with final assets
+            without changing the layout or theme.
+          </p>
+        </div>
+
+        <div class="asset-grid" aria-label="Asset placeholders">
+          <article class="asset-card asset-card-wide">
+            <div class="label">
+              <span>Asset Slot 01</span>
+              <span>Wide</span>
+            </div>
+            <div>
+              <h3>Webpage analysis visual</h3>
+              <p class="asset-copy">Use this frame for a browser-shot, illustration, or composite showing how a long page gets structured for questioning.</p>
+            </div>
+            <div class="placeholder-frame" aria-hidden="true">
+              <div class="placeholder-toolbar">
+                <span class="placeholder-dot"></span>
+                <span class="placeholder-dot"></span>
+                <span class="placeholder-dot"></span>
+              </div>
+              <div class="placeholder-lines">
+                <span class="placeholder-line line-long"></span>
+                <span class="placeholder-line line-medium"></span>
+                <span class="placeholder-line line-long"></span>
+                <span class="placeholder-line line-short"></span>
+              </div>
+            </div>
+          </article>
+
+          <article class="asset-card">
+            <div class="label">
+              <span>Asset Slot 02</span>
+              <span>Chat</span>
+            </div>
+            <div>
+              <h3>Conversation snapshot</h3>
+              <p class="asset-copy">Reserve this card for a focused conversational UI or answer interaction.</p>
+            </div>
+            <div class="placeholder-chat" aria-hidden="true">
+              <span class="placeholder-bubble"></span>
+              <span class="placeholder-bubble"></span>
+              <span class="placeholder-bubble"></span>
+            </div>
+          </article>
+
+          <article class="asset-card">
+            <div class="label">
+              <span>Asset Slot 03</span>
+              <span>Evidence</span>
+            </div>
+            <div>
+              <h3>Source and summary proof</h3>
+              <p class="asset-copy">Use this panel for citation, source mapping, or another proof-of-grounding visual.</p>
+            </div>
+            <div class="placeholder-source" aria-hidden="true">
+              <span class="placeholder-chip"></span>
+              <span class="placeholder-chip"></span>
+              <span class="placeholder-chip"></span>
+              <span class="placeholder-chip"></span>
+            </div>
+          </article>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>`;
+}
+
 export function createApp() {
   const app = express();
 
@@ -31,142 +850,7 @@ export function createApp() {
   app.use(express.json());
 
   app.get("/", (_request, response) => {
-    response.type("html").send(`<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${env.serviceName}</title>
-    <style>
-      :root {
-        color-scheme: dark;
-        font-family: "Avenir Next", "Segoe UI", sans-serif;
-      }
-
-      * {
-        box-sizing: border-box;
-      }
-
-      body {
-        margin: 0;
-        min-height: 100vh;
-        background:
-          radial-gradient(circle at 18% 18%, rgba(70, 191, 255, 0.22), transparent 24%),
-          radial-gradient(circle at 78% 16%, rgba(57, 216, 129, 0.18), transparent 22%),
-          radial-gradient(circle at 76% 84%, rgba(251, 113, 133, 0.14), transparent 18%),
-          linear-gradient(160deg, #07111d 0%, #0a1627 52%, #060d18 100%);
-        color: #eef9ff;
-      }
-
-      main {
-        min-height: 100vh;
-        display: grid;
-        place-items: center;
-        max-width: 980px;
-        margin: 0 auto;
-        padding: 32px 24px;
-      }
-
-      .panel {
-        width: min(100%, 760px);
-        padding: 36px;
-        border: 1px solid rgba(122, 177, 211, 0.16);
-        border-radius: 32px;
-        background:
-          radial-gradient(circle at top left, rgba(70, 191, 255, 0.16), transparent 28%),
-          linear-gradient(180deg, rgba(8, 18, 31, 0.94), rgba(8, 16, 28, 0.96));
-        backdrop-filter: blur(18px);
-        box-shadow:
-          0 26px 80px rgba(0, 0, 0, 0.38),
-          0 0 0 1px rgba(122, 177, 211, 0.08) inset;
-      }
-
-      .eyebrow {
-        margin: 0 0 14px;
-        color: rgba(151, 222, 255, 0.78);
-        font-size: 0.75rem;
-        font-weight: 700;
-        letter-spacing: 0.2em;
-        text-transform: uppercase;
-      }
-
-      h1 {
-        margin: 0;
-        max-width: 10ch;
-        font-size: clamp(3rem, 7vw, 5.5rem);
-        line-height: 0.94;
-        letter-spacing: -0.04em;
-      }
-
-      p {
-        margin: 0;
-        max-width: 32rem;
-        font-size: 1rem;
-        line-height: 1.6;
-        color: rgba(164, 203, 223, 0.88);
-      }
-
-      .cta-row {
-        margin-top: 28px;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-      }
-
-      .install-button {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-height: 54px;
-        padding: 0 22px;
-        border-radius: 18px;
-        border: 1px solid rgba(57, 216, 129, 0.72);
-        background: linear-gradient(135deg, rgba(70, 191, 255, 0.92), rgba(57, 216, 129, 0.98));
-        color: #041015;
-        font-size: 0.96rem;
-        font-weight: 700;
-        text-decoration: none;
-        pointer-events: none;
-        box-shadow: 0 16px 44px rgba(57, 216, 129, 0.16);
-      }
-
-      .install-button::after {
-        content: "Soon";
-        margin-left: 10px;
-        padding: 5px 8px;
-        border-radius: 999px;
-        background: rgba(4, 16, 21, 0.12);
-        font-size: 0.68rem;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-      }
-
-      .meta {
-        margin-top: 12px;
-        font-size: 0.92rem;
-        color: rgba(191, 231, 245, 0.72);
-      }
-
-      @media (max-width: 640px) {
-        .panel {
-          padding: 28px 22px;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <main>
-      <section class="panel">
-        <p class="eyebrow">Structure Queries</p>
-        <h1>Structure Queries</h1>
-        <div class="cta-row">
-          <a class="install-button" href="#" aria-disabled="true">Install Chrome extension</a>
-        </div>
-        <p class="meta">Voice-first retrieval for live webpages. Chrome install link will be added here next.</p>
-      </section>
-    </main>
-  </body>
-</html>`);
+    response.type("html").send(renderLandingPage(env.serviceName));
   });
 
   app.use("/api/browser-sessions", browserSessionsRouter);

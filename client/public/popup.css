@@ -409,6 +409,28 @@ select {
   grid-template-columns: auto minmax(0, 1fr);
 }
 
+.credit-warning-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(251, 113, 133, 0.28);
+  background:
+    radial-gradient(circle at top right, rgba(251, 113, 133, 0.16), transparent 42%),
+    rgba(43, 14, 21, 0.82);
+}
+
+.credit-warning-message {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: rgba(255, 225, 231, 0.94);
+}
+
+.credit-warning-button {
+  min-height: 38px;
+}
+
 .primary-button,
 .secondary-button,
 .danger-button {

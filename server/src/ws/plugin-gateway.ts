@@ -10,6 +10,10 @@ import {
   chargeExternalElevenLabsSynthesisUsage,
   chargeExternalElevenLabsTranscriptionUsage
 } from "../lib/external-usage-billing.js";
+import {
+  getSamsarErrorMessage,
+  isSamsarCreditsIssue
+} from "../lib/samsar-errors.js";
 
 interface SessionInitMessage {
   type: "session_init";
@@ -84,6 +88,29 @@ function sendStatus(
     phase,
     detail,
     at: new Date().toISOString()
+  });
+}
+
+function sendSocketError(
+  socket: WebSocket,
+  error: unknown,
+  input: {
+    fallbackMessage: string;
+    statusDetail: string;
+  }
+) {
+  const insufficientCredits = isSamsarCreditsIssue(error);
+  const message = getSamsarErrorMessage(error, input.fallbackMessage);
+
+  sendStatus(
+    socket,
+    "error",
+    insufficientCredits ? "Not enough credits are available." : input.statusDetail
+  );
+  sendMessage(socket, {
+    type: "error",
+    code: insufficientCredits ? "insufficient_credits" : "request_failed",
+    message
   });
 }
 
@@ -306,11 +333,9 @@ async function handleSubmitAudio(
       requestId: transcription.requestId
     });
   } catch (error) {
-    sendStatus(socket, "error", "Transcription failed.");
-    sendMessage(socket, {
-      type: "error",
-      message:
-        error instanceof Error ? error.message : "Transcription failed."
+    sendSocketError(socket, error, {
+      fallbackMessage: "Transcription failed",
+      statusDetail: "Transcription failed."
     });
     return;
   }
@@ -344,13 +369,9 @@ async function handleSubmitAudio(
       user: state.browserSessionId
     });
   } catch (error) {
-    sendStatus(socket, "error", "Assistant generation failed.");
-    sendMessage(socket, {
-      type: "error",
-      message:
-        error instanceof Error
-          ? error.message
-          : "Assistant generation failed."
+    sendSocketError(socket, error, {
+      fallbackMessage: "Assistant generation failed",
+      statusDetail: "Assistant generation failed."
     });
     return;
   }
@@ -378,13 +399,9 @@ async function handleSubmitAudio(
         });
       }
     } catch (error) {
-      sendStatus(socket, "error", "Assistant voice billing failed.");
-      sendMessage(socket, {
-        type: "error",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Assistant voice billing failed."
+      sendSocketError(socket, error, {
+        fallbackMessage: "Assistant voice billing failed",
+        statusDetail: "Assistant voice billing failed."
       });
       return;
     }

@@ -63,6 +63,18 @@ function isCreditsIssue(error: SamsarRequestError, detail?: string) {
   );
 }
 
+function normalizeActionMessage(actionMessage: string) {
+  return actionMessage.trim().replace(/[.:]\s*$/, "");
+}
+
+export function isSamsarCreditsIssue(error: unknown) {
+  if (!(error instanceof SamsarRequestError)) {
+    return false;
+  }
+
+  return isCreditsIssue(error, extractErrorDetail(error.body));
+}
+
 export function getSamsarErrorStatus(error: unknown, fallbackStatus = 502) {
   if (
     error instanceof SamsarRequestError &&
@@ -80,29 +92,31 @@ export function getSamsarErrorMessage(
   error: unknown,
   actionMessage: string
 ) {
+  const normalizedActionMessage = normalizeActionMessage(actionMessage);
+
   if (error instanceof SamsarRequestError) {
     const detail = extractErrorDetail(error.body);
 
     if (isCreditsIssue(error, detail)) {
-      return `${actionMessage}: not enough Samsar credits are available for this request.`;
+      return `${normalizedActionMessage}: not enough Samsar credits are available for this request.`;
     }
 
     if (detail) {
-      return `${actionMessage}: ${detail}`;
+      return `${normalizedActionMessage}: ${detail}`;
     }
 
     if (error.status === 400) {
-      return `${actionMessage}: Samsar rejected the request. Make sure the URL is public and supported.`;
+      return `${normalizedActionMessage}: Samsar rejected the request. Make sure the URL is public and supported.`;
     }
 
-    return actionMessage;
+    return normalizedActionMessage;
   }
 
   if (error instanceof Error && error.message.trim()) {
     return error.message.trim();
   }
 
-  return actionMessage;
+  return normalizedActionMessage;
 }
 
 export function getSamsarErrorContext(error: unknown) {
