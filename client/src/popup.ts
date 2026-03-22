@@ -144,6 +144,7 @@ interface AppState {
   voices: VoicesPayload["voices"];
   voiceWarning?: string;
   creditIssueMessage?: string;
+  creditBannerDismissed: boolean;
   preferredVoiceId?: string;
   preferredVoiceName?: string;
   voicePreviewState: "idle" | "loading" | "playing";
@@ -217,6 +218,8 @@ const creditWarningMessageNode =
   document.querySelector<HTMLElement>("#credit-warning-message");
 const creditWarningButton =
   document.querySelector<HTMLButtonElement>("#credit-warning-button");
+const creditWarningDismissButton =
+  document.querySelector<HTMLButtonElement>("#credit-warning-dismiss-button");
 const voiceToggleButton =
   document.querySelector<HTMLButtonElement>("#voice-toggle-button");
 const voiceToggleButtonLabel =
@@ -247,6 +250,7 @@ const state: AppState = {
   voices: [],
   voiceWarning: undefined,
   creditIssueMessage: undefined,
+  creditBannerDismissed: false,
   preferredVoiceId: undefined,
   preferredVoiceName: undefined,
   voicePreviewState: "idle",
@@ -914,7 +918,14 @@ function render() {
     !state.registrationRequired &&
     creditsRemaining !== null &&
     creditsRemaining < LOW_CREDIT_WARNING_THRESHOLD;
-  const showCreditBanner = creditIssueActive || lowCreditsActive;
+  const creditBannerAvailable = creditIssueActive || lowCreditsActive;
+
+  if (!creditBannerAvailable && state.creditBannerDismissed) {
+    state.creditBannerDismissed = false;
+  }
+
+  const showCreditBanner =
+    creditBannerAvailable && !state.creditBannerDismissed;
   const accountName =
     readOptionalString(state.currentUser?.displayName) ??
     readOptionalString(state.currentUser?.username) ??
@@ -1371,6 +1382,7 @@ function showInsufficientCreditsState(message?: string | null) {
   const shouldAppendLog = state.creditIssueMessage !== issueMessage;
 
   state.creditIssueMessage = issueMessage;
+  state.creditBannerDismissed = false;
   void stopPageRecordingCapture();
   closeWebSocketSession({
     phase: "error",
@@ -2701,6 +2713,11 @@ samsarLoginButton?.addEventListener("click", () => {
 
 creditWarningButton?.addEventListener("click", () => {
   void openSamsarClientLogin();
+});
+
+creditWarningDismissButton?.addEventListener("click", () => {
+  state.creditBannerDismissed = true;
+  render();
 });
 
 voiceToggleButton?.addEventListener("click", () => {

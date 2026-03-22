@@ -157,13 +157,23 @@
         hidden
       >
         <p id="credit-warning-message" class="top-credit-banner-message"></p>
-        <button
-          id="credit-warning-button"
-          class="secondary-button top-credit-banner-button"
-          type="button"
-        >
-          Recharge Credits
-        </button>
+        <div class="top-credit-banner-actions">
+          <button
+            id="credit-warning-button"
+            class="secondary-button top-credit-banner-button"
+            type="button"
+          >
+            Recharge Credits
+          </button>
+          <button
+            id="credit-warning-dismiss-button"
+            class="top-credit-banner-dismiss"
+            type="button"
+            aria-label="Dismiss warning"
+          >
+            <span aria-hidden="true">×</span>
+          </button>
+        </div>
       </section>
 
       <section class="hero-surface">
