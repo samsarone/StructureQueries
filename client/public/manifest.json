@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "Structure Queries",
+  "name": "Structured Queries",
   "version": "0.1.0",
-  "description": "Chrome extension for the Structure Queries client.",
+  "description": "Chrome extension for the Structured Queries client.",
   "action": {
-    "default_title": "Structure Queries"
+    "default_title": "Structured Queries"
   },
   "background": {
     "service_worker": "background.js"
@@ -40,7 +40,9 @@
       "resources": [
         "popup.html",
         "popup.css",
-        "popup.js"
+        "popup.js",
+        "structured-queries-monogram.svg",
+        "structured-queries-wordmark.svg"
       ],
       "matches": [
         "<all_urls>"

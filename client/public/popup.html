@@ -3,16 +3,25 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Structure Queries Overlay</title>
+    <title>Structured Queries Overlay</title>
     <link rel="stylesheet" href="./popup.css" />
   </head>
   <body data-loading="true">
     <div id="registration-overlay" class="registration-overlay is-hidden">
       <form id="registration-form" class="registration-dialog">
         <div class="dialog-header">
-          <div>
-            <p id="registration-eyebrow" class="eyebrow">Register</p>
-            <h2 id="registration-title">Register Structure Queries</h2>
+          <div class="dialog-brand">
+            <div class="brand-emblem dialog-emblem">
+              <img
+                src="./structured-queries-monogram.svg"
+                class="brand-mark"
+                alt="Structured Queries monogram"
+              />
+            </div>
+            <div class="dialog-brand-copy">
+              <p id="registration-eyebrow" class="eyebrow">Register</p>
+              <h2 id="registration-title">Register Structured Queries</h2>
+            </div>
           </div>
           <button
             id="registration-close-button"
@@ -20,9 +29,15 @@
             type="button"
             aria-label="Close account dialog"
           >
-            <span aria-hidden="true">x</span>
+            <span aria-hidden="true">×</span>
           </button>
         </div>
+
+        <img
+          src="./structured-queries-wordmark.svg"
+          class="dialog-wordmark"
+          alt="Structured Queries"
+        />
 
         <p id="registration-subtitle" class="registration-copy">
           Register this browser installation to continue.
@@ -55,6 +70,7 @@
             autocomplete="username"
           />
         </label>
+
         <div class="voice-field">
           <label class="field field-select">
             <span>Speaker</span>
@@ -105,9 +121,19 @@
 
     <main class="overlay-shell">
       <header class="topbar">
-        <div class="brand-stack">
-          <p class="eyebrow">Structure Queries</p>
-          <h1 id="page-title" class="page-title">Loading...</h1>
+        <div class="topbar-brand">
+          <div class="brand-emblem">
+            <img
+              src="./structured-queries-monogram.svg"
+              class="brand-mark"
+              alt="Structured Queries monogram"
+            />
+          </div>
+
+          <div class="brand-stack">
+            <p class="eyebrow">Structured Queries</p>
+            <p class="brand-mini">Voice browser intelligence</p>
+          </div>
         </div>
 
         <div class="topbar-actions">
@@ -139,30 +165,42 @@
         </div>
       </header>
 
-      <section class="voice-surface">
-        <div class="voice-surface-glow"></div>
+      <section class="hero-surface">
+        <div class="hero-copy">
+          <img
+            src="./structured-queries-wordmark.svg"
+            class="hero-wordmark"
+            alt="Structured Queries"
+          />
+          <p class="surface-label">Active Page</p>
+          <h1 id="page-title" class="page-title">Loading...</h1>
+          <p id="surface-status" class="surface-status">
+            Syncing session...
+          </p>
+        </div>
 
-        <div class="voice-stage">
-          <div class="voice-orb-shell" aria-hidden="true">
-            <div class="voice-ring voice-ring-one"></div>
-            <div class="voice-ring voice-ring-two"></div>
-            <div class="voice-orb">
-              <div class="voice-eq">
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
+        <div class="hero-stage">
+          <div class="hero-emblem">
+            <img
+              src="./structured-queries-monogram.svg"
+              class="hero-mark"
+              alt=""
+            />
+
+            <div class="voice-orb-shell" aria-hidden="true">
+              <div class="voice-ring voice-ring-one"></div>
+              <div class="voice-ring voice-ring-two"></div>
+              <div class="voice-orb">
+                <div class="voice-eq">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+                <div class="voice-orb-core"></div>
               </div>
-              <div class="voice-orb-core"></div>
             </div>
-          </div>
-
-          <div class="surface-copy">
-            <p class="surface-label">Page QA</p>
-            <p id="surface-status" class="surface-status">
-              Syncing session...
-            </p>
           </div>
         </div>
 
@@ -227,8 +265,8 @@
 
       <details class="drawer">
         <summary>
-          <span>Details</span>
-          <span class="drawer-hint">status and transcript</span>
+          <span>Telemetry</span>
+          <span class="drawer-hint">session and transcript</span>
         </summary>
 
         <div class="drawer-body">
@@ -273,9 +311,12 @@
 
       <div id="loading-shell" class="loading-shell" aria-hidden="true">
         <div class="loading-topbar">
-          <div class="loading-stack">
-            <span class="skeleton skeleton-eyebrow"></span>
-            <span class="skeleton skeleton-title"></span>
+          <div class="loading-brand">
+            <span class="skeleton skeleton-mark"></span>
+            <div class="loading-stack">
+              <span class="skeleton skeleton-eyebrow"></span>
+              <span class="skeleton skeleton-title"></span>
+            </div>
           </div>
           <div class="loading-topbar-actions">
             <span class="skeleton skeleton-pill"></span>
@@ -286,12 +327,12 @@
         </div>
 
         <section class="loading-surface">
-          <span class="skeleton skeleton-orb"></span>
-          <span class="skeleton skeleton-line skeleton-surface-label"></span>
+          <span class="skeleton skeleton-wordmark"></span>
+          <span class="skeleton skeleton-line skeleton-hero-title"></span>
           <span class="skeleton skeleton-line skeleton-surface-status"></span>
+          <span class="skeleton skeleton-orb"></span>
 
           <div class="loading-control-row">
-            <span class="skeleton skeleton-control"></span>
             <span class="skeleton skeleton-control"></span>
           </div>
 

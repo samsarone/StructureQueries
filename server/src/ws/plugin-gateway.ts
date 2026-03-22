@@ -67,6 +67,31 @@ interface SocketState {
   language?: string | null;
 }
 
+const MIN_ACCEPTED_TRANSCRIPT_DURATION_MS = 140;
+const MIN_ACCEPTED_TRANSCRIPT_LOGPROB = -1.5;
+const MIN_ACCEPTED_TRANSCRIPT_CHARS = 2;
+const MIN_ACCEPTED_LANGUAGE_PROBABILITY = 0.35;
+
+type TranscriptChunk = {
+  languageCode?: unknown;
+  languageProbability?: unknown;
+  words?: unknown;
+};
+
+type TranscriptWord = {
+  text?: unknown;
+  type?: unknown;
+  logprob?: unknown;
+  start?: unknown;
+  end?: unknown;
+};
+
+type AcceptedTranscriptWord = {
+  text: string;
+  start: number | null;
+  end: number | null;
+};
+
 function sendMessage(socket: WebSocket, payload: Record<string, unknown>) {
   socket.send(JSON.stringify(payload));
 }
@@ -162,6 +187,183 @@ function normalizeLanguage(language?: string | null) {
   return language;
 }
 
+function createNoSpeechDetectedError(message = "No clear speech was detected.") {
+  const error = new Error(message) as Error & {
+    code: string;
+  };
+  error.code = "no_speech_detected";
+  return error;
+}
+
+function isNoSpeechDetectedError(error: unknown) {
+  return (
+    Boolean(error) &&
+    typeof error === "object" &&
+    (error as { code?: unknown }).code === "no_speech_detected"
+  );
+}
+
+function extractTranscriptChunks(payload: unknown) {
+  if (
+    payload &&
+    typeof payload === "object" &&
+    Array.isArray((payload as { transcripts?: unknown }).transcripts)
+  ) {
+    return (payload as { transcripts: TranscriptChunk[] }).transcripts;
+  }
+
+  return [payload as TranscriptChunk];
+}
+
+function extractTranscriptWords(payload: unknown) {
+  return extractTranscriptChunks(payload).flatMap((chunk) =>
+    Array.isArray(chunk?.words) ? (chunk.words as TranscriptWord[]) : []
+  );
+}
+
+function normalizeTranscriptText(value: unknown) {
+  return typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+}
+
+function isWordLikeTranscriptText(value: string) {
+  return /[\p{L}\p{N}]/u.test(value);
+}
+
+function readFiniteNumber(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatTranscript(words: AcceptedTranscriptWord[]) {
+  return words
+    .map((word) => word.text)
+    .join(" ")
+    .replace(/\s+([,.;!?])/g, "$1")
+    .replace(/([([{])\s+/g, "$1")
+    .trim();
+}
+
+function calculateAcceptedSpeechDurationMs(words: AcceptedTranscriptWord[]) {
+  const starts = words
+    .map((word) => word.start)
+    .filter((value): value is number => typeof value === "number");
+  const ends = words
+    .map((word) => word.end)
+    .filter((value): value is number => typeof value === "number");
+
+  if (starts.length === 0 || ends.length === 0) {
+    return null;
+  }
+
+  const start = Math.min(...starts);
+  const end = Math.max(...ends);
+  return end > start ? Math.ceil((end - start) * 1000) : null;
+}
+
+function normalizeTranscriptionResult(
+  payload: unknown,
+  requestId: string | null,
+  fallbackDurationMs: number | null,
+  language?: string | null
+) {
+  const transcriptChunks = extractTranscriptChunks(payload);
+  const transcriptWords = extractTranscriptWords(payload);
+  const expectedLanguage = normalizeLanguage(language);
+  const audioEventCount = transcriptWords.filter(
+    (word) => word?.type === "audio_event"
+  ).length;
+  const acceptedWords = transcriptWords.reduce<AcceptedTranscriptWord[]>(
+    (result, word) => {
+      if (word?.type !== "word") {
+        return result;
+      }
+
+      const text = normalizeTranscriptText(word.text);
+
+      if (!text || !isWordLikeTranscriptText(text)) {
+        return result;
+      }
+
+      const logprob = readFiniteNumber(word.logprob);
+      if (
+        logprob !== null &&
+        logprob < MIN_ACCEPTED_TRANSCRIPT_LOGPROB
+      ) {
+        return result;
+      }
+
+      result.push({
+        text,
+        start: readFiniteNumber(word.start),
+        end: readFiniteNumber(word.end)
+      });
+      return result;
+    },
+    []
+  );
+  const transcript = formatTranscript(acceptedWords);
+  const languageProbability = transcriptChunks.reduce((maxProbability, chunk) => {
+    const nextProbability = readFiniteNumber(chunk?.languageProbability);
+    return nextProbability !== null && nextProbability > maxProbability
+      ? nextProbability
+      : maxProbability;
+  }, 0);
+  const detectedLanguage = transcriptChunks.reduce<string | undefined>(
+    (resolvedLanguage, chunk) => {
+      if (resolvedLanguage) {
+        return resolvedLanguage;
+      }
+
+      return typeof chunk?.languageCode === "string" && chunk.languageCode.trim()
+        ? chunk.languageCode
+        : undefined;
+    },
+    undefined
+  );
+  const durationMs =
+    calculateAcceptedSpeechDurationMs(acceptedWords) ?? fallbackDurationMs;
+
+  if (!transcript || transcript.length < MIN_ACCEPTED_TRANSCRIPT_CHARS) {
+    throw createNoSpeechDetectedError();
+  }
+
+  if (
+    audioEventCount > acceptedWords.length * 2 &&
+    acceptedWords.length < 2
+  ) {
+    throw createNoSpeechDetectedError(
+      "Only background noise was detected in the recording."
+    );
+  }
+
+  if (
+    durationMs !== null &&
+    durationMs < MIN_ACCEPTED_TRANSCRIPT_DURATION_MS &&
+    acceptedWords.length < 2
+  ) {
+    throw createNoSpeechDetectedError();
+  }
+
+  if (
+    !expectedLanguage &&
+    languageProbability > 0 &&
+    languageProbability < MIN_ACCEPTED_LANGUAGE_PROBABILITY &&
+    acceptedWords.length < 2
+  ) {
+    throw createNoSpeechDetectedError(
+      "The recording was too noisy to confidently detect speech."
+    );
+  }
+
+  return {
+    transcript,
+    detectedLanguage,
+    durationMs,
+    requestId,
+    source: "elevenlabs" as const
+  };
+}
+
 async function transcribeAudio(
   audioBase64: string,
   mimeType: string,
@@ -184,28 +386,24 @@ async function transcribeAudio(
       modelId: "scribe_v2",
       file,
       languageCode: normalizeLanguage(language),
+      noVerbatim: true,
+      tagAudioEvents: true,
       diarize: false,
+      temperature: 0,
       timestampsGranularity: "word"
     });
-    const transcriptPayload = result.transcription;
-    const transcriptText =
-      "text" in transcriptPayload && typeof transcriptPayload.text === "string"
-        ? transcriptPayload.text.trim()
-        : "";
 
-    return {
-      transcript:
-        transcriptText ||
-        "Audio was received but the transcript came back empty.",
-      detectedLanguage:
-        "languageCode" in transcriptPayload
-          ? transcriptPayload.languageCode
-          : undefined,
-      durationMs: result.durationMs,
-      requestId: result.requestId,
-      source: "elevenlabs" as const
-    };
+    return normalizeTranscriptionResult(
+      result.transcription,
+      result.requestId,
+      result.durationMs,
+      language
+    );
   } catch (error) {
+    if (isNoSpeechDetectedError(error)) {
+      throw error;
+    }
+
     throw new Error(
       error instanceof Error
         ? `Transcription failed. ${error.message}`
@@ -333,6 +531,15 @@ async function handleSubmitAudio(
       requestId: transcription.requestId
     });
   } catch (error) {
+    if (isNoSpeechDetectedError(error)) {
+      sendStatus(
+        socket,
+        "idle",
+        error instanceof Error ? error.message : "No clear speech was detected."
+      );
+      return;
+    }
+
     sendSocketError(socket, error, {
       fallbackMessage: "Transcription failed",
       statusDetail: "Transcription failed."

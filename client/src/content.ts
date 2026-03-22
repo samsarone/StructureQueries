@@ -2,18 +2,19 @@ function getSelectedText() {
   return window.getSelection()?.toString().trim() ?? "";
 }
 
-const MIN_SPEECH_DURATION_MS = 320;
-const SILENCE_STOP_DURATION_MS = 450;
-const MIN_SIGNAL_RMS = 0.018;
-const MIN_SUSTAINED_VOICE_FRAMES = 5;
+const MIN_SPEECH_DURATION_MS = 360;
+const SILENCE_STOP_DURATION_MS = 520;
+const MIN_SIGNAL_RMS = 0.02;
+const MIN_SUSTAINED_VOICE_FRAMES = 6;
+const MIN_RECORDED_AUDIO_BYTES = 2_500;
 const VOICE_BAND_MIN_HZ = 140;
 const VOICE_BAND_MAX_HZ = 3600;
 const LOW_RUMBLE_MAX_HZ = 120;
 const HIGH_CLICK_MIN_HZ = 4200;
 const ANALYSIS_BAND_MAX_HZ = 6000;
-const MIN_VOICE_BAND_SHARE = 0.58;
-const MAX_LOW_BAND_SHARE = 0.28;
-const MAX_HIGH_BAND_SHARE = 0.22;
+const MIN_VOICE_BAND_SHARE = 0.6;
+const MAX_LOW_BAND_SHARE = 0.25;
+const MAX_HIGH_BAND_SHARE = 0.18;
 const OVERLAY_HOST_ID = "structuredqueries-overlay-host";
 const OVERLAY_FRAME_URL = chrome.runtime.getURL("popup.html");
 
@@ -337,11 +338,19 @@ async function startPageRecording() {
         type: mediaRecorder?.mimeType || mimeType || "audio/webm"
       });
       const hasSpeech = Boolean(speechDetectedAt);
+      const effectiveSpeechDurationMs =
+        speechDetectedAt && lastVoiceDetectedAt
+          ? Math.max(0, lastVoiceDetectedAt - speechDetectedAt)
+          : 0;
       const durationMs =
         recordingStartedAt > 0 ? Math.max(0, Date.now() - recordingStartedAt) : undefined;
       cleanupRecording();
 
-      if (blob.size === 0 || !hasSpeech) {
+      if (
+        blob.size < MIN_RECORDED_AUDIO_BYTES ||
+        !hasSpeech ||
+        effectiveSpeechDurationMs < MIN_SPEECH_DURATION_MS
+      ) {
         await chrome.runtime.sendMessage({
           type: "PAGE_RECORDING_CANCELLED"
         });
@@ -405,8 +414,8 @@ function createOverlay() {
         position: fixed;
         top: 16px;
         right: 16px;
-        width: min(356px, calc(100vw - 24px));
-        height: min(624px, calc(100vh - 24px));
+        width: min(392px, calc(100vw - 24px));
+        height: min(664px, calc(100vh - 24px));
         z-index: 2147483647;
         pointer-events: none;
       }
@@ -452,7 +461,7 @@ function createOverlay() {
       <iframe
         class="sq-frame"
         src="${OVERLAY_FRAME_URL}"
-        title="Structure Queries overlay"
+        title="Structured Queries overlay"
         allow="microphone"
       ></iframe>
     </div>

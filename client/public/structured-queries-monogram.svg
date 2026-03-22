@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Structured Queries Monogram</title>
+  <desc id="desc">Rounded futuristic monogram for Structured Queries with a luminous Q glyph, subtle grid, and restrained blue-green atmosphere.</desc>
+
+  <defs>
+    <clipPath id="shellClip">
+      <rect width="512" height="512" rx="116" />
+    </clipPath>
+
+    <linearGradient id="shell" x1="8%" y1="6%" x2="94%" y2="96%">
+      <stop offset="0%" stop-color="#0c1b2f" />
+      <stop offset="54%" stop-color="#08111e" />
+      <stop offset="100%" stop-color="#040915" />
+    </linearGradient>
+
+    <radialGradient id="blueAura" cx="18%" cy="16%" r="70%">
+      <stop offset="0%" stop-color="#58bcff" stop-opacity="0.24" />
+      <stop offset="58%" stop-color="#58bcff" stop-opacity="0.08" />
+      <stop offset="100%" stop-color="#58bcff" stop-opacity="0" />
+    </radialGradient>
+
+    <radialGradient id="greenAura" cx="84%" cy="84%" r="64%">
+      <stop offset="0%" stop-color="#5ce39a" stop-opacity="0.22" />
+      <stop offset="58%" stop-color="#5ce39a" stop-opacity="0.08" />
+      <stop offset="100%" stop-color="#5ce39a" stop-opacity="0" />
+    </radialGradient>
+
+    <radialGradient id="coreGlow" cx="50%" cy="52%" r="44%">
+      <stop offset="0%" stop-color="#74d8ff" stop-opacity="0.24" />
+      <stop offset="52%" stop-color="#74d8ff" stop-opacity="0.07" />
+      <stop offset="100%" stop-color="#63de8d" stop-opacity="0" />
+    </radialGradient>
+
+    <linearGradient id="glyphGradient" x1="154" y1="116" x2="362" y2="384" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#66bbff" />
+      <stop offset="56%" stop-color="#7be2ff" />
+      <stop offset="100%" stop-color="#67e38d" />
+    </linearGradient>
+
+    <linearGradient id="strokeGradient" x1="68" y1="52" x2="454" y2="454" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#9ce2ff" stop-opacity="0.18" />
+      <stop offset="100%" stop-color="#67e38d" stop-opacity="0.12" />
+    </linearGradient>
+
+    <pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse">
+      <path d="M28 0H0V28" fill="none" stroke="#d5ebff" stroke-opacity="0.04" stroke-width="1" />
+    </pattern>
+
+    <filter id="softShadow" x="-28%" y="-28%" width="156%" height="164%">
+      <feDropShadow dx="0" dy="16" stdDeviation="22" flood-color="#00060f" flood-opacity="0.4" />
+    </filter>
+
+    <filter id="glyphGlow" x="-24%" y="-24%" width="148%" height="148%">
+      <feDropShadow dx="0" dy="0" stdDeviation="16" flood-color="#63b8ff" flood-opacity="0.16" />
+      <feDropShadow dx="0" dy="0" stdDeviation="12" flood-color="#67e38d" flood-opacity="0.12" />
+    </filter>
+  </defs>
+
+  <g clip-path="url(#shellClip)">
+    <rect width="512" height="512" rx="116" fill="url(#shell)" />
+    <rect width="512" height="512" rx="116" fill="url(#blueAura)" />
+    <rect width="512" height="512" rx="116" fill="url(#greenAura)" />
+    <rect width="512" height="512" rx="116" fill="url(#grid)" />
+  </g>
+
+  <rect x="14" y="14" width="484" height="484" rx="102" fill="none" stroke="url(#strokeGradient)" stroke-width="1.5" />
+
+  <g filter="url(#softShadow)">
+    <circle cx="256" cy="258" r="106" fill="url(#coreGlow)" opacity="0.84" />
+    <circle cx="256" cy="258" r="124" fill="none" stroke="#8fdfff" stroke-opacity="0.08" stroke-width="1.4" />
+    <circle cx="256" cy="258" r="142" fill="none" stroke="#67e38d" stroke-opacity="0.04" stroke-width="1.2" />
+
+    <g filter="url(#glyphGlow)">
+      <text
+        x="256"
+        y="356"
+        fill="#06121e"
+        fill-opacity="0.74"
+        font-family="'Avenir Next', 'Helvetica Neue', Arial, sans-serif"
+        font-size="244"
+        font-weight="800"
+        letter-spacing="-6"
+        text-anchor="middle"
+      >
+        Q
+      </text>
+      <text
+        x="256"
+        y="346"
+        fill="url(#glyphGradient)"
+        font-family="'Avenir Next', 'Helvetica Neue', Arial, sans-serif"
+        font-size="244"
+        font-weight="800"
+        letter-spacing="-6"
+        text-anchor="middle"
+      >
+        Q
+      </text>
+    </g>
+  </g>
+</svg>
