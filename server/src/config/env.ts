@@ -1,4 +1,19 @@
-import "dotenv/config";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+
+import { config as loadDotenv } from "dotenv";
+
+const dotenvPath =
+  process.env.DOTENV_CONFIG_PATH ??
+  [".env", ".env.production"].find((candidate) =>
+    existsSync(resolve(process.cwd(), candidate))
+  );
+
+if (dotenvPath) {
+  loadDotenv({
+    path: dotenvPath
+  });
+}
 
 const DEFAULT_PORT = 3000;
 const DEFAULT_SERVICE_NAME = "structuredqueries-server";

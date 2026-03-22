@@ -74,6 +74,17 @@ function readVoicePreviewUrl(value: unknown) {
   );
 }
 
+function normalizeVoiceListFailure(error: unknown) {
+  const message =
+    error instanceof Error ? error.message : "Failed to fetch ElevenLabs voices.";
+
+  if (/missing_permissions/i.test(message) && /voices_read/i.test(message)) {
+    return "ElevenLabs API key is missing the voices_read permission. Update that key so the plugin can populate speaker names from ElevenLabs.";
+  }
+
+  return message;
+}
+
 function createFallbackVoicesPayload(reason?: string) {
   const defaultVoiceId = env.integrations.elevenLabs.defaultVoiceId;
 
@@ -172,11 +183,7 @@ voicesRouter.get("/", async (_request, response) => {
     });
   } catch (error) {
     response.json(
-      createFallbackVoicesPayload(
-        error instanceof Error
-          ? error.message
-          : "Failed to fetch ElevenLabs voices."
-      )
+      createFallbackVoicesPayload(normalizeVoiceListFailure(error))
     );
   }
 });

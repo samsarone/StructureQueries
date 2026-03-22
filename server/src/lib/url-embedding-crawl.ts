@@ -287,6 +287,20 @@ async function firecrawlWithRetry<T>(
   throw lastError;
 }
 
+function getFirecrawlCreditsUsedFromDocument(
+  document: FirecrawlDocument | null | undefined,
+  fallback = 0
+) {
+  const metadata =
+    document?.metadata && typeof document.metadata === "object"
+      ? document.metadata
+      : null;
+  const rawCreditsUsed = metadata?.creditsUsed ?? metadata?.credits_used;
+  const parsed = Number(rawCreditsUsed);
+
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 function truncateText(text: string, maxChars = MAX_EMBEDDING_INPUT_CHARS) {
   if (!text) {
     return "";
@@ -1030,7 +1044,7 @@ async function crawlSeedUrlWithFallback(
           batchResult.job.status ??
           (childDocuments.length > 0 ? "completed" : "failed"),
         creditsUsed:
-          1 +
+          getFirecrawlCreditsUsedFromDocument(primaryDocument, 1) +
           (typeof batchResult.job.creditsUsed === "number"
             ? batchResult.job.creditsUsed
             : childDocuments.length),
@@ -1179,7 +1193,10 @@ export async function crawlUrlsForPlainTextEmbeddings(
       const primaryDocument = await scrapePrimaryDocument(client, seedUrl);
 
       if (primaryDocument) {
-        firecrawlCreditsUsed += 1;
+        firecrawlCreditsUsed += getFirecrawlCreditsUsedFromDocument(
+          primaryDocument,
+          1
+        );
         recordBuildResult = buildUrlPlainTextRecord(
           seedUrl,
           crawledDocuments,

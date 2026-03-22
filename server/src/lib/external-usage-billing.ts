@@ -95,6 +95,7 @@ export async function chargeExternalElevenLabsTranscriptionUsage(input: {
   mimeType?: string;
   pageTitle?: string;
   pageUrl?: string;
+  requestId?: string | null;
 }) {
   const durationMs = normalizePositiveNumber(input.durationMs);
 
@@ -112,6 +113,7 @@ export async function chargeExternalElevenLabsTranscriptionUsage(input: {
         interactionType: "voicebot_qa_transcription",
         assistantSessionId: readOptionalString(input.assistantSessionId),
         browserSessionId: readOptionalString(input.browserSessionId),
+        requestId: readOptionalString(input.requestId ?? undefined),
         language: readOptionalString(input.language ?? undefined) ?? null,
         mimeType: readOptionalString(input.mimeType),
         pageTitle: readOptionalString(input.pageTitle),
@@ -125,15 +127,18 @@ export async function chargeExternalElevenLabsTranscriptionUsage(input: {
 export async function chargeExternalElevenLabsSynthesisUsage(input: {
   assistantSessionId?: string;
   browserSessionId?: string;
+  charactersUsed?: number;
   externalUserApiKey?: string;
   pageTitle?: string;
   pageUrl?: string;
-  text: string;
+  requestId?: string | null;
+  text?: string;
   voiceId?: string;
 }) {
   const text = typeof input.text === "string" ? input.text.trim() : "";
+  const charactersUsed = normalizePositiveNumber(input.charactersUsed);
 
-  if (!text) {
+  if (charactersUsed <= 0 && !text) {
     return null;
   }
 
@@ -141,7 +146,13 @@ export async function chargeExternalElevenLabsSynthesisUsage(input: {
     {
       utility_type: "elevenlabs_tts",
       model: env.integrations.elevenLabs.defaultModelId,
-      text,
+      ...(charactersUsed > 0
+        ? {
+            character_count: charactersUsed
+          }
+        : {
+            text
+          }),
       metadata: {
         source: "structuredqueries_proxy",
         interactionType: "voicebot_qa_synthesis",
@@ -149,6 +160,7 @@ export async function chargeExternalElevenLabsSynthesisUsage(input: {
         browserSessionId: readOptionalString(input.browserSessionId),
         pageTitle: readOptionalString(input.pageTitle),
         pageUrl: readOptionalString(input.pageUrl),
+        requestId: readOptionalString(input.requestId ?? undefined),
         voiceId: readOptionalString(input.voiceId)
       }
     },

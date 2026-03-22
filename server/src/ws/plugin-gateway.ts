@@ -152,7 +152,7 @@ async function transcribeAudio(
       `turn.${getAudioFileExtension(mimeType)}`,
       { type: mimeType }
     );
-    const transcription = await elevenLabsAdapter.transcribe({
+    const result = await elevenLabsAdapter.transcribe({
       enableLogging: true,
       modelId: "scribe_v2",
       file,
@@ -160,12 +160,22 @@ async function transcribeAudio(
       diarize: false,
       timestampsGranularity: "word"
     });
+    const transcriptPayload = result.transcription;
+    const transcriptText =
+      "text" in transcriptPayload && typeof transcriptPayload.text === "string"
+        ? transcriptPayload.text.trim()
+        : "";
 
     return {
       transcript:
-        transcription.text.trim() ||
+        transcriptText ||
         "Audio was received but the transcript came back empty.",
-      detectedLanguage: transcription.languageCode,
+      detectedLanguage:
+        "languageCode" in transcriptPayload
+          ? transcriptPayload.languageCode
+          : undefined,
+      durationMs: result.durationMs,
+      requestId: result.requestId,
       source: "elevenlabs" as const
     };
   } catch (error) {
@@ -185,14 +195,16 @@ async function synthesizeAssistantAudio(text: string, voiceId?: string) {
   }
 
   try {
-    const audioBuffer = await elevenLabsAdapter.synthesize({
+    const result = await elevenLabsAdapter.synthesize({
       voiceId: resolvedVoiceId,
       text
     });
 
     return {
-      audioBase64: audioBuffer.toString("base64"),
+      audioBase64: result.audioBuffer.toString("base64"),
+      characterCount: result.characterCount,
       mimeType: "audio/mpeg",
+      requestId: result.requestId,
       source: "elevenlabs" as const,
       voiceId: resolvedVoiceId
     };
@@ -285,12 +297,13 @@ async function handleSubmitAudio(
     await chargeExternalElevenLabsTranscriptionUsage({
       assistantSessionId: state.assistantSessionId,
       browserSessionId: state.browserSessionId,
-      durationMs: payload.durationMs,
+      durationMs: transcription.durationMs ?? payload.durationMs,
       externalUserApiKey: state.externalUserApiKey,
       language: transcription.detectedLanguage ?? activeLanguage,
       mimeType: payload.mimeType ?? "audio/webm",
       pageTitle: state.pageTitle,
-      pageUrl: state.pageUrl
+      pageUrl: state.pageUrl,
+      requestId: transcription.requestId
     });
   } catch (error) {
     sendStatus(socket, "error", "Transcription failed.");
@@ -355,9 +368,11 @@ async function handleSubmitAudio(
         await chargeExternalElevenLabsSynthesisUsage({
           assistantSessionId: state.assistantSessionId,
           browserSessionId: state.browserSessionId,
+          charactersUsed: synthesizedAudio.characterCount ?? undefined,
           externalUserApiKey: state.externalUserApiKey,
           pageTitle: state.pageTitle,
           pageUrl: state.pageUrl,
+          requestId: synthesizedAudio.requestId,
           text: assistantText,
           voiceId: activeVoiceId
         });

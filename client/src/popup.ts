@@ -141,6 +141,7 @@ interface AppState {
   websocketPhase: WebSocketPhase;
   websocketDetail: string;
   voices: VoicesPayload["voices"];
+  voiceWarning?: string;
   preferredVoiceId?: string;
   preferredVoiceName?: string;
   voicePreviewState: "idle" | "loading" | "playing";
@@ -219,6 +220,7 @@ const voiceToggleButtonIcon =
 const voiceSelect = document.querySelector<HTMLSelectElement>("#voice-select");
 const voicePreviewButton =
   document.querySelector<HTMLButtonElement>("#voice-preview-button");
+const voiceWarningNode = document.querySelector<HTMLElement>("#voice-warning");
 const languageSelect =
   document.querySelector<HTMLSelectElement>("#language-select");
 
@@ -237,6 +239,7 @@ const state: AppState = {
   websocketPhase: "idle",
   websocketDetail: "Idle",
   voices: [],
+  voiceWarning: undefined,
   preferredVoiceId: undefined,
   preferredVoiceName: undefined,
   voicePreviewState: "idle",
@@ -1059,6 +1062,11 @@ function render() {
   );
   setText(settingsCreditsRemainingNode, settingsCreditsValue);
   setText(settingsCreditsCaptionNode, settingsCreditsCaption);
+  setText(voiceWarningNode, state.voiceWarning ?? "");
+
+  if (voiceWarningNode) {
+    voiceWarningNode.hidden = !state.voiceWarning;
+  }
 
   document.body.dataset.loading = state.isInitializing ? "true" : "false";
   document.body.dataset.voiceMode = voiceMode;
@@ -1665,6 +1673,7 @@ async function refreshServerStatus() {
 async function refreshVoices() {
   if (!state.serverOnline) {
     state.voices = [];
+    state.voiceWarning = undefined;
     renderVoiceOptions();
     return;
   }
@@ -1672,6 +1681,7 @@ async function refreshVoices() {
   try {
     const payload = await fetchJson<VoicesPayload>("/api/voices");
     state.voices = payload.voices;
+    state.voiceWarning = readOptionalString(payload.warnings?.[0]);
 
     for (const warning of payload.warnings ?? []) {
       console.warn("Structure Queries voices warning:", warning);
@@ -1679,6 +1689,8 @@ async function refreshVoices() {
   } catch (error) {
     console.error("Failed to fetch voices", error);
     state.voices = [];
+    state.voiceWarning =
+      error instanceof Error ? error.message : "Failed to fetch voices.";
   }
 
   renderVoiceOptions();
