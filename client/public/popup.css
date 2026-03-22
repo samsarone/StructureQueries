@@ -617,6 +617,12 @@ select {
 
 .dialog-actions {
   display: grid;
+  gap: 8px;
+}
+
+.voice-field {
+  display: grid;
+  gap: 8px;
 }
 
 .field {
@@ -652,6 +658,30 @@ select {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: rgba(191, 231, 245, 0.74);
+}
+
+.preview-button {
+  min-height: 38px;
+  font-size: 0.78rem;
+}
+
+.settings-credit-card {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(122, 177, 211, 0.14);
+  background:
+    radial-gradient(circle at top right, rgba(57, 216, 129, 0.12), transparent 36%),
+    rgba(11, 26, 40, 0.72);
+}
+
+.settings-credit-value {
+  margin: 2px 0 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--text);
 }
 
 .loading-shell {

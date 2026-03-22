@@ -9,6 +9,8 @@ const ANALYZED_PAGES_STORAGE_KEY = "structuredqueries.analyzedPages";
 const REGISTRATION_STORAGE_KEY = "structuredqueries.registration";
 const LEGACY_ANALYZED_PAGES_STORAGE_KEY = "telepathy.analyzedPages";
 const LEGACY_REGISTRATION_STORAGE_KEY = "telepathy.registration";
+const STARTER_CREDITS = 5;
+const creditCountFormatter = new Intl.NumberFormat();
 
 interface ExtensionSessionPayload {
   ok: boolean;
@@ -32,6 +34,12 @@ interface StructureQueriesExternalUserPayload {
   userType?: string | null;
   browserInstallation?: Record<string, unknown> | null;
   generationCredits?: number | null;
+  totalRequests?: number | null;
+  totalCreditsUsed?: number | null;
+  totalCreditsRefunded?: number | null;
+  totalCreditsPurchased?: number | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }
 
 interface RegistrationStatePayload {
@@ -49,7 +57,14 @@ interface BrowserSessionPayload {
   externalUser?: StructureQueriesExternalUserPayload | null;
   externalUserApiKey?: string | null;
   registrationRequired?: boolean;
+  starterCreditsGranted?: number | null;
   warnings?: string[];
+}
+
+interface BrowserSessionLoginLinkPayload {
+  ok: boolean;
+  loginUrl?: string | null;
+  externalUser?: StructureQueriesExternalUserPayload | null;
 }
 
 interface PageContext {
@@ -86,6 +101,7 @@ interface VoicesPayload {
     voiceId: string;
     name: string;
     description?: string;
+    previewUrl?: string;
   }>;
 }
 
@@ -114,6 +130,7 @@ interface AppState {
   externalUserApiKey?: string;
   registrationRequired: boolean;
   registrationSubmitting: boolean;
+  loginLinkSubmitting: boolean;
   accountEditorOpen: boolean;
   serverOnline: boolean;
   indexChecked: boolean;
@@ -126,6 +143,8 @@ interface AppState {
   voices: VoicesPayload["voices"];
   preferredVoiceId?: string;
   preferredVoiceName?: string;
+  voicePreviewState: "idle" | "loading" | "playing";
+  voicePreviewVoiceId?: string;
   pendingAssistantText?: string;
   conversationActive: boolean;
   assistantSpeaking: boolean;
@@ -167,6 +186,12 @@ const registrationEmailNode =
   document.querySelector<HTMLInputElement>("#registration-email");
 const registrationUsernameNode =
   document.querySelector<HTMLInputElement>("#registration-username");
+const settingsCreditsRemainingNode =
+  document.querySelector<HTMLElement>("#settings-credits-remaining");
+const settingsCreditsCaptionNode =
+  document.querySelector<HTMLElement>("#settings-credits-caption");
+const samsarLoginButton =
+  document.querySelector<HTMLButtonElement>("#samsar-login-button");
 const analysisStatusNode =
   document.querySelector<HTMLElement>("#analysis-status");
 const conversationLogNode =
@@ -192,6 +217,8 @@ const voiceToggleButtonLabel =
 const voiceToggleButtonIcon =
   document.querySelector<HTMLElement>("#voice-toggle-button-icon");
 const voiceSelect = document.querySelector<HTMLSelectElement>("#voice-select");
+const voicePreviewButton =
+  document.querySelector<HTMLButtonElement>("#voice-preview-button");
 const languageSelect =
   document.querySelector<HTMLSelectElement>("#language-select");
 
@@ -199,6 +226,7 @@ const state: AppState = {
   currentUser: null,
   registrationRequired: true,
   registrationSubmitting: false,
+  loginLinkSubmitting: false,
   accountEditorOpen: false,
   serverOnline: false,
   indexChecked: false,
@@ -211,6 +239,8 @@ const state: AppState = {
   voices: [],
   preferredVoiceId: undefined,
   preferredVoiceName: undefined,
+  voicePreviewState: "idle",
+  voicePreviewVoiceId: undefined,
   conversationActive: false,
   assistantSpeaking: false,
   recording: false
@@ -220,6 +250,7 @@ let activeSocket: WebSocket | undefined;
 let activeSocketPromise: Promise<WebSocket> | undefined;
 let activeAssistantAudio: HTMLAudioElement | undefined;
 let activeAssistantAudioObjectUrl: string | undefined;
+let activeVoicePreviewAudio: HTMLAudioElement | undefined;
 let resumeConversationTimer: number | undefined;
 let assistantAudioReceivedForTurn = false;
 
@@ -337,6 +368,17 @@ function getCurrentUserId() {
   );
 }
 
+function getCreditsRemaining() {
+  return typeof state.currentUser?.generationCredits === "number"
+    ? Math.max(0, Math.floor(state.currentUser.generationCredits))
+    : null;
+}
+
+function formatCreditsLabel(value: number) {
+  const amount = creditCountFormatter.format(value);
+  return `${amount} ${value === 1 ? "credit" : "credits"}`;
+}
+
 function getPreferredVoiceIdFromUser(
   user?: StructureQueriesExternalUserPayload | null
 ) {
@@ -390,7 +432,115 @@ function stopAssistantPlayback() {
   }
 }
 
+function stopVoicePreviewPlayback() {
+  if (activeVoicePreviewAudio) {
+    activeVoicePreviewAudio.pause();
+    activeVoicePreviewAudio.src = "";
+    activeVoicePreviewAudio = undefined;
+  }
+
+  if (
+    state.voicePreviewState !== "idle" ||
+    readOptionalString(state.voicePreviewVoiceId)
+  ) {
+    state.voicePreviewState = "idle";
+    state.voicePreviewVoiceId = undefined;
+    renderVoicePreviewButton();
+  }
+}
+
+async function toggleVoicePreviewPlayback() {
+  const selectedVoiceId = getSelectedVoiceId();
+  const previewSource = getSelectedVoicePreviewSource();
+
+  if (!selectedVoiceId || !previewSource) {
+    return;
+  }
+
+  const previewActive =
+    state.voicePreviewVoiceId === selectedVoiceId &&
+    state.voicePreviewState !== "idle";
+
+  if (previewActive) {
+    stopVoicePreviewPlayback();
+    return;
+  }
+
+  stopAssistantPlayback();
+  stopVoicePreviewPlayback();
+
+  const audio = new Audio(previewSource);
+  activeVoicePreviewAudio = audio;
+  state.voicePreviewVoiceId = selectedVoiceId;
+  state.voicePreviewState = "loading";
+  renderVoicePreviewButton();
+
+  const cleanup = () => {
+    if (activeVoicePreviewAudio === audio) {
+      activeVoicePreviewAudio = undefined;
+    }
+
+    if (state.voicePreviewVoiceId === selectedVoiceId) {
+      state.voicePreviewState = "idle";
+      state.voicePreviewVoiceId = undefined;
+      renderVoicePreviewButton();
+    }
+  };
+
+  audio.addEventListener("play", () => {
+    if (activeVoicePreviewAudio !== audio) {
+      return;
+    }
+
+    state.voicePreviewState = "playing";
+    renderVoicePreviewButton();
+  });
+
+  audio.addEventListener(
+    "ended",
+    () => {
+      cleanup();
+    },
+    { once: true }
+  );
+
+  audio.addEventListener(
+    "pause",
+    () => {
+      if (!audio.ended) {
+        cleanup();
+      }
+    },
+    { once: true }
+  );
+
+  audio.addEventListener(
+    "error",
+    () => {
+      cleanup();
+      appendLog("system", "Failed to play speaker preview.");
+    },
+    { once: true }
+  );
+
+  try {
+    await audio.play();
+  } catch (error) {
+    const previewWasInterrupted =
+      activeVoicePreviewAudio !== audio ||
+      state.voicePreviewVoiceId !== selectedVoiceId ||
+      (error instanceof DOMException && error.name === "AbortError");
+    cleanup();
+
+    if (!previewWasInterrupted) {
+      throw error;
+    }
+  }
+}
+
 function requestOverlayClose() {
+  stopVoicePreviewPlayback();
+
   if (window.parent && window.parent !== window) {
     window.parent.postMessage({
       type: "STRUCTUREDQUERIES_CLOSE_OVERLAY"
@@ -542,6 +692,7 @@ function resetConversationLog() {
 
 function renderVoiceOptions() {
   if (!voiceSelect) {
+    renderVoicePreviewButton();
     return;
   }
 
@@ -587,6 +738,17 @@ function renderVoiceOptions() {
       readOptionalString(voiceSelect.selectedOptions[0]?.textContent) ??
       preferredVoiceName;
   }
+
+  if (
+    state.voicePreviewState !== "idle" &&
+    (state.voicePreviewVoiceId !== getSelectedVoiceId() ||
+      !getSelectedVoicePreviewSource())
+  ) {
+    stopVoicePreviewPlayback();
+    return;
+  }
+
+  renderVoicePreviewButton();
 }
 
 function getSelectedVoiceId() {
@@ -595,11 +757,63 @@ function getSelectedVoiceId() {
   return value ?? readOptionalString(state.preferredVoiceId);
 }
 
+function getSelectedVoiceOption() {
+  const selectedVoiceId = getSelectedVoiceId();
+
+  if (!selectedVoiceId) {
+    return undefined;
+  }
+
+  return state.voices.find((voice) => voice.voiceId === selectedVoiceId);
+}
+
 function getSelectedVoiceName() {
   return (
+    readOptionalString(getSelectedVoiceOption()?.name) ??
     readOptionalString(voiceSelect?.selectedOptions[0]?.textContent) ??
     readOptionalString(state.preferredVoiceName)
   );
+}
+
+function getSelectedVoicePreviewSource() {
+  const selectedVoice = getSelectedVoiceOption();
+
+  if (!selectedVoice?.previewUrl) {
+    return undefined;
+  }
+
+  return `${SERVER_HTTP_ORIGIN}/api/voices/preview?voiceId=${encodeURIComponent(
+    selectedVoice.voiceId
+  )}`;
+}
+
+function renderVoicePreviewButton() {
+  if (!voicePreviewButton) {
+    return;
+  }
+
+  const selectedVoiceId = getSelectedVoiceId();
+  const previewSource = getSelectedVoicePreviewSource();
+  const previewActive = Boolean(
+    selectedVoiceId &&
+      state.voicePreviewVoiceId === selectedVoiceId &&
+      state.voicePreviewState !== "idle"
+  );
+  const voiceBusy =
+    state.conversationActive || state.recording || state.assistantSpeaking;
+
+  voicePreviewButton.disabled =
+    !previewSource ||
+    state.registrationSubmitting ||
+    state.isInitializing ||
+    (voiceBusy && !previewActive);
+  voicePreviewButton.textContent = !previewSource
+    ? "Preview unavailable"
+    : previewActive && state.voicePreviewState === "playing"
+      ? "Pause preview"
+      : previewActive && state.voicePreviewState === "loading"
+        ? "Loading preview..."
+        : "Play preview";
 }
 
 function syncRegistrationForm() {
@@ -620,6 +834,12 @@ function openAccountEditor() {
   state.accountEditorOpen = true;
   syncRegistrationForm();
   render();
+
+  if (!state.registrationRequired && state.serverOnline) {
+    void syncBrowserSession().catch((error) => {
+      console.error("Failed to refresh account settings", error);
+    });
+  }
 }
 
 function closeAccountEditor() {
@@ -643,11 +863,22 @@ function render() {
     state.recording ||
     state.assistantSpeaking ||
     waitingForAssistant;
+  const creditsRemaining = getCreditsRemaining();
   const accountName =
     readOptionalString(state.currentUser?.displayName) ??
     readOptionalString(state.currentUser?.username) ??
     readOptionalString(state.currentUser?.email) ??
     (state.registrationRequired ? "Setup required" : "Structure Queries");
+  const settingsCreditsValue = state.registrationRequired
+    ? `${STARTER_CREDITS} starter credits`
+    : creditsRemaining === null
+      ? "Unavailable"
+      : formatCreditsLabel(creditsRemaining);
+  const settingsCreditsCaption = state.registrationRequired
+    ? "Granted once when this Chrome client finishes registration."
+    : creditsRemaining === null
+      ? "Refresh the session to load your latest balance."
+      : "Open the Samsar app to recharge when you need more.";
   const analysisPill = state.isInitializing
     ? "Loading"
     : state.isAnalyzing
@@ -767,6 +998,8 @@ function render() {
     accountHintNode,
     state.registrationRequired
       ? "Setup is required."
+      : creditsRemaining !== null
+        ? `${formatCreditsLabel(creditsRemaining)} remaining.`
       : state.currentUser?.email
         ? "Ready."
         : "Connected."
@@ -818,10 +1051,14 @@ function render() {
         ? registrationMode === "register"
           ? "Setting up..."
           : "Saving..."
+      : state.loginLinkSubmitting
+          ? "Opening Samsar..."
       : registrationMode === "register"
-          ? "All fields are optional."
+          ? `All fields are optional. You will receive ${STARTER_CREDITS} starter credits.`
           : "Save changes."
   );
+  setText(settingsCreditsRemainingNode, settingsCreditsValue);
+  setText(settingsCreditsCaptionNode, settingsCreditsCaption);
 
   document.body.dataset.loading = state.isInitializing ? "true" : "false";
   document.body.dataset.voiceMode = voiceMode;
@@ -842,7 +1079,9 @@ function render() {
 
   if (registrationSubmitButton) {
     registrationSubmitButton.disabled =
-      state.registrationSubmitting || !state.serverOnline;
+      state.registrationSubmitting ||
+      state.loginLinkSubmitting ||
+      !state.serverOnline;
     registrationSubmitButton.textContent = state.registrationSubmitting
       ? registrationMode === "register"
         ? "Registering..."
@@ -850,6 +1089,18 @@ function render() {
       : registrationMode === "register"
         ? "Register"
         : "Save Changes";
+  }
+
+  if (samsarLoginButton) {
+    samsarLoginButton.hidden = registrationMode === "register";
+    samsarLoginButton.disabled =
+      state.registrationRequired ||
+      state.registrationSubmitting ||
+      state.loginLinkSubmitting ||
+      !state.serverOnline;
+    samsarLoginButton.textContent = state.loginLinkSubmitting
+      ? "Opening Samsar..."
+      : "Recharge Credits";
   }
 
   if (analyzeButton) {
@@ -892,6 +1143,8 @@ function render() {
       state.registrationSubmitting ||
       state.isInitializing;
   }
+
+  renderVoicePreviewButton();
 
   if (languageSelect) {
     languageSelect.disabled =
@@ -1160,6 +1413,26 @@ async function loadRegistrationState() {
   syncRegistrationForm();
 }
 
+function applyBrowserSessionPayload(payload: BrowserSessionPayload) {
+  state.assistantSessionId =
+    typeof payload.assistantSessionId === "string"
+      ? payload.assistantSessionId
+      : payload.assistantSessionId === null
+        ? undefined
+        : state.assistantSessionId;
+  state.currentUser =
+    payload.externalUser === undefined
+      ? state.currentUser
+      : payload.externalUser ?? null;
+  state.externalUserApiKey =
+    typeof payload.externalUserApiKey === "string"
+      ? payload.externalUserApiKey
+      : payload.externalUserApiKey === null
+        ? undefined
+        : state.externalUserApiKey;
+  state.registrationRequired = Boolean(payload.registrationRequired);
+}
+
 async function syncBrowserSession() {
   if (!state.browserSessionId) {
     return;
@@ -1177,11 +1450,70 @@ async function syncBrowserSession() {
       externalUserApiKey: state.externalUserApiKey,
       extensionId: state.extensionId,
       preferredLanguage: languageSelect?.value ?? "auto",
-      preferredVoiceId: getSelectedVoiceId()
+      preferredVoiceId: getSelectedVoiceId(),
+      userAgent: navigator.userAgent
     })
   });
 
-  state.registrationRequired = Boolean(payload.registrationRequired);
+  applyBrowserSessionPayload(payload);
+
+  await saveRegistrationState(state.browserSessionId, {
+    assistantSessionId: state.assistantSessionId,
+    externalUser: state.currentUser,
+    externalUserApiKey: state.externalUserApiKey,
+    preferredVoiceId: state.preferredVoiceId,
+    preferredVoiceName: state.preferredVoiceName
+  });
+  render();
+}
+
+async function persistBrowserProfilePreferences() {
+  if (!state.browserSessionId) {
+    return;
+  }
+
+  if (
+    state.registrationRequired ||
+    !state.serverOnline ||
+    !state.externalUserApiKey ||
+    !state.assistantSessionId
+  ) {
+    await syncBrowserSession();
+    return;
+  }
+
+  const payload = await fetchJson<BrowserSessionPayload>(
+    "/api/browser-sessions/profile",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        assistantSessionId: state.assistantSessionId,
+        browserSessionId: state.browserSessionId,
+        externalUserApiKey: state.externalUserApiKey,
+        extensionId: state.extensionId,
+        userAgent: navigator.userAgent,
+        displayName: state.currentUser?.displayName ?? "",
+        email: state.currentUser?.email ?? "",
+        username: state.currentUser?.username ?? "",
+        preferredLanguage: languageSelect?.value ?? "auto",
+        preferredVoiceId: getSelectedVoiceId()
+      })
+    }
+  );
+
+  applyBrowserSessionPayload(payload);
+
+  await saveRegistrationState(state.browserSessionId, {
+    assistantSessionId: state.assistantSessionId,
+    externalUser: state.currentUser,
+    externalUserApiKey: state.externalUserApiKey,
+    preferredVoiceId: state.preferredVoiceId,
+    preferredVoiceName: state.preferredVoiceName
+  });
+  render();
 }
 
 async function submitAccountProfile() {
@@ -1217,18 +1549,9 @@ async function submitAccountProfile() {
       })
     });
 
-    state.assistantSessionId =
-      typeof payload.assistantSessionId === "string"
-        ? payload.assistantSessionId
-        : undefined;
-    state.currentUser = payload.externalUser ?? null;
-    state.externalUserApiKey =
-      typeof payload.externalUserApiKey === "string"
-        ? payload.externalUserApiKey
-        : undefined;
+    applyBrowserSessionPayload(payload);
     state.preferredVoiceId = getSelectedVoiceId();
     state.preferredVoiceName = getSelectedVoiceName();
-    state.registrationRequired = Boolean(payload.registrationRequired);
     state.accountEditorOpen = false;
     await saveRegistrationState(state.browserSessionId, {
       assistantSessionId: state.assistantSessionId,
@@ -1240,7 +1563,9 @@ async function submitAccountProfile() {
     appendLog(
       "system",
       isRegistrationFlow
-        ? "Registration completed. You can now analyze documents and start voice chat."
+        ? payload.starterCreditsGranted && payload.starterCreditsGranted > 0
+          ? `Registration completed. ${formatCreditsLabel(payload.starterCreditsGranted)} are ready to use.`
+          : "Registration completed. You can now analyze documents and start voice chat."
         : "Account details updated for this client session."
     );
     await refreshAll();
@@ -1256,6 +1581,73 @@ async function submitAccountProfile() {
     );
   } finally {
     state.registrationSubmitting = false;
+    render();
+  }
+}
+
+async function openSamsarClientLogin() {
+  if (!state.browserSessionId || state.registrationRequired) {
+    return;
+  }
+
+  state.loginLinkSubmitting = true;
+  render();
+
+  try {
+    const payload = await fetchJson<BrowserSessionLoginLinkPayload>(
+      "/api/browser-sessions/login-link",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          browserSessionId: state.browserSessionId,
+          externalUser: state.currentUser,
+          externalUserApiKey: state.externalUserApiKey,
+          extensionId: state.extensionId,
+          preferredLanguage: languageSelect?.value ?? "auto",
+          preferredVoiceId: getSelectedVoiceId(),
+          userAgent: navigator.userAgent
+        })
+      }
+    );
+
+    if (payload.externalUser !== undefined) {
+      state.currentUser = payload.externalUser ?? null;
+    }
+
+    await saveRegistrationState(state.browserSessionId, {
+      assistantSessionId: state.assistantSessionId,
+      externalUser: state.currentUser,
+      externalUserApiKey: state.externalUserApiKey,
+      preferredVoiceId: state.preferredVoiceId,
+      preferredVoiceName: state.preferredVoiceName
+    });
+
+    const loginUrl = readOptionalString(payload.loginUrl);
+
+    if (!loginUrl) {
+      throw new Error("Samsar login link was not returned.");
+    }
+
+    await chrome.tabs.create({
+      url: loginUrl
+    });
+    appendLog(
+      "system",
+      "Opened Samsar in a new tab so you can recharge credits."
+    );
+  } catch (error) {
+    console.error("Failed to open Samsar client login", error);
+    appendLog(
+      "system",
+      error instanceof Error
+        ? error.message
+        : "Failed to create the Samsar login link."
+    );
+  } finally {
+    state.loginLinkSubmitting = false;
     render();
   }
 }
@@ -1295,6 +1687,7 @@ async function refreshVoices() {
 function closeWebSocketSession() {
   clearResumeConversationTimer();
   stopAssistantPlayback();
+  stopVoicePreviewPlayback();
 
   if (activeSocket) {
     activeSocket.close();
@@ -1434,6 +1827,7 @@ function scheduleConversationResume(delayMs = 250) {
 
 async function playAssistantAudio(audioBase64: string, mimeType: string) {
   stopAssistantPlayback();
+  stopVoicePreviewPlayback();
 
   const bytes = bytesFromBase64(audioBase64);
   const blob = new Blob([bytes], {
@@ -1512,6 +1906,7 @@ function speakLocally(text: string) {
   }
 
   stopAssistantPlayback();
+  stopVoicePreviewPlayback();
   state.assistantSpeaking = true;
   state.websocketDetail = "Assistant speaking...";
   render();
@@ -1872,6 +2267,7 @@ async function startRecording() {
     throw new Error("Register this browser installation before starting voice chat.");
   }
 
+  stopVoicePreviewPlayback();
   state.conversationActive = true;
   state.websocketPhase = "connected";
   state.websocketDetail = "Starting...";
@@ -2134,6 +2530,10 @@ registrationOverlayNode?.addEventListener("click", (event) => {
   }
 });
 
+samsarLoginButton?.addEventListener("click", () => {
+  void openSamsarClientLogin();
+});
+
 voiceToggleButton?.addEventListener("click", () => {
   if (state.conversationActive || state.recording || state.assistantSpeaking) {
     void stopRecording();
@@ -2153,9 +2553,21 @@ closeOverlayButton?.addEventListener("click", () => {
   requestOverlayClose();
 });
 
+voicePreviewButton?.addEventListener("click", () => {
+  void toggleVoicePreviewPlayback().catch((error) => {
+    console.error("Failed to play speaker preview", error);
+    appendLog(
+      "system",
+      error instanceof Error ? error.message : "Failed to play speaker preview."
+    );
+  });
+});
+
 voiceSelect?.addEventListener("change", () => {
   state.preferredVoiceId = getSelectedVoiceId();
   state.preferredVoiceName = getSelectedVoiceName();
+  stopVoicePreviewPlayback();
+  renderVoicePreviewButton();
 
   void savePreferredVoicePreference().catch((error) => {
     console.error("Failed to persist preferred speaker", error);
@@ -2168,18 +2580,19 @@ voiceSelect?.addEventListener("change", () => {
     });
   }
 
-  void syncBrowserSession().catch((error) => {
+  void persistBrowserProfilePreferences().catch((error) => {
     console.error("Failed to update preferred speaker", error);
   });
 });
 
 languageSelect?.addEventListener("change", () => {
-  void syncBrowserSession().catch((error) => {
+  void persistBrowserProfilePreferences().catch((error) => {
     console.error("Failed to update browser session", error);
   });
 });
 
 window.addEventListener("pagehide", () => {
+  stopVoicePreviewPlayback();
   void stopRecording();
 });
 

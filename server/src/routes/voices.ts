@@ -61,6 +61,19 @@ function readVoiceOptions(value: unknown): VoiceOption[] {
   });
 }
 
+function readVoicePreviewUrl(value: unknown) {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+
+  const candidate = value as Record<string, unknown>;
+
+  return (
+    readOptionalString(candidate.previewUrl) ??
+    readOptionalString(candidate.preview_url)
+  );
+}
+
 function createFallbackVoicesPayload(reason?: string) {
   const defaultVoiceId = env.integrations.elevenLabs.defaultVoiceId;
 
@@ -79,6 +92,64 @@ function createFallbackVoicesPayload(reason?: string) {
     warnings: reason ? [reason] : []
   };
 }
+
+voicesRouter.get("/preview", async (request, response) => {
+  const voiceId = readOptionalString(
+    typeof request.query.voiceId === "string" ? request.query.voiceId : undefined
+  );
+
+  if (!voiceId) {
+    response.status(400).json({
+      ok: false,
+      error: "voiceId is required"
+    });
+    return;
+  }
+
+  if (!elevenLabsAdapter.isConfigured()) {
+    response.status(503).json({
+      ok: false,
+      error: "ELEVENLABS_API_KEY is not configured."
+    });
+    return;
+  }
+
+  try {
+    const voice = await elevenLabsAdapter.getVoice(voiceId);
+    const previewUrl = readVoicePreviewUrl(voice);
+
+    if (!previewUrl) {
+      response.status(404).json({
+        ok: false,
+        error: "Preview audio is not available for this voice."
+      });
+      return;
+    }
+
+    const previewResponse = await fetch(previewUrl);
+
+    if (!previewResponse.ok) {
+      throw new Error(`Preview request failed with ${previewResponse.status}`);
+    }
+
+    const previewAudio = Buffer.from(await previewResponse.arrayBuffer());
+
+    response.set(
+      "Content-Type",
+      previewResponse.headers.get("content-type") ?? "audio/mpeg"
+    );
+    response.set("Cache-Control", "private, max-age=3600");
+    response.send(previewAudio);
+  } catch (error) {
+    response.status(502).json({
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to fetch ElevenLabs preview audio."
+    });
+  }
+});
 
 voicesRouter.get("/", async (_request, response) => {
   if (!elevenLabsAdapter.isConfigured()) {

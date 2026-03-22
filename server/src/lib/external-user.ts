@@ -25,6 +25,12 @@ export interface StructureQueriesExternalUserSummary {
   userType?: string | null;
   browserInstallation?: Record<string, unknown> | null;
   generationCredits?: number | null;
+  totalRequests?: number | null;
+  totalCreditsUsed?: number | null;
+  totalCreditsRefunded?: number | null;
+  totalCreditsPurchased?: number | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }
 
 function readOptionalString(value: unknown) {
@@ -127,6 +133,38 @@ export function summarizeStructureQueriesExternalUser(
         ? value.generation_credits
         : typeof value.generationCredits === "number"
           ? value.generationCredits
-          : null
+          : null,
+    totalRequests:
+      typeof value.total_requests === "number"
+        ? value.total_requests
+        : typeof value.totalRequests === "number"
+          ? value.totalRequests
+          : null,
+    totalCreditsUsed:
+      typeof value.total_credits_used === "number"
+        ? value.total_credits_used
+        : typeof value.totalCreditsUsed === "number"
+          ? value.totalCreditsUsed
+          : null,
+    totalCreditsRefunded:
+      typeof value.total_credits_refunded === "number"
+        ? value.total_credits_refunded
+        : typeof value.totalCreditsRefunded === "number"
+          ? value.totalCreditsRefunded
+          : null,
+    totalCreditsPurchased:
+      typeof value.total_credits_purchased === "number"
+        ? value.total_credits_purchased
+        : typeof value.totalCreditsPurchased === "number"
+          ? value.totalCreditsPurchased
+          : null,
+    createdAt:
+      readOptionalString(value.created_at) ??
+      readOptionalString(value.createdAt) ??
+      null,
+    updatedAt:
+      readOptionalString(value.updated_at) ??
+      readOptionalString(value.updatedAt) ??
+      null
   };
 }

@@ -55,10 +55,29 @@
             autocomplete="username"
           />
         </label>
-        <label class="field field-select">
-          <span>Speaker</span>
-          <select id="voice-select"></select>
-        </label>
+        <div class="voice-field">
+          <label class="field field-select">
+            <span>Speaker</span>
+            <select id="voice-select"></select>
+          </label>
+          <button
+            id="voice-preview-button"
+            class="secondary-button preview-button"
+            type="button"
+          >
+            Play preview
+          </button>
+        </div>
+
+        <section class="settings-credit-card" aria-live="polite">
+          <p class="status-label">Credits Remaining</p>
+          <p id="settings-credits-remaining" class="settings-credit-value">
+            Checking...
+          </p>
+          <p id="settings-credits-caption" class="detail-line">
+            Starter credits appear here after registration.
+          </p>
+        </section>
 
         <div class="dialog-actions">
           <button
@@ -67,6 +86,13 @@
             type="submit"
           >
             Register
+          </button>
+          <button
+            id="samsar-login-button"
+            class="secondary-button"
+            type="button"
+          >
+            Recharge Credits
           </button>
         </div>
 

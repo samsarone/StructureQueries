@@ -30,9 +30,15 @@ type SamsarChargeExternalUserUtilityUsageInput = Parameters<
 type SamsarCreateExternalAssistantSessionInput = Parameters<
   ReturnType<typeof getSamsarClient>["createExternalAssistantSession"]
 >[1];
+type SamsarCreateExternalUserLoginTokenInput = Parameters<
+  ReturnType<typeof getSamsarClient>["createExternalUserLoginToken"]
+>[1];
 type SamsarExternalUserIdentity = Parameters<
   ReturnType<typeof getSamsarClient>["createExternalUserSession"]
 >[0];
+type SamsarGrantExternalUserCreditsInput = Parameters<
+  ReturnType<typeof getSamsarClient>["grantExternalUserCredits"]
+>[1];
 type SamsarRequestOptions = Parameters<
   ReturnType<typeof getSamsarClient>["createExternalUserSession"]
 >[1];
@@ -128,6 +134,25 @@ export async function createSamsarExternalUserSession(
   return getSamsarClient().createExternalUserSession(externalUser, options);
 }
 
+export async function createSamsarExternalUserLoginToken(
+  externalUser?: SamsarExternalUserIdentity | null,
+  input?: SamsarCreateExternalUserLoginTokenInput
+) {
+  return getSamsarClient().createExternalUserLoginToken(externalUser, input);
+}
+
+export async function grantSamsarExternalUserCredits(
+  externalUser: SamsarExternalUserIdentity,
+  credits: SamsarGrantExternalUserCreditsInput,
+  options?: SamsarRequestOptions
+) {
+  return getSamsarClient().grantExternalUserCredits(
+    externalUser,
+    credits,
+    options
+  );
+}
+
 export async function getSamsarEmbeddingStatus(
   templateId: SamsarGetEmbeddingStatusInput
 ) {
@@ -177,10 +202,12 @@ export const samsarAdapter = {
   createExternalAssistantCompletion: createSamsarExternalAssistantCompletion,
   chargeExternalUserUtilityUsage: chargeSamsarExternalUserUtilityUsage,
   createExternalUserSession: createSamsarExternalUserSession,
+  createExternalUserLoginToken: createSamsarExternalUserLoginToken,
   createVideoFromImageList: createSamsarVideoFromImageList,
   createVideoFromText: createSamsarVideoFromText,
   createEmbeddingFromUrl: createSamsarEmbeddingFromUrl,
   generateEmbeddingsFromPlainText: generateSamsarEmbeddingsFromPlainText,
+  grantExternalUserCredits: grantSamsarExternalUserCredits,
   enhanceMessage: enhanceSamsarMessage,
   getEmbeddingStatus: getSamsarEmbeddingStatus,
   getCreditsBalance: getSamsarCreditsBalance,
