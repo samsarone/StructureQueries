@@ -93,6 +93,14 @@ interface RuntimeMessage {
 }
 
 type LogRole = "system" | "user" | "assistant";
+type WebSocketPhase =
+  | "idle"
+  | "connected"
+  | "ready"
+  | "transcribing"
+  | "thinking"
+  | "synthesizing"
+  | "error";
 
 interface AppState {
   assistantSessionId?: string;
@@ -109,7 +117,9 @@ interface AppState {
   indexChecked: boolean;
   analysisReady: boolean;
   isAnalyzing: boolean;
+  isInitializing: boolean;
   websocketState: "disconnected" | "connecting" | "ready";
+  websocketPhase: WebSocketPhase;
   websocketDetail: string;
   voices: VoicesPayload["voices"];
   pendingAssistantText?: string;
@@ -157,14 +167,26 @@ const analysisStatusNode =
   document.querySelector<HTMLElement>("#analysis-status");
 const conversationLogNode =
   document.querySelector<HTMLElement>("#conversation-log");
+const overlayShellNode =
+  document.querySelector<HTMLElement>(".overlay-shell");
 const refreshButton = document.querySelector<HTMLButtonElement>("#refresh-button");
 const analyzeButton = document.querySelector<HTMLButtonElement>("#analyze-button");
-const startChatButton =
-  document.querySelector<HTMLButtonElement>("#start-chat-button");
-const stopChatButton =
-  document.querySelector<HTMLButtonElement>("#stop-chat-button");
+const analyzeButtonLabel =
+  document.querySelector<HTMLElement>("#analyze-button-label");
+const analyzeButtonIcon =
+  document.querySelector<HTMLElement>("#analyze-button-icon");
+const buttonRowNode =
+  document.querySelector<HTMLElement>("#button-row");
 const closeOverlayButton =
   document.querySelector<HTMLButtonElement>("#close-overlay-button");
+const surfaceStatusNode =
+  document.querySelector<HTMLElement>("#surface-status");
+const voiceToggleButton =
+  document.querySelector<HTMLButtonElement>("#voice-toggle-button");
+const voiceToggleButtonLabel =
+  document.querySelector<HTMLElement>("#voice-toggle-button-label");
+const voiceToggleButtonIcon =
+  document.querySelector<HTMLElement>("#voice-toggle-button-icon");
 const voiceSelect = document.querySelector<HTMLSelectElement>("#voice-select");
 const languageSelect =
   document.querySelector<HTMLSelectElement>("#language-select");
@@ -178,7 +200,9 @@ const state: AppState = {
   indexChecked: false,
   analysisReady: false,
   isAnalyzing: false,
+  isInitializing: true,
   websocketState: "disconnected",
+  websocketPhase: "idle",
   websocketDetail: "Idle",
   voices: [],
   conversationActive: false,
@@ -192,6 +216,45 @@ let activeAssistantAudio: HTMLAudioElement | undefined;
 let activeAssistantAudioObjectUrl: string | undefined;
 let resumeConversationTimer: number | undefined;
 let assistantAudioReceivedForTurn = false;
+
+const BUTTON_ICONS = {
+  mic: `
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path d="M10 3.2a2.7 2.7 0 0 1 2.7 2.7v3.8a2.7 2.7 0 1 1-5.4 0V5.9A2.7 2.7 0 0 1 10 3.2Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M5.7 8.8v.7A4.3 4.3 0 0 0 10 13.8a4.3 4.3 0 0 0 4.3-4.3v-.7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M10 13.8v2.9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M7.6 16.7h4.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>
+  `,
+  stop: `
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <rect x="5.2" y="5.2" width="9.6" height="9.6" rx="2.1" stroke="currentColor" stroke-width="1.6"/>
+    </svg>
+  `,
+  scan: `
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path d="M7.4 3.8H5.6A1.8 1.8 0 0 0 3.8 5.6v1.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M12.6 3.8h1.8a1.8 1.8 0 0 1 1.8 1.8v1.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M16.2 12.6v1.8a1.8 1.8 0 0 1-1.8 1.8h-1.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M3.8 12.6v1.8a1.8 1.8 0 0 0 1.8 1.8h1.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M7.6 10h4.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M10 7.6v4.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>
+  `,
+  redo: `
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path d="M15.1 7.2A5.6 5.6 0 0 0 6 5.3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M15 3.9v3.8h-3.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M4.9 12.8A5.6 5.6 0 0 0 14 14.7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M5 16.1v-3.8h3.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  `,
+  loader: `
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path d="M10 3.2a6.8 6.8 0 1 1-4.81 1.99" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>
+  `
+} as const;
 
 function normalizeUrl(rawUrl: string) {
   try {
@@ -335,6 +398,43 @@ function setText(node: HTMLElement | null, value: string) {
   }
 }
 
+function setIcon(
+  node: HTMLElement | null,
+  icon: keyof typeof BUTTON_ICONS
+) {
+  if (node) {
+    node.innerHTML = BUTTON_ICONS[icon];
+  }
+}
+
+function setButtonVariant(
+  button: HTMLElement | null,
+  variant: "primary" | "secondary" | "danger"
+) {
+  if (!button) {
+    return;
+  }
+
+  button.classList.toggle("primary-button", variant === "primary");
+  button.classList.toggle("secondary-button", variant === "secondary");
+  button.classList.toggle("danger-button", variant === "danger");
+}
+
+function normalizeWebSocketPhase(phase: string): WebSocketPhase {
+  switch (phase) {
+    case "connected":
+    case "ready":
+    case "transcribing":
+    case "thinking":
+    case "synthesizing":
+    case "idle":
+    case "error":
+      return phase;
+    default:
+      return "idle";
+  }
+}
+
 function appendLog(role: LogRole, text: string) {
   if (!conversationLogNode) {
     return;
@@ -406,7 +506,7 @@ function resetConversationLog() {
   }
 
   conversationLogNode.innerHTML = "";
-  appendLog("system", "Scan the page, then talk.");
+  appendLog("system", "Prepare the page, then ask by voice.");
 }
 
 function renderVoiceOptions() {
@@ -475,66 +575,135 @@ function closeAccountEditor() {
 
 function render() {
   const analyzeUrlError = getAnalyzeUrlError(state.currentPage?.url);
+  const waitingForAssistant =
+    state.conversationActive &&
+    !state.recording &&
+    !state.assistantSpeaking &&
+    ["transcribing", "thinking", "synthesizing"].includes(state.websocketPhase);
+  const voiceBusy =
+    state.conversationActive ||
+    state.recording ||
+    state.assistantSpeaking ||
+    waitingForAssistant;
   const accountName =
     readOptionalString(state.currentUser?.displayName) ??
     readOptionalString(state.currentUser?.username) ??
     readOptionalString(state.currentUser?.email) ??
     (state.registrationRequired ? "Setup required" : "StructuredQueries");
-  const analysisPill = state.isAnalyzing
-    ? "Scanning"
-    : !state.serverOnline
-      ? "Offline"
-      : state.registrationRequired
-        ? "Register"
-        : analyzeUrlError
-          ? "Blocked"
-          : state.recording
-            ? "Listening"
-            : state.assistantSpeaking
-              ? "Speaking"
-              : state.conversationActive
-                ? "Live"
-                : state.analysisReady
-                  ? "Ready"
-                  : "Scan";
-  const analysisDetail = !state.serverOnline
-    ? "Server unavailable."
-    : state.registrationRequired
-      ? "Finish setup to continue."
-      : analyzeUrlError
-        ? analyzeUrlError
-        : state.isAnalyzing
-          ? "Reading this page."
-          : state.recording
-            ? "Listening."
-            : state.assistantSpeaking
-              ? "Speaking."
-              : state.conversationActive
-                ? "Voice chat live."
-                : state.analysisReady
-                  ? "Ready when you are."
-                  : "Scan this page first.";
-  const registrationDialogOpen =
-    state.registrationRequired || state.accountEditorOpen;
-  const registrationMode = state.registrationRequired ? "register" : "edit";
-  const voiceMode = !state.serverOnline
-    ? "offline"
+  const analysisPill = state.isInitializing
+    ? "Loading"
     : state.isAnalyzing
-      ? "analyzing"
-      : state.recording
-        ? "listening"
-        : state.assistantSpeaking
-          ? "speaking"
-          : state.websocketState === "connecting"
-            ? "connecting"
-            : state.conversationActive
-              ? "armed"
-              : state.analysisReady
-                ? "ready"
-                : analyzeUrlError
-                  ? "error"
-                  : "idle";
+      ? "Scanning"
+      : !state.serverOnline
+        ? "Offline"
+        : state.registrationRequired
+          ? "Register"
+          : analyzeUrlError
+            ? "Blocked"
+            : state.recording
+              ? "Listening"
+              : state.assistantSpeaking
+                ? "Speaking"
+                : waitingForAssistant
+                  ? "Thinking"
+                  : state.conversationActive
+                    ? "Live"
+                    : state.analysisReady
+                      ? "Ready"
+                      : "Prepare";
+  const surfaceStatus = state.isInitializing
+    ? "Syncing session..."
+    : !state.serverOnline
+      ? "Server offline."
+      : state.registrationRequired
+        ? "Finish setup to unlock page QA."
+        : analyzeUrlError
+          ? analyzeUrlError
+          : state.isAnalyzing
+            ? "Building page context..."
+            : state.recording
+              ? "Listening for your question..."
+              : state.assistantSpeaking
+                ? "Speaking the answer..."
+                : waitingForAssistant
+                  ? state.websocketPhase === "transcribing"
+                    ? "Transcribing your question..."
+                    : state.websocketPhase === "synthesizing"
+                      ? "Preparing voice reply..."
+                      : "Thinking..."
+                  : state.conversationActive
+                    ? "Voice chat is live."
+                    : state.analysisReady
+                      ? "Ready for voice questions."
+                      : "Prepare this page once to start QA.";
+  const analysisDetail = state.isInitializing
+    ? "Loading client state."
+    : !state.serverOnline
+      ? "Server unavailable."
+      : state.registrationRequired
+        ? "Finish setup to continue."
+        : analyzeUrlError
+          ? analyzeUrlError
+          : state.isAnalyzing
+            ? "Reading and indexing this page."
+            : state.recording
+              ? "Listening."
+              : state.assistantSpeaking
+                ? "Speaking."
+                : waitingForAssistant
+                  ? state.websocketDetail || "Generating assistant reply."
+                  : state.conversationActive
+                    ? "Voice chat live."
+                    : state.analysisReady
+                      ? "Ready when you are."
+                      : "Create page context first.";
+  const registrationDialogOpen =
+    !state.isInitializing && (state.registrationRequired || state.accountEditorOpen);
+  const registrationMode = state.registrationRequired ? "register" : "edit";
+  const voiceMode = state.isInitializing
+    ? "loading"
+    : !state.serverOnline
+      ? "offline"
+      : state.isAnalyzing
+        ? "analyzing"
+        : state.recording
+          ? "listening"
+          : state.assistantSpeaking
+            ? "speaking"
+            : waitingForAssistant
+              ? "thinking"
+              : state.websocketState === "connecting"
+                ? "connecting"
+                : state.conversationActive
+                  ? "armed"
+                  : state.analysisReady
+                    ? "ready"
+                    : analyzeUrlError
+                      ? "error"
+                      : "idle";
+  const voiceButtonDisabled =
+    state.isInitializing ||
+    state.registrationRequired ||
+    state.registrationSubmitting ||
+    !state.serverOnline ||
+    !state.analysisReady ||
+    !state.currentPage?.url ||
+    state.isAnalyzing ||
+    state.websocketState === "connecting";
+  const voiceButtonLabel = state.websocketState === "connecting"
+    ? "Connecting..."
+    : voiceBusy
+      ? "Stop voice"
+      : state.analysisReady
+        ? "Start voice"
+        : "Voice after scan";
+  const analyzeButtonLabelText = state.isAnalyzing
+    ? "Preparing..."
+    : state.analysisReady
+      ? "Redo scan"
+      : "Prepare page";
 
+  setText(surfaceStatusNode, surfaceStatus);
   setText(accountNameNode, accountName);
   setText(
     accountHintNode,
@@ -591,12 +760,17 @@ function render() {
         ? registrationMode === "register"
           ? "Setting up..."
           : "Saving..."
-        : registrationMode === "register"
+      : registrationMode === "register"
           ? "All fields are optional."
           : "Save changes."
   );
 
+  document.body.dataset.loading = state.isInitializing ? "true" : "false";
   document.body.dataset.voiceMode = voiceMode;
+
+  if (overlayShellNode) {
+    overlayShellNode.setAttribute("aria-busy", state.isInitializing ? "true" : "false");
+  }
 
   if (registrationOverlayNode) {
     registrationOverlayNode.classList.toggle("is-hidden", !registrationDialogOpen);
@@ -622,52 +796,51 @@ function render() {
 
   if (analyzeButton) {
     analyzeButton.disabled =
+      state.isInitializing ||
       state.registrationRequired ||
       state.registrationSubmitting ||
       !state.serverOnline ||
       Boolean(analyzeUrlError) ||
-      state.isAnalyzing;
-    analyzeButton.textContent = state.isAnalyzing
-      ? "Scanning..."
-      : state.analysisReady
-        ? "Scan again"
-        : "Scan";
+      state.isAnalyzing ||
+      voiceBusy;
+    analyzeButton.classList.toggle("button-chip", state.analysisReady);
+    setButtonVariant(analyzeButton, state.analysisReady ? "secondary" : "primary");
   }
 
-  if (startChatButton) {
-    startChatButton.disabled =
-      state.registrationRequired ||
-      state.registrationSubmitting ||
-      !state.serverOnline ||
-      !state.analysisReady ||
-      !state.currentPage?.url ||
-      state.conversationActive ||
-      state.websocketState === "connecting";
-    startChatButton.textContent =
-      state.websocketState === "connecting"
-        ? "Connecting"
-        : state.conversationActive
-          ? "Live"
-          : "Talk";
+  setText(analyzeButtonLabel, analyzeButtonLabelText);
+  setIcon(
+    analyzeButtonIcon,
+    state.isAnalyzing ? "loader" : state.analysisReady ? "redo" : "scan"
+  );
+
+  if (voiceToggleButton) {
+    voiceToggleButton.disabled = voiceButtonDisabled;
+    voiceToggleButton.classList.toggle("button-live", voiceBusy);
+    setButtonVariant(
+      voiceToggleButton,
+      voiceBusy ? "danger" : state.analysisReady ? "primary" : "secondary"
+    );
   }
 
-  if (stopChatButton) {
-    stopChatButton.disabled =
-      state.registrationRequired ||
-      state.registrationSubmitting ||
-      !state.conversationActive;
-    stopChatButton.textContent = "End";
+  setText(voiceToggleButtonLabel, voiceButtonLabel);
+  setIcon(voiceToggleButtonIcon, voiceBusy ? "stop" : "mic");
+
+  if (buttonRowNode) {
+    buttonRowNode.classList.toggle("button-row-ready", state.analysisReady);
   }
 
   if (voiceSelect) {
     voiceSelect.disabled =
       state.registrationSubmitting ||
-      state.registrationRequired;
+      state.registrationRequired ||
+      state.isInitializing;
   }
 
   if (languageSelect) {
     languageSelect.disabled =
-      state.registrationSubmitting || state.registrationRequired;
+      state.registrationSubmitting ||
+      state.registrationRequired ||
+      state.isInitializing;
   }
 
   if (registrationDisplayNameNode) {
@@ -683,7 +856,7 @@ function render() {
   }
 
   if (accountButton) {
-    accountButton.disabled = state.registrationSubmitting;
+    accountButton.disabled = state.registrationSubmitting || state.isInitializing;
   }
 }
 
@@ -1053,6 +1226,7 @@ function closeWebSocketSession() {
   state.recording = false;
   state.assistantSpeaking = false;
   state.websocketState = "disconnected";
+  state.websocketPhase = "idle";
   state.websocketDetail = "Idle";
   state.pendingAssistantText = undefined;
 }
@@ -1127,6 +1301,7 @@ function handleConversationLoopError(error: unknown) {
   state.conversationActive = false;
   state.recording = false;
   state.assistantSpeaking = false;
+  state.websocketPhase = "error";
   state.websocketDetail = "Voice chat stopped";
   closeWebSocketSession();
   render();
@@ -1146,6 +1321,7 @@ async function startConversationTurn() {
     throw new Error("Register this browser installation before starting voice chat.");
   }
 
+  state.websocketPhase = "ready";
   state.websocketDetail = "Listening...";
   render();
   await ensureWebSocketSession();
@@ -1297,6 +1473,7 @@ function handleSocketMessage(event: MessageEvent<string>) {
   if (payload.type === "status") {
     const phase = typeof payload.phase === "string" ? payload.phase : "idle";
     const detail = typeof payload.detail === "string" ? payload.detail : "";
+    state.websocketPhase = normalizeWebSocketPhase(phase);
     if (!state.assistantSpeaking) {
       state.websocketDetail = detail || phase;
     }
@@ -1326,6 +1503,7 @@ function handleSocketMessage(event: MessageEvent<string>) {
 
   if (payload.type === "session_ready") {
     state.websocketState = "ready";
+    state.websocketPhase = "ready";
     state.websocketDetail = "Connected";
     state.currentTemplateId =
       typeof payload.templateId === "string"
@@ -1409,6 +1587,7 @@ function handleSocketMessage(event: MessageEvent<string>) {
   }
 
   if (payload.type === "error") {
+    state.websocketPhase = "error";
     appendLog(
       "system",
       typeof payload.message === "string"
@@ -1444,6 +1623,7 @@ async function ensureWebSocketSession() {
   }
 
   state.websocketState = "connecting";
+  state.websocketPhase = "connected";
   state.websocketDetail = "Connecting...";
   render();
 
@@ -1458,6 +1638,7 @@ async function ensureWebSocketSession() {
         state.recording = false;
         state.assistantSpeaking = false;
         state.websocketState = "disconnected";
+        state.websocketPhase = "idle";
         state.websocketDetail = "Disconnected";
         render();
       }
@@ -1468,6 +1649,7 @@ async function ensureWebSocketSession() {
     socket.addEventListener("open", () => {
       activeSocket = socket;
       state.websocketState = "ready";
+      state.websocketPhase = "connected";
       state.websocketDetail = "Connected";
       render();
       sendSocketMessage({
@@ -1517,6 +1699,7 @@ async function submitRecordedAudioBase64(audioBase64: string, mimeType: string) 
 
   assistantAudioReceivedForTurn = false;
   state.recording = false;
+  state.websocketPhase = "transcribing";
   state.websocketDetail = "Processing audio...";
   render();
 
@@ -1533,7 +1716,7 @@ async function submitRecordedAudioBase64(audioBase64: string, mimeType: string) 
 function normalizeRecordingError(error: unknown) {
   if (error instanceof DOMException) {
     if (error.name === "NotAllowedError") {
-      return "Microphone access was blocked or dismissed. Allow it for this page, then try Talk again.";
+      return "Microphone access was blocked or dismissed. Allow it for this page, then try Start voice again.";
     }
 
     if (error.name === "NotFoundError") {
@@ -1582,7 +1765,7 @@ async function requestMicrophonePermissionFromPanel() {
 
       if (permissionState === "denied") {
         throw new Error(
-          "Chrome is currently blocking microphone access for this extension. Open the extension site settings, allow Microphone, then click Start Voice Chat again."
+          "Chrome is currently blocking microphone access for this extension. Open the extension site settings, allow Microphone, then click Start voice again."
         );
       }
     }
@@ -1601,6 +1784,7 @@ async function startRecording() {
   }
 
   state.conversationActive = true;
+  state.websocketPhase = "connected";
   state.websocketDetail = "Starting...";
   render();
 
@@ -1628,6 +1812,7 @@ async function stopRecording() {
   clearResumeConversationTimer();
   state.conversationActive = false;
   state.recording = false;
+  state.websocketPhase = "idle";
   state.websocketDetail = "Stopped";
   stopAssistantPlayback();
   render();
@@ -1703,7 +1888,7 @@ async function analyzeCurrentPage() {
       });
       appendLog(
         "system",
-        "Page ready."
+        "Page ready for QA."
       );
       await ensureWebSocketSession();
     }
@@ -1721,33 +1906,40 @@ async function analyzeCurrentPage() {
 
 async function refreshAll() {
   const previousPageUrl = state.currentPage?.url;
-  const extensionSession = await getExtensionSession();
 
-  state.browserSessionId = extensionSession.browserSessionId;
-  state.extensionId = extensionSession.extensionId;
+  try {
+    const extensionSession = await getExtensionSession();
 
-  await refreshServerStatus();
-  await refreshVoices();
-  state.currentPage = await fetchPageContext();
+    state.browserSessionId = extensionSession.browserSessionId;
+    state.extensionId = extensionSession.extensionId;
 
-  if (previousPageUrl && previousPageUrl !== state.currentPage?.url) {
-    if (state.conversationActive || state.recording || state.assistantSpeaking) {
-      await stopRecording();
-    } else {
-      closeWebSocketSession();
+    await refreshServerStatus();
+    await refreshVoices();
+    state.currentPage = await fetchPageContext();
+
+    if (previousPageUrl && previousPageUrl !== state.currentPage?.url) {
+      if (state.conversationActive || state.recording || state.assistantSpeaking) {
+        await stopRecording();
+      } else {
+        closeWebSocketSession();
+      }
+      resetConversationLog();
+      state.currentTemplateId = undefined;
     }
-    resetConversationLog();
-    state.currentTemplateId = undefined;
+
+    await loadRegistrationState();
+
+    if (state.serverOnline) {
+      await syncBrowserSession();
+    }
+
+    await refreshIndexStatus();
+  } catch (error) {
+    console.error("Failed to refresh popup state", error);
+  } finally {
+    state.isInitializing = false;
+    render();
   }
-
-  await loadRegistrationState();
-
-  if (state.serverOnline) {
-    await syncBrowserSession();
-  }
-
-  await refreshIndexStatus();
-  render();
 }
 
 chrome.runtime.onMessage.addListener((message) => {
@@ -1756,6 +1948,7 @@ chrome.runtime.onMessage.addListener((message) => {
     message?.type === "PAGE_RECORDING_STARTED"
   ) {
     state.recording = true;
+    state.websocketPhase = "ready";
     state.websocketDetail = "Listening...";
     render();
     return false;
@@ -1763,6 +1956,7 @@ chrome.runtime.onMessage.addListener((message) => {
 
   if (message?.type === "PAGE_RECORDING_STOPPED") {
     state.recording = false;
+    state.websocketPhase = "transcribing";
     state.websocketDetail = "Processing audio...";
     render();
     return false;
@@ -1789,6 +1983,7 @@ chrome.runtime.onMessage.addListener((message) => {
 
   if (message?.type === "PAGE_RECORDING_CANCELLED") {
     state.recording = false;
+    state.websocketPhase = state.conversationActive ? "ready" : "idle";
     state.websocketDetail = state.conversationActive
       ? "Listening..."
       : "Idle";
@@ -1807,6 +2002,7 @@ chrome.runtime.onMessage.addListener((message) => {
   ) {
     state.recording = false;
     state.conversationActive = false;
+    state.websocketPhase = "error";
     state.websocketDetail = "Microphone unavailable";
     render();
     appendLog(
@@ -1848,7 +2044,12 @@ registrationOverlayNode?.addEventListener("click", (event) => {
   }
 });
 
-startChatButton?.addEventListener("click", () => {
+voiceToggleButton?.addEventListener("click", () => {
+  if (state.conversationActive || state.recording || state.assistantSpeaking) {
+    void stopRecording();
+    return;
+  }
+
   void startRecording().catch((error) => {
     console.error("Failed to start recording", error);
     appendLog(
@@ -1856,10 +2057,6 @@ startChatButton?.addEventListener("click", () => {
       normalizeRecordingError(error)
     );
   });
-});
-
-stopChatButton?.addEventListener("click", () => {
-  void stopRecording();
 });
 
 closeOverlayButton?.addEventListener("click", () => {

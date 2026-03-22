@@ -6,8 +6,8 @@
     <title>StructuredQueries Overlay</title>
     <link rel="stylesheet" href="./popup.css" />
   </head>
-  <body>
-    <div id="registration-overlay" class="registration-overlay">
+  <body data-loading="true">
+    <div id="registration-overlay" class="registration-overlay is-hidden">
       <form id="registration-form" class="registration-dialog">
         <div class="dialog-header">
           <div>
@@ -116,12 +116,22 @@
             <div class="voice-ring voice-ring-one"></div>
             <div class="voice-ring voice-ring-two"></div>
             <div class="voice-orb">
+              <div class="voice-eq">
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
               <div class="voice-orb-core"></div>
             </div>
           </div>
 
           <div class="surface-copy">
-            <p class="surface-label">Ask about this page</p>
+            <p class="surface-label">Page QA</p>
+            <p id="surface-status" class="surface-status">
+              Syncing session...
+            </p>
           </div>
         </div>
 
@@ -131,7 +141,7 @@
             <select id="voice-select"></select>
           </label>
           <label class="control-pill">
-            <span>Lang</span>
+            <span>Language</span>
             <select id="language-select">
               <option value="auto">Auto</option>
               <option value="en">English</option>
@@ -144,20 +154,30 @@
           </label>
         </div>
 
-        <div class="button-row">
-          <button id="analyze-button" class="secondary-button" type="button">
-            Analyze
-          </button>
-          <button id="start-chat-button" class="primary-button" type="button">
-            Talk
+        <div id="button-row" class="button-row">
+          <button
+            id="analyze-button"
+            class="secondary-button action-button"
+            type="button"
+          >
+            <span
+              id="analyze-button-icon"
+              class="button-icon"
+              aria-hidden="true"
+            ></span>
+            <span id="analyze-button-label">Prepare page</span>
           </button>
           <button
-            id="stop-chat-button"
-            class="danger-button"
+            id="voice-toggle-button"
+            class="primary-button action-button"
             type="button"
-            disabled
           >
-            Stop
+            <span
+              id="voice-toggle-button-icon"
+              class="button-icon"
+              aria-hidden="true"
+            ></span>
+            <span id="voice-toggle-button-label">Start voice</span>
           </button>
         </div>
       </section>
@@ -202,11 +222,56 @@
           <div id="conversation-log" class="conversation-log">
             <article class="log-item log-item-system">
               <p class="log-role">System</p>
-              <p class="log-text">Scan the page, then talk.</p>
+              <p class="log-text">Prepare the page, then ask by voice.</p>
             </article>
           </div>
         </div>
       </details>
+
+      <div id="loading-shell" class="loading-shell" aria-hidden="true">
+        <div class="loading-topbar">
+          <div class="loading-stack">
+            <span class="skeleton skeleton-eyebrow"></span>
+            <span class="skeleton skeleton-title"></span>
+          </div>
+          <div class="loading-topbar-actions">
+            <span class="skeleton skeleton-pill"></span>
+            <span class="skeleton skeleton-icon"></span>
+            <span class="skeleton skeleton-icon"></span>
+            <span class="skeleton skeleton-icon"></span>
+          </div>
+        </div>
+
+        <section class="loading-surface">
+          <span class="skeleton skeleton-orb"></span>
+          <span class="skeleton skeleton-line skeleton-surface-label"></span>
+          <span class="skeleton skeleton-line skeleton-surface-status"></span>
+
+          <div class="loading-control-row">
+            <span class="skeleton skeleton-control"></span>
+            <span class="skeleton skeleton-control"></span>
+          </div>
+
+          <div class="loading-button-row">
+            <span class="skeleton skeleton-button skeleton-button-secondary"></span>
+            <span class="skeleton skeleton-button skeleton-button-primary"></span>
+          </div>
+        </section>
+
+        <section class="loading-drawer">
+          <div class="loading-meta-grid">
+            <span class="skeleton skeleton-card"></span>
+            <span class="skeleton skeleton-card"></span>
+            <span class="skeleton skeleton-card"></span>
+            <span class="skeleton skeleton-card skeleton-card-wide"></span>
+            <span class="skeleton skeleton-card skeleton-card-wide"></span>
+          </div>
+          <div class="loading-log">
+            <span class="skeleton skeleton-log"></span>
+            <span class="skeleton skeleton-log"></span>
+          </div>
+        </section>
+      </div>
     </main>
 
     <script src="./popup.js"></script>

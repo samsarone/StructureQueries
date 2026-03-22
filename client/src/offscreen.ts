@@ -30,7 +30,7 @@ function getPreferredRecordingMimeType() {
 function normalizeRecordingError(error: unknown) {
   if (error instanceof DOMException) {
     if (error.name === "NotAllowedError") {
-      return "Microphone access was blocked or dismissed. Click Start Voice Chat again and allow microphone access in Chrome.";
+      return "Microphone access was blocked or dismissed. Click Start voice again and allow microphone access in Chrome.";
     }
 
     if (error.name === "NotFoundError") {

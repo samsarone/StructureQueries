@@ -7,7 +7,13 @@ import {
 } from "./embedding-text-cleanup.js";
 
 const MAX_EMBEDDING_INPUT_CHARS = 6_000;
-const MAX_URL_LINKS_PER_REQUEST = 50;
+const MAX_URL_SEEDS_PER_REQUEST = 50;
+const MAX_URL_CRAWL_LINKS_PER_REQUEST = 10;
+const FIRECRAWL_MIN_REQUEST_INTERVAL_MS = 500;
+const FIRECRAWL_MIN_JOB_START_INTERVAL_MS = 8_000;
+const FIRECRAWL_MAX_RATE_LIMIT_RETRIES = 8;
+const FIRECRAWL_RETRY_DELAY_BUFFER_MS = 1_000;
+const FIRECRAWL_MAX_RETRY_DELAY_MS = 60_000;
 
 type FirecrawlDocument = {
   markdown?: unknown;
@@ -77,6 +83,9 @@ export interface UrlPlainTextCrawlResult {
 }
 
 let firecrawlClient: Firecrawl | undefined;
+let firecrawlThrottleQueue = Promise.resolve();
+let firecrawlNextRequestAt = 0;
+let firecrawlNextJobStartAt = 0;
 
 function createStatusError(
   message: string,
@@ -93,6 +102,165 @@ function createStatusError(
   }
 
   return error;
+}
+
+function sleep(delayMs: number) {
+  return new Promise((resolve) => setTimeout(resolve, delayMs));
+}
+
+function parseRetryAfterMessageMs(message: unknown) {
+  if (typeof message !== "string" || !message.trim()) {
+    return null;
+  }
+
+  const retryAfterMatch = message.match(/retry after\s+(\d+)\s*s/i);
+
+  if (retryAfterMatch) {
+    const seconds = Number.parseInt(retryAfterMatch[1] ?? "", 10);
+
+    if (Number.isFinite(seconds) && seconds >= 0) {
+      return seconds * 1_000;
+    }
+  }
+
+  const resetAtMatch = message.match(/resets at\s+(.+)$/i);
+
+  if (resetAtMatch) {
+    const resetAt = Date.parse((resetAtMatch[1] ?? "").trim());
+
+    if (Number.isFinite(resetAt)) {
+      return Math.max(0, resetAt - Date.now());
+    }
+  }
+
+  return null;
+}
+
+function isFirecrawlRateLimitError(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const statusCode = (error as { statusCode?: unknown }).statusCode;
+  const code = (error as { code?: unknown }).code;
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof (error as { message?: unknown }).message === "string"
+        ? (error as { message: string }).message
+        : "";
+
+  return (
+    statusCode === 429 ||
+    code === "FIRECRAWL_RATE_LIMIT" ||
+    /rate limit/i.test(message) ||
+    /retry after/i.test(message)
+  );
+}
+
+function getFirecrawlRetryDelayMs(error: unknown, attempt = 0) {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof (error as { message?: unknown })?.message === "string"
+        ? (error as { message: string }).message
+        : "";
+  const hintedDelayMs = parseRetryAfterMessageMs(message) ?? 0;
+  const exponentialDelayMs = Math.min(
+    FIRECRAWL_MAX_RETRY_DELAY_MS,
+    1_000 * (2 ** attempt)
+  );
+
+  return Math.max(hintedDelayMs, exponentialDelayMs) + FIRECRAWL_RETRY_DELAY_BUFFER_MS;
+}
+
+async function waitForFirecrawlRequestSlot(isJobStart: boolean) {
+  const run = firecrawlThrottleQueue.then(async () => {
+    const now = Date.now();
+    const waitUntil = Math.max(
+      firecrawlNextRequestAt,
+      isJobStart ? firecrawlNextJobStartAt : 0
+    );
+    const delayMs = Math.max(0, waitUntil - now);
+
+    if (delayMs > 0) {
+      await sleep(delayMs);
+    }
+
+    const scheduledAt = Date.now();
+    firecrawlNextRequestAt =
+      scheduledAt + Math.max(0, FIRECRAWL_MIN_REQUEST_INTERVAL_MS);
+
+    if (isJobStart) {
+      firecrawlNextJobStartAt =
+        scheduledAt +
+        Math.max(
+          FIRECRAWL_MIN_REQUEST_INTERVAL_MS,
+          FIRECRAWL_MIN_JOB_START_INTERVAL_MS
+        );
+    }
+  });
+
+  firecrawlThrottleQueue = run.catch(() => {});
+  await run;
+}
+
+function registerFirecrawlRateLimitBackoff(
+  isJobStart: boolean,
+  retryAfterMs: number
+) {
+  const normalizedRetryAfterMs = Math.max(
+    0,
+    Number.parseInt(String(retryAfterMs || 0), 10) || 0
+  );
+
+  if (normalizedRetryAfterMs <= 0) {
+    return;
+  }
+
+  const backoffUntil = Date.now() + normalizedRetryAfterMs;
+  firecrawlNextRequestAt = Math.max(firecrawlNextRequestAt, backoffUntil);
+
+  if (isJobStart) {
+    firecrawlNextJobStartAt = Math.max(firecrawlNextJobStartAt, backoffUntil);
+  }
+}
+
+async function firecrawlWithRetry<T>(
+  run: () => Promise<T>,
+  options?: {
+    isJobStart?: boolean;
+  }
+) {
+  const isJobStart = options?.isJobStart === true;
+  let lastError: unknown;
+
+  for (
+    let attempt = 0;
+    attempt <= FIRECRAWL_MAX_RATE_LIMIT_RETRIES;
+    attempt += 1
+  ) {
+    await waitForFirecrawlRequestSlot(isJobStart);
+
+    try {
+      return await run();
+    } catch (error) {
+      lastError = error;
+
+      if (
+        !isFirecrawlRateLimitError(error) ||
+        attempt >= FIRECRAWL_MAX_RATE_LIMIT_RETRIES
+      ) {
+        throw error;
+      }
+
+      const retryDelayMs = getFirecrawlRetryDelayMs(error, attempt);
+      registerFirecrawlRateLimitBackoff(isJobStart, retryDelayMs);
+      await sleep(retryDelayMs);
+    }
+  }
+
+  throw lastError;
 }
 
 function truncateText(text: string, maxChars = MAX_EMBEDDING_INPUT_CHARS) {
@@ -470,10 +638,16 @@ function getFirecrawlClient() {
 
 async function scrapePrimaryDocument(client: Firecrawl, url: string) {
   try {
-    const document = (await client.scrape(url, {
-      formats: ["markdown"],
-      onlyMainContent: true
-    })) as FirecrawlDocument;
+    const document = (await firecrawlWithRetry(
+      () =>
+        client.scrape(url, {
+          formats: ["markdown"],
+          onlyMainContent: true
+        }) as Promise<FirecrawlDocument>,
+      {
+        isJobStart: false
+      }
+    )) as FirecrawlDocument;
 
     return document;
   } catch {
@@ -488,13 +662,13 @@ export async function crawlUrlsForPlainTextEmbeddings(
   const normalizedUrls = normalizeUrlList(urls);
   const crawlLevels = env.integrations.firecrawl.crawlLevels;
   const maxLinks = Math.min(
-    MAX_URL_LINKS_PER_REQUEST,
+    MAX_URL_CRAWL_LINKS_PER_REQUEST,
     env.integrations.firecrawl.maxLinks
   );
 
-  if (normalizedUrls.length > MAX_URL_LINKS_PER_REQUEST) {
+  if (normalizedUrls.length > MAX_URL_SEEDS_PER_REQUEST) {
     throw createStatusError(
-      `urls may contain at most ${MAX_URL_LINKS_PER_REQUEST} seed URLs per request.`,
+      `urls may contain at most ${MAX_URL_SEEDS_PER_REQUEST} seed URLs per request.`,
       400
     );
   }
@@ -522,21 +696,27 @@ export async function crawlUrlsForPlainTextEmbeddings(
     let job: FirecrawlCrawlJob;
 
     try {
-      job = (await client.crawl(seedUrl, {
-        limit: crawlLimit,
-        maxDiscoveryDepth: Math.max(0, crawlLevels - 1),
-        sitemap: "skip",
-        crawlEntireDomain: true,
-        allowExternalLinks: false,
-        allowSubdomains: false,
-        ignoreQueryParameters: true,
-        scrapeOptions: {
-          formats: ["markdown"],
-          onlyMainContent: true
-        },
-        pollInterval: env.integrations.firecrawl.pollIntervalSeconds,
-        timeout: env.integrations.firecrawl.timeoutSeconds
-      })) as FirecrawlCrawlJob;
+      job = (await firecrawlWithRetry(
+        () =>
+          client.crawl(seedUrl, {
+            limit: crawlLimit,
+            maxDiscoveryDepth: Math.max(0, crawlLevels - 1),
+            sitemap: "skip",
+            crawlEntireDomain: true,
+            allowExternalLinks: false,
+            allowSubdomains: false,
+            ignoreQueryParameters: true,
+            scrapeOptions: {
+              formats: ["markdown"],
+              onlyMainContent: true
+            },
+            pollInterval: env.integrations.firecrawl.pollIntervalSeconds,
+            timeout: env.integrations.firecrawl.timeoutSeconds
+          }) as Promise<FirecrawlCrawlJob>,
+        {
+          isJobStart: true
+        }
+      )) as FirecrawlCrawlJob;
     } catch (error) {
       const issue = {
         url: seedUrl,
@@ -570,7 +750,12 @@ export async function crawlUrlsForPlainTextEmbeddings(
 
     if (job.id) {
       try {
-        const jobErrors = (await client.getCrawlErrors(job.id)) as FirecrawlCrawlErrors;
+        const jobErrors = (await firecrawlWithRetry(
+          () => client.getCrawlErrors(job.id!) as Promise<FirecrawlCrawlErrors>,
+          {
+            isJobStart: false
+          }
+        )) as FirecrawlCrawlErrors;
 
         (jobErrors.errors ?? [])
           .map((entry) =>

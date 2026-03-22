@@ -111,7 +111,7 @@ function base64FromBytes(bytes: Uint8Array) {
 function normalizeRecordingError(error: unknown) {
   if (error instanceof DOMException) {
     if (error.name === "NotAllowedError") {
-      return "Microphone access was blocked or dismissed for this site. Allow microphone access in Chrome, then click Talk again.";
+      return "Microphone access was blocked or dismissed for this site. Allow microphone access in Chrome, then click Start voice again.";
     }
 
     if (error.name === "NotFoundError") {
@@ -399,8 +399,8 @@ function createOverlay() {
         position: fixed;
         top: 16px;
         right: 16px;
-        width: min(388px, calc(100vw - 24px));
-        height: min(680px, calc(100vh - 24px));
+        width: min(356px, calc(100vw - 24px));
+        height: min(624px, calc(100vh - 24px));
         z-index: 2147483647;
         pointer-events: none;
       }
@@ -438,7 +438,7 @@ function createOverlay() {
           right: 12px;
           left: 12px;
           width: auto;
-          height: min(76vh, calc(100vh - 24px));
+          height: min(72vh, calc(100vh - 24px));
         }
       }
     </style>
