@@ -122,30 +122,15 @@
     <main class="overlay-shell">
       <header class="topbar">
         <div class="topbar-brand">
-          <div class="brand-emblem">
-            <img
-              src="./structured-queries-monogram.svg"
-              class="brand-mark"
-              alt="Structured Queries monogram"
-            />
-          </div>
-
-          <div class="brand-stack">
-            <p class="eyebrow">Structured Queries</p>
-            <p class="brand-mini">Voice browser intelligence</p>
-          </div>
+          <img
+            src="./structured-queries-wordmark.svg"
+            class="topbar-wordmark"
+            alt="Structured Queries"
+          />
         </div>
 
         <div class="topbar-actions">
           <p id="analysis-pill" class="status-pill">Checking...</p>
-          <button
-            id="refresh-button"
-            class="icon-button"
-            type="button"
-            aria-label="Refresh session"
-          >
-            <span aria-hidden="true">↻</span>
-          </button>
           <button
             id="account-button"
             class="icon-button"
@@ -166,19 +151,6 @@
       </header>
 
       <section class="hero-surface">
-        <div class="hero-copy">
-          <img
-            src="./structured-queries-wordmark.svg"
-            class="hero-wordmark"
-            alt="Structured Queries"
-          />
-          <p class="surface-label">Active Page</p>
-          <h1 id="page-title" class="page-title">Loading...</h1>
-          <p id="surface-status" class="surface-status">
-            Syncing session...
-          </p>
-        </div>
-
         <div class="hero-stage">
           <div class="hero-emblem">
             <img
@@ -233,6 +205,14 @@
           >
             Recharge Credits
           </button>
+        </section>
+
+        <section class="page-summary" aria-live="polite">
+          <p class="surface-label">Current Page</p>
+          <h1 id="page-title" class="page-title">Loading...</h1>
+          <p id="surface-status" class="surface-status">
+            Syncing session...
+          </p>
         </section>
 
         <div id="button-row" class="button-row">
@@ -312,28 +292,26 @@
       <div id="loading-shell" class="loading-shell" aria-hidden="true">
         <div class="loading-topbar">
           <div class="loading-brand">
-            <span class="skeleton skeleton-mark"></span>
-            <div class="loading-stack">
-              <span class="skeleton skeleton-eyebrow"></span>
-              <span class="skeleton skeleton-title"></span>
-            </div>
+            <span class="skeleton skeleton-wordmark"></span>
           </div>
           <div class="loading-topbar-actions">
             <span class="skeleton skeleton-pill"></span>
-            <span class="skeleton skeleton-icon"></span>
             <span class="skeleton skeleton-icon"></span>
             <span class="skeleton skeleton-icon"></span>
           </div>
         </div>
 
         <section class="loading-surface">
-          <span class="skeleton skeleton-wordmark"></span>
-          <span class="skeleton skeleton-line skeleton-hero-title"></span>
-          <span class="skeleton skeleton-line skeleton-surface-status"></span>
           <span class="skeleton skeleton-orb"></span>
 
           <div class="loading-control-row">
             <span class="skeleton skeleton-control"></span>
+          </div>
+
+          <div class="loading-page-summary">
+            <span class="skeleton skeleton-page-label"></span>
+            <span class="skeleton skeleton-line skeleton-hero-title"></span>
+            <span class="skeleton skeleton-line skeleton-surface-status"></span>
           </div>
 
           <div class="loading-button-row">

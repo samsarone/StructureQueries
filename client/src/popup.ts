@@ -200,7 +200,6 @@ const conversationLogNode =
   document.querySelector<HTMLElement>("#conversation-log");
 const overlayShellNode =
   document.querySelector<HTMLElement>(".overlay-shell");
-const refreshButton = document.querySelector<HTMLButtonElement>("#refresh-button");
 const analyzeButton = document.querySelector<HTMLButtonElement>("#analyze-button");
 const analyzeButtonLabel =
   document.querySelector<HTMLElement>("#analyze-button-label");
@@ -2649,10 +2648,6 @@ chrome.runtime.onMessage.addListener((message) => {
   }
 
   return false;
-});
-
-refreshButton?.addEventListener("click", () => {
-  void refreshAll();
 });
 
 accountButton?.addEventListener("click", () => {

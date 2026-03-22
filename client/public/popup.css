@@ -126,10 +126,21 @@ select option {
 }
 
 .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 4;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
+  padding: 10px 12px;
+  border-radius: 22px;
+  border: 1px solid rgba(143, 223, 255, 0.14);
+  background:
+    linear-gradient(180deg, rgba(10, 19, 32, 0.9), rgba(7, 13, 24, 0.88)),
+    rgba(8, 16, 28, 0.82);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(18px);
 }
 
 .topbar-brand,
@@ -138,6 +149,16 @@ select option {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.topbar-brand {
+  flex: 1;
+}
+
+.topbar-wordmark {
+  width: min(100%, 176px);
+  height: auto;
+  filter: drop-shadow(0 0 14px rgba(96, 194, 245, 0.1));
 }
 
 .brand-emblem {
@@ -202,19 +223,19 @@ select option {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
-  flex-wrap: wrap;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .status-pill {
-  max-width: 132px;
+  max-width: 124px;
   margin: 0;
-  padding: 8px 11px;
+  padding: 7px 10px;
   overflow: hidden;
   border-radius: 999px;
   border: 1px solid rgba(143, 223, 255, 0.18);
   background: rgba(9, 17, 30, 0.64);
-  font-size: 0.69rem;
+  font-size: 0.68rem;
   font-weight: 800;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -271,7 +292,7 @@ select option {
   position: relative;
   z-index: 0;
   display: grid;
-  gap: 14px;
+  gap: 12px;
   padding: 18px;
   border-radius: 28px;
   border: 1px solid var(--line);
@@ -281,6 +302,18 @@ select option {
   text-align: center;
   overflow: hidden;
   isolation: isolate;
+}
+
+.page-summary {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(143, 223, 255, 0.12);
+  background:
+    linear-gradient(180deg, rgba(10, 18, 31, 0.76), rgba(7, 13, 24, 0.8)),
+    rgba(8, 16, 28, 0.72);
+  text-align: left;
 }
 
 .hero-surface::before,
@@ -327,25 +360,23 @@ select option {
 
 .page-title {
   margin: 0;
-  max-width: 320px;
   overflow: hidden;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  font-size: clamp(1.64rem, 5vw, 2.74rem);
-  font-weight: 800;
-  line-height: 0.98;
-  letter-spacing: -0.045em;
-  text-wrap: balance;
+  -webkit-line-clamp: 2;
+  font-size: clamp(1.02rem, 3.8vw, 1.3rem);
+  font-weight: 780;
+  line-height: 1.14;
+  letter-spacing: -0.03em;
   color: var(--text);
+  text-wrap: balance;
 }
 
 .surface-status {
-  max-width: 296px;
   margin: 0;
-  font-size: 0.88rem;
+  font-size: 0.8rem;
   font-weight: 600;
-  line-height: 1.6;
+  line-height: 1.5;
   color: var(--muted);
 }
 
@@ -910,7 +941,6 @@ body[data-loading="true"] .overlay-shell > :not(.loading-shell) {
 .loading-brand {
   display: flex;
   align-items: center;
-  gap: 12px;
   flex: 1;
 }
 
@@ -934,6 +964,7 @@ body[data-loading="true"] .overlay-shell > :not(.loading-shell) {
 }
 
 .loading-control-row,
+.loading-page-summary,
 .loading-button-row,
 .loading-meta-grid {
   display: grid;
@@ -943,6 +974,13 @@ body[data-loading="true"] .overlay-shell > :not(.loading-shell) {
 
 .loading-control-row {
   grid-template-columns: 1fr;
+}
+
+.loading-page-summary {
+  padding: 12px 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(143, 223, 255, 0.1);
+  background: rgba(7, 13, 24, 0.2);
 }
 
 .loading-button-row {
@@ -1013,6 +1051,12 @@ body[data-loading="true"] .overlay-shell > :not(.loading-shell) {
   width: 174px;
   height: 34px;
   border-radius: 12px;
+}
+
+.skeleton-page-label {
+  width: 92px;
+  height: 10px;
+  border-radius: 999px;
 }
 
 .skeleton-orb {
@@ -1340,12 +1384,19 @@ body[data-voice-mode="offline"] .voice-orb {
   }
 
   .topbar {
-    align-items: stretch;
-    flex-direction: column;
+    padding: 10px;
   }
 
   .topbar-actions {
-    justify-content: space-between;
+    gap: 6px;
+  }
+
+  .topbar-wordmark {
+    width: min(100%, 152px);
+  }
+
+  .status-pill {
+    max-width: 108px;
   }
 
   .hero-surface,
