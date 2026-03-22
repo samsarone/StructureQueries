@@ -931,23 +931,44 @@ select option {
   color: rgba(251, 113, 133, 0.92);
 }
 
-.settings-credit-card {
-  display: grid;
-  gap: 4px;
-  padding: 13px;
-  border-radius: 18px;
-  border: 1px solid rgba(143, 223, 255, 0.12);
+.settings-credit-banner {
+  border-color: rgba(143, 223, 255, 0.12);
   background:
-    radial-gradient(circle at top right, rgba(103, 227, 141, 0.12), transparent 34%),
-    rgba(10, 18, 31, 0.72);
+    radial-gradient(circle at top right, rgba(103, 227, 141, 0.1), transparent 38%),
+    linear-gradient(180deg, rgba(10, 18, 31, 0.78), rgba(7, 13, 24, 0.84)),
+    rgba(10, 18, 31, 0.74);
+}
+
+.settings-credit-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.settings-credit-label {
+  flex-shrink: 0;
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(186, 221, 243, 0.72);
 }
 
 .settings-credit-value {
-  margin: 2px 0 0;
-  font-size: 1.14rem;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.82rem;
   font-weight: 800;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--text);
+}
+
+.settings-credit-caption {
+  display: none;
 }
 
 .loading-shell {
