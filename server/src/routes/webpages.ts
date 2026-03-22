@@ -193,6 +193,23 @@ webpagesRouter.post("/analyze", async (request, response) => {
 
   try {
     const crawlResult = await crawlUrlsForPlainTextEmbeddings([url]);
+
+    console.log(
+      "[api][webpages][analyze] prepared plain-text payload",
+      JSON.stringify({
+        url,
+        inputUrlCount: crawlResult.inputUrlCount,
+        processedUrlCount: crawlResult.processedUrlCount,
+        crawlLevels: crawlResult.crawlLevels,
+        firecrawlCreditsUsed: crawlResult.firecrawlCreditsUsed,
+        firecrawlJobId: crawlResult.firecrawlJobId,
+        firecrawlJobIds: crawlResult.firecrawlJobIds,
+        skippedUrls: crawlResult.skippedUrls,
+        crawlErrors: crawlResult.crawlErrors,
+        records: crawlResult.records
+      })
+    );
+
     const result = await samsarAdapter.generateEmbeddingsFromPlainText({
       name: createEmbeddingName(title || undefined, url),
       plain_text: crawlResult.records,
