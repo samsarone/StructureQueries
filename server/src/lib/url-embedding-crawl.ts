@@ -171,6 +171,22 @@ function getDocumentSourceUrl(
   );
 }
 
+async function scrapePrimaryDocument(
+  client: Firecrawl,
+  url: string
+): Promise<FirecrawlDocument | null> {
+  try {
+    const document = await client.scrape(url, {
+      formats: ["markdown"],
+      onlyMainContent: true
+    });
+
+    return document as FirecrawlDocument;
+  } catch {
+    return null;
+  }
+}
+
 function extractDocumentText(document: FirecrawlDocument) {
   const markdown = typeof document.markdown === "string" ? document.markdown : "";
 
@@ -460,10 +476,19 @@ export async function crawlUrlsForPlainTextEmbeddings(
     }
 
     const crawledDocuments = Array.isArray(job.data) ? job.data : [];
+    const sortedDocuments = [...crawledDocuments].sort((left, right) => {
+      const leftUrl = getDocumentSourceUrl(left as FirecrawlDocument);
+      const rightUrl = getDocumentSourceUrl(right as FirecrawlDocument);
+      const leftPriority = leftUrl === url ? 0 : 1;
+      const rightPriority = rightUrl === url ? 0 : 1;
 
-    crawledDocuments.forEach((document, documentIndex) => {
+      return leftPriority - rightPriority;
+    });
+    const recordsForUrl: Array<Record<string, unknown>> = [];
+
+    sortedDocuments.forEach((document) => {
       const fallbackUrl =
-        crawlLevels === 1 ? normalizedUrls[documentIndex] ?? null : null;
+        crawlLevels === 1 ? url : null;
       const record = buildUrlPlainTextRecord(
         document as FirecrawlDocument,
         fallbackUrl
@@ -494,8 +519,34 @@ export async function crawlUrlsForPlainTextEmbeddings(
       }
 
       skippedUrlMap.delete(record.url as string);
-      records.push(record);
+      recordsForUrl.push(record);
     });
+
+    const primaryRecordIndex = recordsForUrl.findIndex(
+      (record) => record.url === url
+    );
+
+    if (primaryRecordIndex > 0) {
+      const [primaryRecord] = recordsForUrl.splice(primaryRecordIndex, 1);
+
+      if (primaryRecord) {
+        recordsForUrl.unshift(primaryRecord);
+      }
+    }
+
+    if (primaryRecordIndex === -1) {
+      const primaryDocument = await scrapePrimaryDocument(client, url);
+      const primaryRecord = primaryDocument
+        ? buildUrlPlainTextRecord(primaryDocument, url)
+        : null;
+
+      if (primaryRecord) {
+        skippedUrlMap.delete(url);
+        recordsForUrl.unshift(primaryRecord);
+      }
+    }
+
+    records.push(...recordsForUrl);
   }
 
   const firecrawlJobId =
