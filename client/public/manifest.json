@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Structured Queries",
+  "name": "Structure Queries",
   "version": "0.1.0",
-  "description": "Chrome extension for the Structured Queries client.",
+  "description": "Chrome extension for the Structure Queries client.",
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
@@ -10,7 +10,7 @@
     "128": "icons/icon-128.png"
   },
   "action": {
-    "default_title": "Structured Queries",
+    "default_title": "Structure Queries",
     "default_icon": {
       "16": "icons/icon-16.png",
       "32": "icons/icon-32.png",

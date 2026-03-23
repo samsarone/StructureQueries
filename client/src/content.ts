@@ -461,7 +461,7 @@ function createOverlay() {
       <iframe
         class="sq-frame"
         src="${OVERLAY_FRAME_URL}"
-        title="Structured Queries overlay"
+        title="Structure Queries overlay"
         allow="microphone"
       ></iframe>
     </div>

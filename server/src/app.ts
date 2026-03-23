@@ -703,7 +703,7 @@ function renderLandingPage(serviceName: string) {
           <div class="brand-emblem">
             <img
               src="${STRUCTURED_QUERIES_MONOGRAM_DATA_URL}"
-              alt="Structured Queries monogram"
+              alt="Structure Queries monogram"
             />
           </div>
           <div class="brand-meta">
@@ -792,7 +792,7 @@ function renderLandingPage(serviceName: string) {
           <p class="eyebrow">Chrome Web Store</p>
           <h2 class="section-title">Install the extension and start asking questions on any page.</h2>
           <p class="section-copy">
-            Add Structured Queries to Chrome, open any page you want to understand, and move from reading to
+            Add Structure Queries to Chrome, open any page you want to understand, and move from reading to
             grounded Q&amp;A in a few clicks.
           </p>
         </div>
@@ -808,7 +808,7 @@ function renderLandingPage(serviceName: string) {
             <article class="step-card">
               <span class="step-index">02</span>
               <h3>Let the extension prepare it</h3>
-              <p class="card-copy">Structured Queries analyzes the page, maps the structure, and gets the conversation ready before you ask anything.</p>
+              <p class="card-copy">Structure Queries analyzes the page, maps the structure, and gets the conversation ready before you ask anything.</p>
             </article>
 
             <article class="step-card">
@@ -825,7 +825,7 @@ function renderLandingPage(serviceName: string) {
             </div>
             <div>
               <h3>Get the extension</h3>
-              <p class="card-copy">Install Structured Queries in Chrome to analyze pages, surface the key structure, and start a voice-enabled Q&amp;A flow on top of the live page.</p>
+              <p class="card-copy">Install Structure Queries in Chrome to analyze pages, surface the key structure, and start a voice-enabled Q&amp;A flow on top of the live page.</p>
             </div>
             <a
               class="button button-primary button-full"

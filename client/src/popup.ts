@@ -693,7 +693,7 @@ function appendLog(role: LogRole, text: string) {
     role === "user"
       ? "You"
       : role === "assistant"
-        ? "Structured Queries"
+        ? "Structure Queries"
         : "System";
   textNode.className = "log-text";
   textNode.textContent = text;
@@ -943,7 +943,7 @@ function render() {
     readOptionalString(state.currentUser?.displayName) ??
     readOptionalString(state.currentUser?.username) ??
     readOptionalString(state.currentUser?.email) ??
-    (state.registrationRequired ? "Setup required" : "Structured Queries");
+    (state.registrationRequired ? "Setup required" : "Structure Queries");
   const headerCreditsValue = state.registrationRequired
     ? `${STARTER_CREDITS} starter`
     : creditsRemaining === null
@@ -1137,7 +1137,7 @@ function render() {
   setText(
     registrationTitleNode,
     registrationMode === "register"
-      ? "Register Structured Queries"
+      ? "Register Structure Queries"
       : "Update Account"
   );
   setText(
