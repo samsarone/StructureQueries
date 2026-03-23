@@ -708,55 +708,65 @@ function renderLandingPage(serviceName: string) {
           </div>
           <div class="brand-meta">
             <p class="brand-overline">Structure Queries</p>
-            <p class="brand-name">Deep analysis for live webpages and blog posts</p>
+            <p class="brand-name">Deep page analysis with voice-enabled Q&amp;A.</p>
           </div>
         </div>
 
         <nav class="site-nav" aria-label="Landing sections">
-          <a href="#install">Install</a>
-          <a href="#assets">Assets</a>
+          <a
+            href="${CHROME_WEB_STORE_PLACEHOLDER_URL}"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Install from WebStore
+          </a>
         </nav>
       </header>
 
       <section class="section" id="top">
         <div class="hero-grid">
           <div class="hero-copy">
-            <p class="eyebrow">CTA / Deep page understanding</p>
             <h1 class="hero-title">
-              <span class="highlight">Deeply analyze</span> complex webpages and blog posts.
+              <span class="highlight">Understand</span> complex webpages and blog posts faster.
             </h1>
             <p class="hero-description">
-              Turn dense reading into a conversational experience. Structure Queries prepares the page context,
-              surfaces the important structure, and lets users ask grounded follow-up questions through a
-              conversational bot.
+              Structure Queries prepares the page, surfaces the key structure, and lets you ask grounded
+              follow-up questions by text or voice without losing the source context.
             </p>
 
             <div class="cta-row">
-              <a class="button button-primary" href="#install">Install the extension</a>
-              <a class="button button-secondary" href="#assets">See asset-ready layout</a>
+              <a
+                class="button button-primary"
+                href="${CHROME_WEB_STORE_PLACEHOLDER_URL}"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Install from WebStore
+              </a>
+              <a class="button button-secondary" href="#install">See how it works</a>
             </div>
 
             <div class="feature-row" aria-label="Key product capabilities">
               <span class="feature-pill">Complex webpages</span>
               <span class="feature-pill">Long-form blog posts</span>
-              <span class="feature-pill">Conversational Q&amp;A</span>
+              <span class="feature-pill">Voice-enabled Q&amp;A</span>
             </div>
           </div>
 
           <div class="preview-card" aria-label="Conversational product preview">
             <div class="preview-top">
               <span>Live Page Context</span>
-              <span>blog.example.com/article</span>
+              <span>Source page</span>
             </div>
 
             <div class="message">
               <span class="message-label">User</span>
-              <p>What are the main arguments on this page, and where does the author support them?</p>
+              <p>What are the main takeaways here, and which sections support them?</p>
             </div>
 
             <div class="message assistant-message">
               <span class="message-label">Bot</span>
-              <p>I mapped the article structure, extracted the key claims, and can answer follow-ups while staying grounded in the live page.</p>
+              <p>I mapped the page structure, pulled out the key points, and can answer follow-up questions while staying grounded in the source.</p>
             </div>
 
             <div class="preview-stats" aria-label="Product highlights">
@@ -780,10 +790,10 @@ function renderLandingPage(serviceName: string) {
       <section class="section" id="install">
         <div class="section-header">
           <p class="eyebrow">Chrome Web Store</p>
-          <h2 class="section-title">Install the extension and start querying any page.</h2>
+          <h2 class="section-title">Install the extension and start asking questions on any page.</h2>
           <p class="section-copy">
-            This section is dedicated to the Chrome Web Store install action. The link is a placeholder for now,
-            but the structure is ready for the final listing URL, badge, and store assets.
+            Add Structured Queries to Chrome, open any page you want to understand, and move from reading to
+            grounded Q&amp;A in a few clicks.
           </p>
         </div>
 
@@ -791,31 +801,31 @@ function renderLandingPage(serviceName: string) {
           <div class="step-list" aria-label="Install workflow">
             <article class="step-card">
               <span class="step-index">01</span>
-              <h3>Open a dense page</h3>
-              <p class="card-copy">Use it on long blog posts, technical articles, or complex webpages where quick comprehension matters.</p>
+              <h3>Open the page you care about</h3>
+              <p class="card-copy">Use it on long blog posts, technical docs, or any webpage where the important details are easy to miss.</p>
             </article>
 
             <article class="step-card">
               <span class="step-index">02</span>
-              <h3>Prepare the content</h3>
-              <p class="card-copy">The extension analyzes the page, structures the content, and gets the conversation ready for grounded questions.</p>
+              <h3>Let the extension prepare it</h3>
+              <p class="card-copy">Structured Queries analyzes the page, maps the structure, and gets the conversation ready before you ask anything.</p>
             </article>
 
             <article class="step-card">
               <span class="step-index">03</span>
-              <h3>Ask naturally</h3>
-              <p class="card-copy">Users can ask follow-ups in plain language instead of manually scanning every section of the page.</p>
+              <h3>Ask naturally by text or voice</h3>
+              <p class="card-copy">Follow up in plain language and get answers that stay anchored to the content already on the page.</p>
             </article>
           </div>
 
           <aside class="store-card" aria-label="Chrome Web Store install">
             <div class="label">
-              <span>Extension Install</span>
-              <span>Placeholder</span>
+              <span>Chrome Web Store</span>
+              <span>Extension</span>
             </div>
             <div>
-              <h3>Chrome Web Store listing</h3>
-              <p class="card-copy">Swap this with the live Web Store URL once the listing is published. The layout is already ready for screenshots, ratings, and badge treatment.</p>
+              <h3>Get the extension</h3>
+              <p class="card-copy">Install Structured Queries in Chrome to analyze pages, surface the key structure, and start a voice-enabled Q&amp;A flow on top of the live page.</p>
             </div>
             <a
               class="button button-primary button-full"
@@ -823,33 +833,32 @@ function renderLandingPage(serviceName: string) {
               target="_blank"
               rel="noreferrer"
             >
-              Install from Chrome Web Store
+              Install from WebStore
             </a>
-            <p class="store-note">Placeholder link only. Replace with the final listing URL when it is available.</p>
+            <p class="store-note">This will point to the Chrome Web Store listing as soon as publishing is complete.</p>
           </aside>
         </div>
       </section>
 
       <section class="section" id="assets">
         <div class="section-header">
-          <p class="eyebrow">Asset-ready section</p>
-          <h2 class="section-title">Reserved space for the landing visuals you design next.</h2>
+          <p class="eyebrow">Product visuals</p>
+          <h2 class="section-title">A simple layout for analysis, conversation, and source grounding.</h2>
           <p class="section-copy">
-            The page now shares the same dark grid, cyan and green glow, glass-card surfaces, and typography
-            direction as the Samsar landing site. These placeholder frames can be replaced with final assets
-            without changing the layout or theme.
+            The landing page can support a wide analysis view, a focused conversation panel, and proof that each
+            answer stays tied to the source.
           </p>
         </div>
 
-        <div class="asset-grid" aria-label="Asset placeholders">
+        <div class="asset-grid" aria-label="Product visual layouts">
           <article class="asset-card asset-card-wide">
             <div class="label">
-              <span>Asset Slot 01</span>
-              <span>Wide</span>
+              <span>Analysis View</span>
+              <span>Overview</span>
             </div>
             <div>
               <h3>Webpage analysis visual</h3>
-              <p class="asset-copy">Use this frame for a browser-shot, illustration, or composite showing how a long page gets structured for questioning.</p>
+              <p class="asset-copy">A wide visual for showing how a long page is broken into sections, summaries, and the key ideas worth following up on.</p>
             </div>
             <div class="placeholder-frame" aria-hidden="true">
               <div class="placeholder-toolbar">
@@ -868,12 +877,12 @@ function renderLandingPage(serviceName: string) {
 
           <article class="asset-card">
             <div class="label">
-              <span>Asset Slot 02</span>
-              <span>Chat</span>
+              <span>Conversation</span>
+              <span>Q&amp;A</span>
             </div>
             <div>
               <h3>Conversation snapshot</h3>
-              <p class="asset-copy">Reserve this card for a focused conversational UI or answer interaction.</p>
+              <p class="asset-copy">A focused panel for showing the voice or text conversation experience once the page has been prepared.</p>
             </div>
             <div class="placeholder-chat" aria-hidden="true">
               <span class="placeholder-bubble"></span>
@@ -884,12 +893,12 @@ function renderLandingPage(serviceName: string) {
 
           <article class="asset-card">
             <div class="label">
-              <span>Asset Slot 03</span>
-              <span>Evidence</span>
+              <span>Grounding</span>
+              <span>Sources</span>
             </div>
             <div>
-              <h3>Source and summary proof</h3>
-              <p class="asset-copy">Use this panel for citation, source mapping, or another proof-of-grounding visual.</p>
+              <h3>Source-backed answers</h3>
+              <p class="asset-copy">A compact visual for citations, highlighted passages, or source links that support each answer.</p>
             </div>
             <div class="placeholder-source" aria-hidden="true">
               <span class="placeholder-chip"></span>
