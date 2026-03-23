@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import cors from "cors";
@@ -26,11 +25,6 @@ const CHROME_WEB_STORE_PLACEHOLDER_URL = "https://chromewebstore.google.com/";
 const CLIENT_PUBLIC_DIR = fileURLToPath(
   new URL("../../client/public/", import.meta.url)
 );
-const STRUCTURED_QUERIES_MONOGRAM_DATA_URL = `data:image/svg+xml;base64,${Buffer.from(
-  readFileSync(
-    new URL("../../client/public/structured-queries-monogram.svg", import.meta.url)
-  )
-).toString("base64")}`;
 
 function renderLandingPage(serviceName: string) {
   return `<!doctype html>
@@ -114,61 +108,6 @@ function renderLandingPage(serviceName: string) {
         padding: 10px 0 44px;
       }
 
-      .site-header {
-        position: relative;
-        z-index: 4;
-        width: auto;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        padding: 10px 12px;
-        border: 1px solid rgba(122, 177, 211, 0.08);
-        border-radius: 22px;
-        background:
-          linear-gradient(180deg, rgba(10, 19, 32, 0.22), rgba(7, 13, 24, 0.18)),
-          rgba(8, 16, 28, 0.14);
-        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
-        backdrop-filter: blur(14px);
-        opacity: 0.34;
-        pointer-events: none;
-        margin-bottom: 18px;
-      }
-
-      .brand {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-      }
-
-      .brand-emblem {
-        width: 40px;
-        height: 40px;
-        padding: 4px;
-        flex-shrink: 0;
-        border-radius: 16px;
-        border: 1px solid rgba(143, 223, 255, 0.1);
-        background:
-          linear-gradient(180deg, rgba(13, 24, 41, 0.34), rgba(7, 13, 23, 0.3)),
-          rgba(7, 13, 23, 0.28);
-        box-shadow:
-          0 8px 20px rgba(0, 0, 0, 0.12),
-          0 0 0 1px rgba(255, 255, 255, 0.02) inset;
-      }
-
-      .brand-emblem img {
-        display: block;
-        width: 100%;
-        height: 100%;
-        object-fit: contain;
-      }
-
-      .brand-meta {
-        display: grid;
-        gap: 2px;
-      }
-
-      .brand-overline,
       .eyebrow,
       .label,
       .feature-pill,
@@ -176,31 +115,12 @@ function renderLandingPage(serviceName: string) {
         font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
       }
 
-      .brand-overline,
       .eyebrow {
         color: rgba(151, 222, 255, 0.68);
         font-size: 0.7rem;
         font-weight: 600;
         letter-spacing: 0.2em;
         text-transform: uppercase;
-      }
-
-      .brand-name {
-        max-width: 34ch;
-        color: rgba(204, 219, 233, 0.72);
-        font-size: 0.8rem;
-        line-height: 1.48;
-        text-align: left;
-      }
-
-      .site-banner-install {
-        color: rgba(204, 219, 233, 0.26);
-        font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
-        font-size: 0.72rem;
-        font-weight: 600;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-        white-space: nowrap;
       }
 
       .section {
@@ -853,19 +773,6 @@ function renderLandingPage(serviceName: string) {
           padding-top: 16px;
         }
 
-        #top {
-          padding-top: 96px;
-        }
-
-        .site-header {
-          position: fixed;
-          top: 12px;
-          left: 12px;
-          right: 12px;
-          margin-bottom: 0;
-          opacity: 0.46;
-        }
-
         .section {
           padding: 24px 20px;
           border-radius: 24px;
@@ -891,15 +798,6 @@ function renderLandingPage(serviceName: string) {
           max-width: 22ch;
           margin-top: 0;
           font-size: 0.28em;
-        }
-
-        .brand-name {
-          max-width: none;
-          text-align: center;
-        }
-
-        .site-banner-install {
-          display: none;
         }
 
         .hero-description,
@@ -930,21 +828,6 @@ function renderLandingPage(serviceName: string) {
   <body>
     <main>
       <section class="section" id="top">
-        <header class="site-header">
-          <div class="brand">
-            <div class="brand-emblem">
-              <img
-                src="${STRUCTURED_QUERIES_MONOGRAM_DATA_URL}"
-                alt="Structure Queries monogram"
-              />
-            </div>
-            <div class="brand-meta">
-              <p class="brand-overline">Structure Queries</p>
-              <p class="brand-name">Deep page analysis with voice-enabled Q&amp;A.</p>
-            </div>
-          </div>
-          <div class="site-banner-install">Install from WebStore</div>
-        </header>
         <div class="hero-grid">
           <div class="hero-copy">
             <h1 class="hero-title">
