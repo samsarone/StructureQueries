@@ -71,6 +71,34 @@ const MIN_ACCEPTED_TRANSCRIPT_DURATION_MS = 140;
 const MIN_ACCEPTED_TRANSCRIPT_LOGPROB = -1.5;
 const MIN_ACCEPTED_TRANSCRIPT_CHARS = 2;
 const MIN_ACCEPTED_LANGUAGE_PROBABILITY = 0.35;
+const ISO_639_3_TO_1_LANGUAGE_CODE: Record<string, string> = {
+  ara: "ar",
+  ben: "bn",
+  chi: "zh",
+  deu: "de",
+  dut: "nl",
+  eng: "en",
+  fra: "fr",
+  fre: "fr",
+  ger: "de",
+  hin: "hi",
+  ita: "it",
+  jpn: "ja",
+  kor: "ko",
+  mar: "mr",
+  nld: "nl",
+  pol: "pl",
+  por: "pt",
+  rus: "ru",
+  spa: "es",
+  tam: "ta",
+  tel: "te",
+  tur: "tr",
+  ukr: "uk",
+  urd: "ur",
+  vie: "vi",
+  zho: "zh"
+};
 
 type TranscriptChunk = {
   languageCode?: unknown;
@@ -180,11 +208,42 @@ function getAudioFileExtension(mimeType: string) {
 }
 
 function normalizeLanguage(language?: string | null) {
-  if (!language || language === "auto") {
+  if (!language) {
     return undefined;
   }
 
-  return language;
+  const trimmed = language.trim().toLowerCase();
+
+  if (!trimmed || trimmed === "auto") {
+    return undefined;
+  }
+
+  const [baseLanguage] = trimmed.split(/[-_]/);
+
+  if (!baseLanguage) {
+    return undefined;
+  }
+
+  if (baseLanguage.length === 2) {
+    return baseLanguage;
+  }
+
+  return ISO_639_3_TO_1_LANGUAGE_CODE[baseLanguage];
+}
+
+function coerceLanguageHint(language?: string | null) {
+  const normalizedLanguage = normalizeLanguage(language);
+
+  if (normalizedLanguage) {
+    return normalizedLanguage;
+  }
+
+  if (!language) {
+    return undefined;
+  }
+
+  const trimmed = language.trim().toLowerCase();
+  return trimmed && trimmed !== "auto" ? trimmed : undefined;
 }
 
 function createNoSpeechDetectedError(message = "No clear speech was detected.") {
@@ -308,7 +367,7 @@ function normalizeTranscriptionResult(
       ? nextProbability
       : maxProbability;
   }, 0);
-  const detectedLanguage = transcriptChunks.reduce<string | undefined>(
+  const rawDetectedLanguage = transcriptChunks.reduce<string | undefined>(
     (resolvedLanguage, chunk) => {
       if (resolvedLanguage) {
         return resolvedLanguage;
@@ -320,6 +379,7 @@ function normalizeTranscriptionResult(
     },
     undefined
   );
+  const detectedLanguage = coerceLanguageHint(rawDetectedLanguage);
   const durationMs =
     calculateAcceptedSpeechDurationMs(acceptedWords) ?? fallbackDurationMs;
 
@@ -412,8 +472,13 @@ async function transcribeAudio(
   }
 }
 
-async function synthesizeAssistantAudio(text: string, voiceId?: string) {
+async function synthesizeAssistantAudio(
+  text: string,
+  voiceId?: string,
+  language?: string | null
+) {
   const resolvedVoiceId = voiceId ?? env.integrations.elevenLabs.defaultVoiceId;
+  const resolvedLanguage = normalizeLanguage(language);
 
   if (!resolvedVoiceId || !elevenLabsAdapter.isConfigured()) {
     return null;
@@ -422,7 +487,8 @@ async function synthesizeAssistantAudio(text: string, voiceId?: string) {
   try {
     const result = await elevenLabsAdapter.synthesize({
       voiceId: resolvedVoiceId,
-      text
+      text,
+      ...(resolvedLanguage ? { languageCode: resolvedLanguage } : {})
     });
 
     return {
@@ -509,6 +575,9 @@ async function handleSubmitAudio(
   const activeVoiceId = payload.voiceId ?? state.voiceId;
   const activeLanguage = payload.language ?? state.language ?? null;
   const activeTemplateId = payload.templateId ?? state.templateId;
+  state.voiceId = activeVoiceId;
+  state.language = activeLanguage;
+  state.templateId = activeTemplateId;
 
   sendStatus(socket, "transcribing", "Processing recorded audio.");
   let transcription;
@@ -547,10 +616,13 @@ async function handleSubmitAudio(
     return;
   }
 
+  const responseLanguage =
+    transcription.detectedLanguage ?? coerceLanguageHint(activeLanguage) ?? null;
+
   sendMessage(socket, {
     type: "transcript_ready",
     transcript: transcription.transcript,
-    language: transcription.detectedLanguage,
+    language: responseLanguage,
     source: transcription.source
   });
 
@@ -562,7 +634,7 @@ async function handleSubmitAudio(
       externalUserApiKey: state.externalUserApiKey,
       browserSessionId: state.browserSessionId,
       conversationId: state.conversationId,
-      language: transcription.detectedLanguage ?? activeLanguage,
+      language: responseLanguage,
       metadata: {
         assistantSessionId: state.assistantSessionId,
         extensionId: state.extensionId,
@@ -590,7 +662,11 @@ async function handleSubmitAudio(
     sendStatus(socket, "synthesizing", "Synthesizing assistant voice.");
 
     try {
-      synthesizedAudio = await synthesizeAssistantAudio(assistantText, activeVoiceId);
+      synthesizedAudio = await synthesizeAssistantAudio(
+        assistantText,
+        activeVoiceId,
+        responseLanguage
+      );
 
       if (synthesizedAudio) {
         await chargeExternalElevenLabsSynthesisUsage({

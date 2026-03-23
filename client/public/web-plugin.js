@@ -1390,6 +1390,7 @@
   }
 
   function stopAssistantPlayback() {
+    clearResumeConversationTimer();
     state.assistantSpeaking = false;
 
     if (activeAssistantAudio) {
@@ -1419,6 +1420,14 @@
       state.voicePreviewState = "idle";
       state.voicePreviewVoiceId = null;
     }
+  }
+
+  function resumeConversationAfterVoicePreview() {
+    if (!state.conversationActive || state.recording || state.assistantSpeaking) {
+      return;
+    }
+
+    scheduleConversationResume(100);
   }
 
   async function toggleVoicePreviewPlayback() {
@@ -1457,6 +1466,7 @@
         state.voicePreviewState = "idle";
       }
 
+      resumeConversationAfterVoicePreview();
       render();
     };
 
@@ -2501,11 +2511,13 @@
     }
 
     if (refs.voicePreviewButton) {
+      const previewBusy = state.recording || state.assistantSpeaking;
       refs.voicePreviewButton.disabled =
         !voicePreviewSource ||
         state.isAnalyzing ||
         state.authSubmitting ||
-        state.settingsSaving;
+        state.settingsSaving ||
+        (previewBusy && !previewActive);
       refs.voicePreviewButton.textContent = !voicePreviewSource
         ? "Preview unavailable"
         : previewActive && state.voicePreviewState === "playing"

@@ -576,6 +576,14 @@ function stopVoicePreviewPlayback() {
   }
 }
 
+function resumeConversationAfterVoicePreview() {
+  if (!state.conversationActive || state.recording || state.assistantSpeaking) {
+    return;
+  }
+
+  scheduleConversationResume(100);
+}
+
 async function toggleVoicePreviewPlayback() {
   const selectedVoiceId = getSelectedVoiceId();
   const previewSource = getSelectedVoicePreviewSource();
@@ -612,6 +620,8 @@ async function toggleVoicePreviewPlayback() {
       state.voicePreviewVoiceId = undefined;
       renderVoicePreviewButton();
     }
+
+    resumeConversationAfterVoicePreview();
   };
 
   audio.addEventListener("play", () => {
@@ -940,8 +950,7 @@ function renderVoicePreviewButton() {
       state.voicePreviewVoiceId === selectedVoiceId &&
       state.voicePreviewState !== "idle"
   );
-  const voiceBusy =
-    state.conversationActive || state.recording || state.assistantSpeaking;
+  const voiceBusy = state.recording || state.assistantSpeaking;
 
   voicePreviewButton.disabled =
     !previewSource ||
