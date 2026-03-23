@@ -110,21 +110,21 @@ function renderLandingPage(serviceName: string) {
         width: min(1180px, calc(100% - 32px));
         margin: 0 auto;
         display: grid;
-        gap: 24px;
-        padding: 20px 0 72px;
+        gap: 18px;
+        padding: 14px 0 56px;
       }
 
       .site-header {
         position: sticky;
-        top: 16px;
+        top: 12px;
         z-index: 3;
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 20px;
-        padding: 14px 16px;
+        padding: 12px 14px;
         border: 1px solid rgba(122, 177, 211, 0.18);
-        border-radius: 26px;
+        border-radius: 24px;
         background:
           linear-gradient(180deg, rgba(10, 19, 32, 0.9), rgba(7, 13, 24, 0.88)),
           rgba(8, 16, 28, 0.82);
@@ -139,8 +139,8 @@ function renderLandingPage(serviceName: string) {
       }
 
       .brand-emblem {
-        width: 48px;
-        height: 48px;
+        width: 44px;
+        height: 44px;
         padding: 4px;
         flex-shrink: 0;
         border-radius: 18px;
@@ -215,7 +215,7 @@ function renderLandingPage(serviceName: string) {
       .section {
         position: relative;
         overflow: hidden;
-        padding: clamp(28px, 4vw, 48px);
+        padding: clamp(22px, 3vw, 38px);
         border: 1px solid rgba(122, 177, 211, 0.16);
         border-radius: 34px;
         background:
@@ -251,12 +251,19 @@ function renderLandingPage(serviceName: string) {
         mask-image: radial-gradient(circle at 50% 42%, black 0%, transparent 75%);
       }
 
+      #top {
+        min-height: calc(100vh - 122px);
+        display: flex;
+        align-items: center;
+      }
+
       .hero-grid {
         display: grid;
-        gap: 28px;
+        width: 100%;
+        gap: 20px;
         align-items: center;
         justify-items: center;
-        min-height: min(84vh, 720px);
+        min-height: 0;
       }
 
       .hero-copy {
@@ -265,15 +272,15 @@ function renderLandingPage(serviceName: string) {
       }
 
       .hero-title {
-        margin: 0 0 18px;
-        max-width: 13ch;
+        margin: 0 0 14px;
+        max-width: 16ch;
         margin-left: auto;
         margin-right: auto;
         display: grid;
         gap: 0.08em;
         justify-items: center;
-        font-size: clamp(3.25rem, 8vw, 6.4rem);
-        line-height: 0.92;
+        font-size: clamp(2.7rem, 5.9vw, 4.9rem);
+        line-height: 0.94;
         letter-spacing: -0.06em;
         text-wrap: balance;
       }
@@ -282,11 +289,20 @@ function renderLandingPage(serviceName: string) {
         display: block;
       }
 
+      .hero-title-line-support {
+        max-width: 14ch;
+        font-size: 0.38em;
+        line-height: 1.06;
+        letter-spacing: -0.04em;
+        color: rgba(228, 238, 248, 0.9);
+        text-wrap: balance;
+      }
+
       .hero-title-rotator {
         position: relative;
         display: grid;
         width: 100%;
-        min-height: 2.05em;
+        min-height: 1.7em;
         place-items: start center;
       }
 
@@ -294,7 +310,7 @@ function renderLandingPage(serviceName: string) {
         grid-area: 1 / 1;
         opacity: 0;
         transform: translate3d(0, 18px, 0);
-        animation: hero-phrase-cycle 9s infinite;
+        animation: hero-phrase-cycle 12s infinite;
       }
 
       .hero-title-rotator span:nth-child(2) {
@@ -305,6 +321,10 @@ function renderLandingPage(serviceName: string) {
         animation-delay: 6s;
       }
 
+      .hero-title-rotator span:nth-child(4) {
+        animation-delay: 9s;
+      }
+
       .hero-title .highlight {
         color: var(--sq-accent-cool);
         text-shadow: 0 0 18px rgba(96, 194, 245, 0.14);
@@ -312,18 +332,18 @@ function renderLandingPage(serviceName: string) {
 
       @keyframes hero-phrase-cycle {
         0%,
-        4% {
+        3% {
           opacity: 0;
           transform: translate3d(0, 18px, 0);
         }
 
-        8%,
-        28% {
+        7%,
+        31% {
           opacity: 1;
           transform: translate3d(0, 0, 0);
         }
 
-        32%,
+        35%,
         100% {
           opacity: 0;
           transform: translate3d(0, -18px, 0);
@@ -336,8 +356,8 @@ function renderLandingPage(serviceName: string) {
       .store-note,
       .asset-copy {
         color: rgba(164, 203, 223, 0.88);
-        font-size: 1.02rem;
-        line-height: 1.6;
+        font-size: 0.96rem;
+        line-height: 1.55;
       }
 
       .hero-description,
@@ -346,7 +366,7 @@ function renderLandingPage(serviceName: string) {
       }
 
       .hero-description {
-        max-width: 42rem;
+        max-width: 39rem;
         margin: 0 auto;
       }
 
@@ -354,7 +374,7 @@ function renderLandingPage(serviceName: string) {
         display: flex;
         flex-wrap: wrap;
         gap: 12px;
-        margin-top: 28px;
+        margin-top: 22px;
         justify-content: center;
       }
 
@@ -363,11 +383,11 @@ function renderLandingPage(serviceName: string) {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-height: 56px;
-        padding: 0 24px;
-        border-radius: 20px;
+        min-height: 50px;
+        padding: 0 22px;
+        border-radius: 18px;
         border: 1px solid transparent;
-        font-size: 0.96rem;
+        font-size: 0.92rem;
         font-weight: 700;
         text-decoration: none;
         transition:
@@ -427,7 +447,7 @@ function renderLandingPage(serviceName: string) {
 
       .preview-card {
         width: min(100%, 860px);
-        padding: 22px;
+        padding: 18px;
       }
 
       .preview-top,
@@ -444,14 +464,14 @@ function renderLandingPage(serviceName: string) {
       }
 
       .preview-top {
-        margin-bottom: 16px;
-        padding-bottom: 12px;
+        margin-bottom: 12px;
+        padding-bottom: 10px;
         border-bottom: 1px solid rgba(148, 163, 184, 0.12);
       }
 
       .message {
-        margin-bottom: 14px;
-        padding: 16px 18px;
+        margin-bottom: 10px;
+        padding: 14px 16px;
         border: 1px solid rgba(148, 163, 184, 0.12);
         border-radius: 22px;
         background: linear-gradient(180deg, rgba(11, 21, 33, 0.92), rgba(8, 16, 27, 0.92));
@@ -468,8 +488,8 @@ function renderLandingPage(serviceName: string) {
       }
 
       .message p {
-        font-size: 0.98rem;
-        line-height: 1.6;
+        font-size: 0.92rem;
+        line-height: 1.5;
         color: rgba(236, 243, 251, 0.94);
       }
 
@@ -480,11 +500,11 @@ function renderLandingPage(serviceName: string) {
       .preview-stats {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 12px;
+        gap: 10px;
       }
 
       .stat {
-        padding: 14px;
+        padding: 12px;
         border: 1px solid rgba(148, 163, 184, 0.12);
         border-radius: 20px;
         background: rgba(255, 255, 255, 0.03);
@@ -492,16 +512,16 @@ function renderLandingPage(serviceName: string) {
 
       .stat strong {
         display: block;
-        font-size: 1rem;
+        font-size: 0.94rem;
         color: rgba(236, 243, 251, 0.96);
       }
 
       .stat span {
         display: block;
-        margin-top: 6px;
+        margin-top: 5px;
         color: rgba(155, 169, 186, 0.88);
-        font-size: 0.84rem;
-        line-height: 1.45;
+        font-size: 0.8rem;
+        line-height: 1.38;
       }
 
       .section-header {
@@ -747,6 +767,10 @@ function renderLandingPage(serviceName: string) {
       }
 
       @media (max-width: 980px) {
+        #top {
+          min-height: auto;
+        }
+
         .install-shell {
           grid-template-columns: 1fr;
         }
@@ -848,15 +872,19 @@ function renderLandingPage(serviceName: string) {
           <div class="hero-copy">
             <h1 class="hero-title">
               <span class="hero-title-line">
-                <span class="highlight">Understand</span>
+                <span class="highlight">Interact with</span>
               </span>
               <span
                 class="hero-title-rotator"
-                aria-label="Dense articles, technical documentation, research papers"
+                aria-label="Articles, research papers, blog posts, technical documentation"
               >
-                <span>Dense articles</span>
-                <span>Technical documentation</span>
+                <span>Articles</span>
                 <span>Research papers</span>
+                <span>Blog posts</span>
+                <span>Technical documentation</span>
+              </span>
+              <span class="hero-title-line hero-title-line-support">
+                with voice-enabled page analysis and follow-up Q&amp;A.
               </span>
             </h1>
             <p class="hero-description">
@@ -874,13 +902,6 @@ function renderLandingPage(serviceName: string) {
                 Install from WebStore
               </a>
               <a class="button button-secondary" href="#install">Try the web client</a>
-            </div>
-
-            <div class="feature-row" aria-label="Key product capabilities">
-              <span class="feature-pill">Dense articles</span>
-              <span class="feature-pill">Technical documentation</span>
-              <span class="feature-pill">Research papers</span>
-              <span class="feature-pill">Voice-enabled Q&amp;A</span>
             </div>
           </div>
 
