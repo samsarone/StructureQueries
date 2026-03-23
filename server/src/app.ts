@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import cors from "cors";
 import express, {
   type NextFunction,
@@ -19,6 +20,11 @@ import { webpagesRouter } from "./routes/webpages.js";
 import { backendStack } from "./stack.js";
 
 const CHROME_WEB_STORE_PLACEHOLDER_URL = "https://chromewebstore.google.com/";
+const STRUCTURED_QUERIES_MONOGRAM_DATA_URL = `data:image/svg+xml;base64,${Buffer.from(
+  readFileSync(
+    new URL("../../client/public/structured-queries-monogram.svg", import.meta.url)
+  )
+).toString("base64")}`;
 
 function renderLandingPage(serviceName: string) {
   return `<!doctype html>
@@ -97,40 +103,60 @@ function renderLandingPage(serviceName: string) {
         z-index: 1;
         width: min(1180px, calc(100% - 32px));
         margin: 0 auto;
-        padding: 24px 0 64px;
+        display: grid;
+        gap: 24px;
+        padding: 20px 0 72px;
       }
 
       .site-header {
+        position: sticky;
+        top: 16px;
+        z-index: 3;
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 20px;
-        padding: 8px 0 22px;
+        padding: 14px 16px;
+        border: 1px solid rgba(122, 177, 211, 0.18);
+        border-radius: 26px;
+        background:
+          linear-gradient(180deg, rgba(10, 19, 32, 0.9), rgba(7, 13, 24, 0.88)),
+          rgba(8, 16, 28, 0.82);
+        box-shadow: 0 18px 42px rgba(0, 0, 0, 0.24);
+        backdrop-filter: blur(20px);
       }
 
       .brand {
         display: flex;
         align-items: center;
-        gap: 14px;
+        gap: 12px;
       }
 
-      .brand-mark {
-        display: grid;
-        place-items: center;
+      .brand-emblem {
         width: 48px;
         height: 48px;
-        border-radius: 16px;
-        background: linear-gradient(135deg, rgba(70, 191, 255, 0.98), rgba(57, 216, 129, 0.95));
-        color: #041015;
-        font-size: 1rem;
-        font-weight: 700;
-        letter-spacing: -0.05em;
-        box-shadow: 0 18px 44px rgba(70, 191, 255, 0.18);
+        padding: 4px;
+        flex-shrink: 0;
+        border-radius: 18px;
+        border: 1px solid rgba(143, 223, 255, 0.16);
+        background:
+          linear-gradient(180deg, rgba(13, 24, 41, 0.86), rgba(7, 13, 23, 0.82)),
+          rgba(7, 13, 23, 0.72);
+        box-shadow:
+          0 14px 34px rgba(0, 0, 0, 0.22),
+          0 0 0 1px rgba(255, 255, 255, 0.02) inset;
+      }
+
+      .brand-emblem img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
       }
 
       .brand-meta {
         display: grid;
-        gap: 4px;
+        gap: 2px;
       }
 
       .brand-overline,
@@ -151,20 +177,29 @@ function renderLandingPage(serviceName: string) {
       }
 
       .brand-name {
-        color: rgba(236, 243, 251, 0.94);
-        font-size: 0.98rem;
+        max-width: 34ch;
+        color: rgba(204, 219, 233, 0.84);
+        font-size: 0.92rem;
+        line-height: 1.45;
       }
 
       .site-nav {
         display: flex;
         align-items: center;
-        gap: 14px;
+        gap: 18px;
+        padding: 10px 14px;
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        border-radius: 999px;
+        background: rgba(8, 18, 29, 0.58);
       }
 
       .site-nav a {
-        color: rgba(204, 219, 233, 0.84);
-        font-size: 0.94rem;
+        color: rgba(204, 219, 233, 0.8);
+        font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+        font-size: 0.76rem;
+        letter-spacing: 0.14em;
         text-decoration: none;
+        text-transform: uppercase;
       }
 
       .site-nav a:hover {
@@ -174,10 +209,9 @@ function renderLandingPage(serviceName: string) {
       .section {
         position: relative;
         overflow: hidden;
-        margin-bottom: 24px;
         padding: clamp(28px, 4vw, 48px);
         border: 1px solid rgba(122, 177, 211, 0.16);
-        border-radius: 32px;
+        border-radius: 34px;
         background:
           radial-gradient(circle at top left, rgba(70, 191, 255, 0.16), transparent 28%),
           linear-gradient(180deg, rgba(8, 18, 31, 0.94), rgba(8, 16, 28, 0.96));
@@ -213,21 +247,24 @@ function renderLandingPage(serviceName: string) {
 
       .hero-grid {
         display: grid;
-        grid-template-columns: minmax(0, 1.12fr) minmax(320px, 0.88fr);
         gap: 28px;
         align-items: center;
-        min-height: min(90vh, 760px);
+        justify-items: center;
+        min-height: min(84vh, 720px);
       }
 
       .hero-copy {
-        max-width: 40rem;
+        max-width: 48rem;
+        text-align: center;
       }
 
       .hero-title {
         margin: 0 0 18px;
-        max-width: 10ch;
-        font-size: clamp(3.25rem, 8vw, 6.75rem);
-        line-height: 0.9;
+        max-width: 11ch;
+        margin-left: auto;
+        margin-right: auto;
+        font-size: clamp(3.25rem, 8vw, 6.4rem);
+        line-height: 0.92;
         letter-spacing: -0.06em;
         text-wrap: balance;
       }
@@ -243,8 +280,18 @@ function renderLandingPage(serviceName: string) {
       .store-note,
       .asset-copy {
         color: rgba(164, 203, 223, 0.88);
-        font-size: 1rem;
+        font-size: 1.02rem;
         line-height: 1.6;
+      }
+
+      .hero-description,
+      .section-copy {
+        text-wrap: pretty;
+      }
+
+      .hero-description {
+        max-width: 42rem;
+        margin: 0 auto;
       }
 
       .cta-row {
@@ -252,6 +299,7 @@ function renderLandingPage(serviceName: string) {
         flex-wrap: wrap;
         gap: 12px;
         margin-top: 28px;
+        justify-content: center;
       }
 
       .button {
@@ -259,9 +307,9 @@ function renderLandingPage(serviceName: string) {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-height: 54px;
-        padding: 0 22px;
-        border-radius: 18px;
+        min-height: 56px;
+        padding: 0 24px;
+        border-radius: 20px;
         border: 1px solid transparent;
         font-size: 0.96rem;
         font-weight: 700;
@@ -298,13 +346,14 @@ function renderLandingPage(serviceName: string) {
         flex-wrap: wrap;
         gap: 12px;
         margin-top: 24px;
+        justify-content: center;
       }
 
       .feature-pill {
-        padding: 10px 14px;
+        padding: 11px 15px;
         border: 1px solid rgba(148, 163, 184, 0.18);
         border-radius: 999px;
-        background: rgba(8, 18, 29, 0.54);
+        background: rgba(8, 18, 29, 0.62);
         color: rgba(228, 238, 248, 0.88);
         font-size: 0.78rem;
         letter-spacing: 0.04em;
@@ -321,6 +370,7 @@ function renderLandingPage(serviceName: string) {
       }
 
       .preview-card {
+        width: min(100%, 860px);
         padding: 22px;
       }
 
@@ -339,6 +389,8 @@ function renderLandingPage(serviceName: string) {
 
       .preview-top {
         margin-bottom: 16px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.12);
       }
 
       .message {
@@ -360,6 +412,8 @@ function renderLandingPage(serviceName: string) {
       }
 
       .message p {
+        font-size: 0.98rem;
+        line-height: 1.6;
         color: rgba(236, 243, 251, 0.94);
       }
 
@@ -395,8 +449,9 @@ function renderLandingPage(serviceName: string) {
       }
 
       .section-header {
-        max-width: 42rem;
-        margin-bottom: 28px;
+        max-width: 46rem;
+        margin: 0 auto 28px;
+        text-align: center;
       }
 
       h2,
@@ -406,16 +461,20 @@ function renderLandingPage(serviceName: string) {
 
       .section-title {
         margin: 0 0 14px;
-        max-width: 12ch;
-        font-size: clamp(2rem, 4vw, 3.6rem);
+        max-width: 14ch;
+        margin-left: auto;
+        margin-right: auto;
+        font-size: clamp(2.15rem, 5vw, 3.8rem);
         line-height: 0.96;
         letter-spacing: -0.05em;
+        text-wrap: balance;
       }
 
       .install-shell {
         display: grid;
         grid-template-columns: minmax(0, 1.06fr) minmax(280px, 0.94fr);
-        gap: 18px;
+        gap: 20px;
+        align-items: start;
       }
 
       .step-list {
@@ -588,7 +647,6 @@ function renderLandingPage(serviceName: string) {
       }
 
       @media (max-width: 980px) {
-        .hero-grid,
         .install-shell {
           grid-template-columns: 1fr;
         }
@@ -610,12 +668,13 @@ function renderLandingPage(serviceName: string) {
         }
 
         .site-header {
-          align-items: flex-start;
           flex-direction: column;
+          align-items: stretch;
         }
 
         .site-nav {
           flex-wrap: wrap;
+          justify-content: center;
         }
 
         .section {
@@ -630,6 +689,10 @@ function renderLandingPage(serviceName: string) {
         .hero-title {
           font-size: clamp(2.8rem, 15vw, 4.25rem);
         }
+
+        .brand-name {
+          max-width: none;
+        }
       }
     </style>
   </head>
@@ -637,7 +700,12 @@ function renderLandingPage(serviceName: string) {
     <main>
       <header class="site-header">
         <div class="brand">
-          <div class="brand-mark">SQ</div>
+          <div class="brand-emblem">
+            <img
+              src="${STRUCTURED_QUERIES_MONOGRAM_DATA_URL}"
+              alt="Structured Queries monogram"
+            />
+          </div>
           <div class="brand-meta">
             <p class="brand-overline">Structure Queries</p>
             <p class="brand-name">Deep analysis for live webpages and blog posts</p>
