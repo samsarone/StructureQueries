@@ -19,7 +19,7 @@ function getServerHttpOrigin() {
   const rawValue =
     process.env.STRUCTUREDQUERIES_SERVER_ORIGIN ??
     process.env.STRUCTUREDQUERIES_SERVER_HTTP_ORIGIN ??
-    "https://structuredqueries.samsar.one";
+    "https://structurequeries.samsar.one";
 
   return trimTrailingSlash(rawValue.trim());
 }

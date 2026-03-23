@@ -24,7 +24,7 @@ The extension client defaults to `http://localhost:3000`.
 Set `STRUCTUREDQUERIES_SERVER_ORIGIN` before building the client if you want a different backend origin, for example:
 
 ```bash
-STRUCTUREDQUERIES_SERVER_ORIGIN=https://structuredqueries.samsar.one npm run build:client
+STRUCTUREDQUERIES_SERVER_ORIGIN=https://structurequeries.samsar.one npm run build:client
 ```
 
 ## Structure

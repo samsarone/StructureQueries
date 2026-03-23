@@ -27,10 +27,10 @@
     "storage"
   ],
   "host_permissions": [
-    "https://structuredqueries.samsar.one/*"
+    "https://structurequeries.samsar.one/*"
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://structuredqueries.samsar.one wss://structuredqueries.samsar.one;"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://structurequeries.samsar.one wss://structurequeries.samsar.one;"
   },
   "web_accessible_resources": [
     {
