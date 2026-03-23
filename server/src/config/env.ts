@@ -27,6 +27,7 @@ const DEFAULT_SAMSAR_SIMILARITY_LIMIT = 8;
 const DEFAULT_SAMSAR_EXTERNAL_USER_PROVIDER = "structuredqueries";
 const DEFAULT_SAMSAR_EXTERNAL_ASSISTANT_PROMPT_VERSION =
   "structuredqueries-rag-voice-v1";
+const DEFAULT_SAMSAR_PUBLIC_API_BASE_URL = "https://api.samsar.one";
 const DEFAULT_FIRECRAWL_API_URL = "https://api.firecrawl.dev";
 const DEFAULT_FIRECRAWL_CRAWL_LEVELS = 2;
 const DEFAULT_FIRECRAWL_MAX_LINKS = 5;
@@ -117,6 +118,9 @@ export const env = {
     },
     samsar: {
       apiKey: readOptional(process.env.SAMSAR_API_KEY),
+      publicApiBaseUrl:
+        readOptional(process.env.SAMSAR_PUBLIC_API_BASE_URL) ??
+        DEFAULT_SAMSAR_PUBLIC_API_BASE_URL,
       timeoutMs: DEFAULT_TIMEOUT_MS,
       assistantModel: undefined,
       assistantReasoningEffort: "medium",

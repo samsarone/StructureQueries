@@ -378,6 +378,22 @@ select option {
     rgba(33, 11, 18, 0.8);
 }
 
+.notice-banner {
+  position: relative;
+  z-index: 1;
+  padding: 6px 9px;
+  border-radius: 11px;
+  border: 1px solid rgba(103, 227, 141, 0.18);
+  background:
+    radial-gradient(circle at top right, rgba(103, 227, 141, 0.12), transparent 42%),
+    linear-gradient(180deg, rgba(10, 24, 18, 0.82), rgba(8, 18, 16, 0.9)),
+    rgba(11, 22, 18, 0.82);
+  font-size: 0.73rem;
+  font-weight: 600;
+  line-height: 1.36;
+  color: rgba(236, 255, 242, 0.94);
+}
+
 .top-credit-banner-message {
   margin: 0;
   min-width: 0;

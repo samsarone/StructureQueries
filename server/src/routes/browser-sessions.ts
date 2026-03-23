@@ -20,6 +20,10 @@ function readOptionalString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+function readOptionalBoolean(value: unknown) {
+  return typeof value === "boolean" ? value : undefined;
+}
+
 function readOptionalExternalUser(
   value: unknown
 ): Record<string, unknown> | undefined {
@@ -310,7 +314,7 @@ browserSessionsRouter.post("/register", async (request, response) => {
       preferredVoiceId: session.preferredVoiceId,
       userAgent: session.userAgent
     }, {
-      grantStarterCredits: true
+      grantStarterCredits: readOptionalBoolean(body.grantStarterCredits) ?? true
     });
     response.json(payload);
   } catch (error) {

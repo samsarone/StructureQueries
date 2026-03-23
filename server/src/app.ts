@@ -1,4 +1,6 @@
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import cors from "cors";
 import express, {
   type NextFunction,
@@ -16,10 +18,14 @@ import { healthRouter } from "./routes/health.js";
 import { messagesRouter } from "./routes/messages.js";
 import { stackRouter } from "./routes/stack.js";
 import { voicesRouter } from "./routes/voices.js";
+import { webAuthRouter } from "./routes/web-auth.js";
 import { webpagesRouter } from "./routes/webpages.js";
 import { backendStack } from "./stack.js";
 
 const CHROME_WEB_STORE_PLACEHOLDER_URL = "https://chromewebstore.google.com/";
+const CLIENT_PUBLIC_DIR = fileURLToPath(
+  new URL("../../client/public/", import.meta.url)
+);
 const STRUCTURED_QUERIES_MONOGRAM_DATA_URL = `data:image/svg+xml;base64,${Buffer.from(
   readFileSync(
     new URL("../../client/public/structured-queries-monogram.svg", import.meta.url)
@@ -477,6 +483,50 @@ function renderLandingPage(serviceName: string) {
         align-items: start;
       }
 
+      .interactive-copy {
+        display: grid;
+        gap: 14px;
+      }
+
+      .interactive-point {
+        padding: 18px 20px;
+        border: 1px solid rgba(122, 177, 211, 0.14);
+        border-radius: 22px;
+        background: linear-gradient(180deg, rgba(10, 18, 29, 0.88), rgba(5, 10, 18, 0.92));
+        box-shadow: var(--sq-card-shadow);
+      }
+
+      .interactive-point strong {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 1rem;
+        letter-spacing: -0.02em;
+      }
+
+      .interactive-point span {
+        display: block;
+        color: rgba(164, 203, 223, 0.88);
+        line-height: 1.6;
+      }
+
+      .interactive-shell {
+        display: grid;
+        gap: 18px;
+      }
+
+      .web-client-frame {
+        width: 100%;
+        min-height: 1180px;
+        border: 1px solid rgba(122, 177, 211, 0.16);
+        border-radius: 30px;
+        background:
+          radial-gradient(circle at 12% 16%, rgba(70, 191, 255, 0.12), transparent 26%),
+          linear-gradient(180deg, rgba(7, 13, 24, 0.96), rgba(5, 10, 18, 0.98));
+        box-shadow:
+          0 26px 80px rgba(0, 0, 0, 0.38),
+          0 0 0 1px rgba(122, 177, 211, 0.08) inset;
+      }
+
       .step-list {
         display: grid;
         gap: 14px;
@@ -651,6 +701,10 @@ function renderLandingPage(serviceName: string) {
           grid-template-columns: 1fr;
         }
 
+        .web-client-frame {
+          min-height: 1260px;
+        }
+
         .preview-stats {
           grid-template-columns: 1fr;
         }
@@ -789,126 +843,41 @@ function renderLandingPage(serviceName: string) {
 
       <section class="section" id="install">
         <div class="section-header">
-          <p class="eyebrow">Chrome Web Store</p>
-          <h2 class="section-title">Install the extension and start asking questions on any page.</h2>
+          <p class="eyebrow">Web client</p>
+          <h2 class="section-title">Try the full Structure Queries workflow on any public URL.</h2>
           <p class="section-copy">
-            Add Structure Queries to Chrome, open any page you want to understand, and move from reading to
-            grounded Q&amp;A in a few clicks.
+            This section embeds a web version of the plugin UI. Paste in a public URL, analyze the page,
+            and use the same voice-enabled Q&amp;A flow directly from the landing page.
           </p>
         </div>
 
         <div class="install-shell">
-          <div class="step-list" aria-label="Install workflow">
-            <article class="step-card">
-              <span class="step-index">01</span>
-              <h3>Open the page you care about</h3>
-              <p class="card-copy">Use it on long blog posts, technical docs, or any webpage where the important details are easy to miss.</p>
+          <div class="interactive-copy" aria-label="Web client overview">
+            <article class="interactive-point">
+              <strong>Enter any public page</strong>
+              <span>Use the embedded client for blog posts, docs, and dense webpages without needing the extension popup.</span>
             </article>
-
-            <article class="step-card">
-              <span class="step-index">02</span>
-              <h3>Let the extension prepare it</h3>
-              <p class="card-copy">Structure Queries analyzes the page, maps the structure, and gets the conversation ready before you ask anything.</p>
+            <article class="interactive-point">
+              <strong>Sign in across Samsar subdomains</strong>
+              <span>If you already have a Samsar session, the web client picks it up here. If not, it opens a login or registration flow before analysis starts.</span>
             </article>
-
-            <article class="step-card">
-              <span class="step-index">03</span>
-              <h3>Ask naturally by text or voice</h3>
-              <p class="card-copy">Follow up in plain language and get answers that stay anchored to the content already on the page.</p>
+            <article class="interactive-point">
+              <strong>Analyze, ask, and recharge in one place</strong>
+              <span>The same page analysis, speaker selection, voice interaction, credits, and recharge logic now live inside this landing page section.</span>
             </article>
           </div>
 
-          <aside class="store-card" aria-label="Chrome Web Store install">
-            <div class="label">
-              <span>Chrome Web Store</span>
-              <span>Extension</span>
-            </div>
-            <div>
-              <h3>Get the extension</h3>
-              <p class="card-copy">Install Structure Queries in Chrome to analyze pages, surface the key structure, and start a voice-enabled Q&amp;A flow on top of the live page.</p>
-            </div>
-            <a
-              class="button button-primary button-full"
-              href="${CHROME_WEB_STORE_PLACEHOLDER_URL}"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Install from WebStore
-            </a>
-            <p class="store-note">This will point to the Chrome Web Store listing as soon as publishing is complete.</p>
-          </aside>
+          <div class="interactive-shell">
+            <iframe
+              class="web-client-frame"
+              src="/web-client"
+              title="Structured Queries web client"
+              loading="lazy"
+            ></iframe>
+          </div>
         </div>
       </section>
 
-      <section class="section" id="assets">
-        <div class="section-header">
-          <p class="eyebrow">Product visuals</p>
-          <h2 class="section-title">A simple layout for analysis, conversation, and source grounding.</h2>
-          <p class="section-copy">
-            The landing page can support a wide analysis view, a focused conversation panel, and proof that each
-            answer stays tied to the source.
-          </p>
-        </div>
-
-        <div class="asset-grid" aria-label="Product visual layouts">
-          <article class="asset-card asset-card-wide">
-            <div class="label">
-              <span>Analysis View</span>
-              <span>Overview</span>
-            </div>
-            <div>
-              <h3>Webpage analysis visual</h3>
-              <p class="asset-copy">A wide visual for showing how a long page is broken into sections, summaries, and the key ideas worth following up on.</p>
-            </div>
-            <div class="placeholder-frame" aria-hidden="true">
-              <div class="placeholder-toolbar">
-                <span class="placeholder-dot"></span>
-                <span class="placeholder-dot"></span>
-                <span class="placeholder-dot"></span>
-              </div>
-              <div class="placeholder-lines">
-                <span class="placeholder-line line-long"></span>
-                <span class="placeholder-line line-medium"></span>
-                <span class="placeholder-line line-long"></span>
-                <span class="placeholder-line line-short"></span>
-              </div>
-            </div>
-          </article>
-
-          <article class="asset-card">
-            <div class="label">
-              <span>Conversation</span>
-              <span>Q&amp;A</span>
-            </div>
-            <div>
-              <h3>Conversation snapshot</h3>
-              <p class="asset-copy">A focused panel for showing the voice or text conversation experience once the page has been prepared.</p>
-            </div>
-            <div class="placeholder-chat" aria-hidden="true">
-              <span class="placeholder-bubble"></span>
-              <span class="placeholder-bubble"></span>
-              <span class="placeholder-bubble"></span>
-            </div>
-          </article>
-
-          <article class="asset-card">
-            <div class="label">
-              <span>Grounding</span>
-              <span>Sources</span>
-            </div>
-            <div>
-              <h3>Source-backed answers</h3>
-              <p class="asset-copy">A compact visual for citations, highlighted passages, or source links that support each answer.</p>
-            </div>
-            <div class="placeholder-source" aria-hidden="true">
-              <span class="placeholder-chip"></span>
-              <span class="placeholder-chip"></span>
-              <span class="placeholder-chip"></span>
-              <span class="placeholder-chip"></span>
-            </div>
-          </article>
-        </div>
-      </section>
     </main>
   </body>
 </html>`;
@@ -925,12 +894,17 @@ export function createApp() {
     })
   );
   app.use(express.json());
+  app.use("/landing-assets", express.static(CLIENT_PUBLIC_DIR));
 
   app.get("/", (_request, response) => {
     response.type("html").send(renderLandingPage(env.serviceName));
   });
+  app.get("/web-client", (_request, response) => {
+    response.sendFile(join(CLIENT_PUBLIC_DIR, "web-plugin.html"));
+  });
 
   app.use("/api/browser-sessions", browserSessionsRouter);
+  app.use("/api/web-auth", webAuthRouter);
   app.use("/api/chat-completion", proxyChatCompletionRouter);
   app.use("/api/health", healthRouter);
   app.use("/api/messages", messagesRouter);

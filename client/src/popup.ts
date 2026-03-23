@@ -11,12 +11,15 @@ const LEGACY_ANALYZED_PAGES_STORAGE_KEY = "telepathy.analyzedPages";
 const LEGACY_REGISTRATION_STORAGE_KEY = "telepathy.registration";
 const STARTER_CREDITS = 50;
 const LOW_CREDIT_WARNING_THRESHOLD = 100;
+const CONVERSATION_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
+const NOTIFICATION_DURATION_MS = 6_000;
 const creditCountFormatter = new Intl.NumberFormat();
 
 interface ExtensionSessionPayload {
   ok: boolean;
   browserSessionId: string;
   extensionId: string;
+  tabId?: number | null;
 }
 
 interface ServerHealthPayload {
@@ -125,6 +128,7 @@ interface AppState {
   assistantSessionId?: string;
   browserSessionId?: string;
   extensionId?: string;
+  hostTabId?: number;
   currentUser?: StructureQueriesExternalUserPayload | null;
   currentPage?: PageContext;
   currentTemplateId?: string;
@@ -149,6 +153,7 @@ interface AppState {
   preferredVoiceName?: string;
   voicePreviewState: "idle" | "loading" | "playing";
   voicePreviewVoiceId?: string;
+  notificationMessage?: string;
   pendingAssistantText?: string;
   conversationActive: boolean;
   assistantSpeaking: boolean;
@@ -220,6 +225,8 @@ const creditWarningButton =
   document.querySelector<HTMLButtonElement>("#credit-warning-button");
 const creditWarningDismissButton =
   document.querySelector<HTMLButtonElement>("#credit-warning-dismiss-button");
+const notificationNode =
+  document.querySelector<HTMLElement>("#notification-banner");
 const voiceToggleButton =
   document.querySelector<HTMLButtonElement>("#voice-toggle-button");
 const voiceToggleButtonLabel =
@@ -255,6 +262,7 @@ const state: AppState = {
   preferredVoiceName: undefined,
   voicePreviewState: "idle",
   voicePreviewVoiceId: undefined,
+  notificationMessage: undefined,
   conversationActive: false,
   assistantSpeaking: false,
   recording: false
@@ -266,6 +274,8 @@ let activeAssistantAudio: HTMLAudioElement | undefined;
 let activeAssistantAudioObjectUrl: string | undefined;
 let activeVoicePreviewAudio: HTMLAudioElement | undefined;
 let resumeConversationTimer: number | undefined;
+let conversationIdleTimer: number | undefined;
+let notificationTimer: number | undefined;
 let assistantAudioReceivedForTurn = false;
 
 const BUTTON_ICONS = {
@@ -461,6 +471,74 @@ function clearResumeConversationTimer() {
   resumeConversationTimer = undefined;
 }
 
+function clearConversationIdleTimer() {
+  if (typeof conversationIdleTimer === "number") {
+    window.clearTimeout(conversationIdleTimer);
+  }
+
+  conversationIdleTimer = undefined;
+}
+
+function clearNotificationTimer() {
+  if (typeof notificationTimer === "number") {
+    window.clearTimeout(notificationTimer);
+  }
+
+  notificationTimer = undefined;
+}
+
+function hideNotification() {
+  clearNotificationTimer();
+
+  if (!state.notificationMessage) {
+    return;
+  }
+
+  state.notificationMessage = undefined;
+  render();
+}
+
+function showNotification(
+  message: string,
+  durationMs = NOTIFICATION_DURATION_MS
+) {
+  clearNotificationTimer();
+  state.notificationMessage = message;
+  render();
+
+  if (durationMs <= 0) {
+    return;
+  }
+
+  notificationTimer = window.setTimeout(() => {
+    notificationTimer = undefined;
+
+    if (state.notificationMessage !== message) {
+      return;
+    }
+
+    state.notificationMessage = undefined;
+    render();
+  }, durationMs);
+}
+
+function resetConversationIdleTimer() {
+  clearConversationIdleTimer();
+
+  if (!state.conversationActive && !state.recording && !state.assistantSpeaking) {
+    return;
+  }
+
+  conversationIdleTimer = window.setTimeout(() => {
+    void stopConversationMode({
+      detail: "Idle timeout",
+      logMessage: "Voice turned off after 10 minutes idle. Start voice when you're ready.",
+      notificationMessage:
+        "You've been idle for 10 minutes. Start voice when you're ready."
+    });
+  }, CONVERSATION_IDLE_TIMEOUT_MS);
+}
+
 function stopAssistantPlayback() {
   clearResumeConversationTimer();
   state.assistantSpeaking = false;
@@ -587,8 +665,9 @@ async function toggleVoicePreviewPlayback() {
   }
 }
 
-function requestOverlayClose() {
+async function requestOverlayClose() {
   stopVoicePreviewPlayback();
+  await stopRecording();
 
   if (window.parent && window.parent !== window) {
     window.parent.postMessage({
@@ -1166,6 +1245,7 @@ function render() {
   setText(settingsCreditsCaptionNode, settingsCreditsCaption);
   setText(voiceWarningNode, state.voiceWarning ?? "");
   setText(creditWarningMessageNode, creditBannerMessage);
+  setText(notificationNode, state.notificationMessage ?? "");
 
   if (voiceWarningNode) {
     voiceWarningNode.hidden = !state.voiceWarning;
@@ -1174,6 +1254,10 @@ function render() {
   if (creditWarningNode) {
     creditWarningNode.hidden = !showCreditBanner;
     creditWarningNode.style.display = showCreditBanner ? "" : "none";
+  }
+
+  if (notificationNode) {
+    notificationNode.hidden = !state.notificationMessage;
   }
 
   document.body.dataset.loading = state.isInitializing ? "true" : "false";
@@ -1349,25 +1433,30 @@ async function getActiveTab() {
   return activeTab;
 }
 
-async function sendMessageToActiveTab<T>(message: RuntimeMessage) {
+async function sendMessageToClientTab<T>(message: RuntimeMessage) {
   const activeTab = await getActiveTab();
+  const tabId =
+    typeof state.hostTabId === "number" ? state.hostTabId : activeTab?.id;
+  const tabUrl =
+    state.currentPage?.url ??
+    (typeof state.hostTabId === "number" ? undefined : activeTab?.url);
 
-  if (!activeTab || typeof activeTab.id !== "number") {
+  if (typeof tabId !== "number") {
     throw new Error("No active browser tab is available.");
   }
 
   try {
-    return (await chrome.tabs.sendMessage(activeTab.id, message)) as T;
+    return (await chrome.tabs.sendMessage(tabId, message)) as T;
   } catch (error) {
-    if (isMissingReceiverError(error) && isInjectableTabUrl(activeTab.url)) {
+    if (isMissingReceiverError(error) && isInjectableTabUrl(tabUrl)) {
       await chrome.scripting.executeScript({
         target: {
-          tabId: activeTab.id
+          tabId
         },
         files: ["content.js"]
       });
 
-      return (await chrome.tabs.sendMessage(activeTab.id, message)) as T;
+      return (await chrome.tabs.sendMessage(tabId, message)) as T;
     }
 
     throw error;
@@ -1376,7 +1465,7 @@ async function sendMessageToActiveTab<T>(message: RuntimeMessage) {
 
 async function stopPageRecordingCapture() {
   try {
-    const response = await sendMessageToActiveTab<{
+    const response = await sendMessageToClientTab<{
       ok?: boolean;
       error?: string;
     }>({
@@ -1415,26 +1504,27 @@ function showInsufficientCreditsState(message?: string | null) {
 
 async function fetchPageContext() {
   const activeTab = await getActiveTab();
+  const hostTabId = typeof state.hostTabId === "number" ? state.hostTabId : undefined;
 
-  if (!activeTab) {
+  if (!activeTab && typeof hostTabId !== "number") {
     return undefined;
   }
 
   let pageContext: PageContext | undefined;
 
-  if (typeof activeTab.id === "number") {
+  if (typeof hostTabId === "number") {
     try {
-      pageContext = await requestPageContextFromTab(activeTab.id);
+      pageContext = await requestPageContextFromTab(hostTabId);
     } catch (error) {
-      if (isMissingReceiverError(error) && isInjectableTabUrl(activeTab.url)) {
+      if (isMissingReceiverError(error) && isInjectableTabUrl(state.currentPage?.url)) {
         try {
           await chrome.scripting.executeScript({
             target: {
-              tabId: activeTab.id
+              tabId: hostTabId
             },
             files: ["content.js"]
           });
-          pageContext = await requestPageContextFromTab(activeTab.id);
+          pageContext = await requestPageContextFromTab(hostTabId);
         } catch (retryError) {
           console.warn(
             "Failed to inject content script into active tab",
@@ -1448,9 +1538,14 @@ async function fetchPageContext() {
   }
 
   return {
-    title: pageContext?.title ?? activeTab.title ?? "Untitled page",
-    url: pageContext?.url ?? activeTab.url,
-    documentLanguage: pageContext?.documentLanguage
+    title:
+      pageContext?.title ??
+      activeTab?.title ??
+      state.currentPage?.title ??
+      "Untitled page",
+    url: pageContext?.url ?? state.currentPage?.url ?? activeTab?.url,
+    documentLanguage:
+      pageContext?.documentLanguage ?? state.currentPage?.documentLanguage
   };
 }
 
@@ -1862,6 +1957,7 @@ function closeWebSocketSession(input?: {
   detail?: string;
 }) {
   clearResumeConversationTimer();
+  clearConversationIdleTimer();
   stopAssistantPlayback();
   stopVoicePreviewPlayback();
 
@@ -1963,6 +2059,43 @@ function handleConversationLoopError(error: unknown) {
   appendLog("system", message);
 }
 
+async function stopConversationMode(input?: {
+  detail?: string;
+  logMessage?: string;
+  notificationMessage?: string;
+}) {
+  if (!state.conversationActive && !state.recording && !state.assistantSpeaking) {
+    return;
+  }
+
+  clearResumeConversationTimer();
+  clearConversationIdleTimer();
+  state.conversationActive = false;
+  state.recording = false;
+  state.websocketPhase = "idle";
+  state.websocketDetail = input?.detail ?? "Stopped";
+  stopAssistantPlayback();
+  render();
+
+  try {
+    await stopPageRecordingCapture();
+  } finally {
+    closeWebSocketSession({
+      phase: "idle",
+      detail: input?.detail ?? "Stopped"
+    });
+    render();
+  }
+
+  if (input?.logMessage) {
+    appendLog("system", input.logMessage);
+  }
+
+  if (input?.notificationMessage) {
+    showNotification(input.notificationMessage);
+  }
+}
+
 async function startConversationTurn() {
   if (
     !state.conversationActive ||
@@ -1980,7 +2113,7 @@ async function startConversationTurn() {
   state.websocketDetail = "Listening...";
   render();
   await ensureWebSocketSession();
-  const response = await sendMessageToActiveTab<{
+  const response = await sendMessageToClientTab<{
     ok?: boolean;
     error?: string;
   }>({
@@ -2304,6 +2437,7 @@ async function ensureWebSocketSession() {
     socket.addEventListener("close", () => {
       if (activeSocket === socket) {
         activeSocket = undefined;
+        clearConversationIdleTimer();
         state.conversationActive = false;
         state.recording = false;
         state.assistantSpeaking = false;
@@ -2462,6 +2596,7 @@ async function startRecording() {
   }
 
   stopVoicePreviewPlayback();
+  hideNotification();
   state.conversationActive = true;
   state.websocketPhase = "connected";
   state.websocketDetail = "Starting...";
@@ -2469,7 +2604,9 @@ async function startRecording() {
 
   try {
     await startConversationTurn();
+    resetConversationIdleTimer();
   } catch (error) {
+    clearConversationIdleTimer();
     state.conversationActive = false;
 
     try {
@@ -2484,26 +2621,9 @@ async function startRecording() {
 }
 
 async function stopRecording() {
-  if (!state.conversationActive && !state.recording && !state.assistantSpeaking) {
-    return;
-  }
-
-  clearResumeConversationTimer();
-  state.conversationActive = false;
-  state.recording = false;
-  state.websocketPhase = "idle";
-  state.websocketDetail = "Stopped";
-  stopAssistantPlayback();
-  render();
-
-  try {
-    await stopPageRecordingCapture();
-  } finally {
-    closeWebSocketSession({
-      phase: "idle",
-      detail: "Stopped"
-    });
-  }
+  await stopConversationMode({
+    detail: "Stopped"
+  });
 }
 
 async function analyzeCurrentPage() {
@@ -2588,6 +2708,10 @@ async function refreshAll() {
 
     state.browserSessionId = extensionSession.browserSessionId;
     state.extensionId = extensionSession.extensionId;
+    state.hostTabId =
+      typeof extensionSession.tabId === "number"
+        ? extensionSession.tabId
+        : state.hostTabId;
 
     await loadRegistrationState();
     await refreshServerStatus();
@@ -2625,6 +2749,7 @@ chrome.runtime.onMessage.addListener((message) => {
     state.recording = true;
     state.websocketPhase = "ready";
     state.websocketDetail = "Listening...";
+    resetConversationIdleTimer();
     render();
     return false;
   }
@@ -2641,6 +2766,7 @@ chrome.runtime.onMessage.addListener((message) => {
     message?.type === "OFFSCREEN_AUDIO_READY" ||
     message?.type === "PAGE_AUDIO_READY"
   ) {
+    resetConversationIdleTimer();
     void submitRecordedAudioBase64(
       typeof message.audioBase64 === "string" ? message.audioBase64 : "",
       typeof message.mimeType === "string" ? message.mimeType : "audio/webm",
@@ -2682,6 +2808,7 @@ chrome.runtime.onMessage.addListener((message) => {
     message?.type === "PAGE_RECORDING_ERROR"
   ) {
     state.recording = false;
+    clearConversationIdleTimer();
     state.conversationActive = false;
     state.websocketPhase = "error";
     state.websocketDetail = "Microphone unavailable";
@@ -2790,6 +2917,17 @@ window.addEventListener("pagehide", () => {
   void stopRecording();
 });
 
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "hidden") {
+    return;
+  }
+
+  void stopConversationMode({
+    detail: "Stopped",
+    logMessage: "Voice stopped when you left this tab."
+  });
+});
+
 window.addEventListener("focus", () => {
   if (
     state.creditIssueMessage &&
@@ -2809,7 +2947,7 @@ window.addEventListener("keydown", (event) => {
       return;
     }
 
-    requestOverlayClose();
+    void requestOverlayClose();
   }
 });
 
