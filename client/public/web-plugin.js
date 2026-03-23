@@ -506,12 +506,19 @@
 
     if (!response.ok) {
       const errorMessage =
-        typeof body === "object" && body && "error" in body
-          ? body.error
-          : typeof body === "string" && body.trim()
-            ? body
-            : `Request failed with ${response.status}`;
-      throw new Error(errorMessage);
+        typeof body === "object" && body && "error" in body && typeof body.error === "string" && body.error.trim()
+          ? body.error.trim()
+          : typeof body === "object" && body && "message" in body && typeof body.message === "string" && body.message.trim()
+            ? body.message.trim()
+            : typeof body === "string" && body.trim()
+              ? body
+              : `Request failed with ${response.status}`;
+      const error = new Error(errorMessage);
+      if (typeof body === "object" && body && "code" in body && typeof body.code === "string") {
+        error.code = body.code;
+      }
+      error.status = response.status;
+      throw error;
     }
 
     return body;
@@ -1320,8 +1327,12 @@
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to analyze the page.";
+      const code =
+        error && typeof error === "object" && "code" in error && typeof error.code === "string"
+          ? error.code
+          : null;
 
-      if (isInsufficientCreditsMessage(message)) {
+      if (code === "insufficient_credits" || isInsufficientCreditsMessage(message)) {
         showInsufficientCreditsState(message);
       } else {
         appendLog("system", message);

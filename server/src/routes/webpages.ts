@@ -13,7 +13,8 @@ import {
 import {
   getSamsarErrorContext,
   getSamsarErrorMessage,
-  getSamsarErrorStatus
+  getSamsarErrorStatus,
+  isSamsarCreditsIssue
 } from "../lib/samsar-errors.js";
 
 function createEmbeddingName(title: string | undefined, url: string) {
@@ -317,6 +318,9 @@ webpagesRouter.post("/analyze", async (request, response) => {
       }
     });
   } catch (error) {
+    const samsarErrorContext = getSamsarErrorContext(error);
+    const insufficientCredits = isSamsarCreditsIssue(error);
+
     console.error("Failed to analyze webpage with Samsar", {
       url,
       firecrawl:
@@ -334,7 +338,7 @@ webpagesRouter.post("/analyze", async (request, response) => {
                 (error as { details?: unknown }).details ?? undefined
             }
           : undefined,
-      samsar: getSamsarErrorContext(error)
+      samsar: samsarErrorContext
     });
 
     const statusCode =
@@ -346,10 +350,16 @@ webpagesRouter.post("/analyze", async (request, response) => {
 
     response.status(statusCode).json({
       ok: false,
-      error: getSamsarErrorMessage(
-        error,
-        "Failed to analyze this document with Samsar."
-      )
+      error: getSamsarErrorMessage(error, "Failed to analyze this document with Samsar."),
+      ...(insufficientCredits
+        ? {
+            code: "insufficient_credits",
+            creditsRemaining:
+              typeof samsarErrorContext?.creditsRemaining === "number"
+                ? samsarErrorContext.creditsRemaining
+                : 0
+          }
+        : {})
     });
   }
 });

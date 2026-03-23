@@ -1396,12 +1396,18 @@ async function fetchJson<T>(path: string, init?: RequestInit) {
 
   if (!response.ok) {
     let errorMessage = `Request failed with ${response.status}`;
+    let errorCode: string | undefined;
 
     try {
       const payload = (await response.json()) as {
+        code?: string;
         error?: string;
         message?: string;
       };
+
+      if (typeof payload.code === "string" && payload.code.trim()) {
+        errorCode = payload.code.trim();
+      }
 
       if (typeof payload.error === "string" && payload.error.trim()) {
         errorMessage = payload.error.trim();
@@ -1415,7 +1421,13 @@ async function fetchJson<T>(path: string, init?: RequestInit) {
       // Keep the default HTTP status message when the response is not JSON.
     }
 
-    throw new Error(errorMessage);
+    const error = new Error(errorMessage) as Error & {
+      code?: string;
+      status?: number;
+    };
+    error.code = errorCode;
+    error.status = response.status;
+    throw error;
   }
 
   return (await response.json()) as T;

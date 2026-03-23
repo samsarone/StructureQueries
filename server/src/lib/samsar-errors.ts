@@ -98,7 +98,9 @@ export function getSamsarErrorMessage(
     const detail = extractErrorDetail(error.body);
 
     if (isCreditsIssue(error, detail)) {
-      return `${normalizedActionMessage}: not enough Samsar credits are available for this request.`;
+      return detail
+        ? `${normalizedActionMessage}: ${detail}`
+        : `${normalizedActionMessage}: not enough Samsar credits are available for this request.`;
     }
 
     if (detail) {

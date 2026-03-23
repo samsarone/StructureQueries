@@ -137,7 +137,7 @@ Firecrawl local/self-hosted note:
 
 - the server uses `@mendable/firecrawl-js`
 - by default it targets `https://api.firecrawl.dev`
-- by default the proxy crawls up to `10` pages across up to `5` discovery levels; lower or raise that with `FIRECRAWL_MAX_LINKS` and `FIRECRAWL_CRAWL_LEVELS`
+- by default the proxy allows up to `10` pages across up to `5` discovery levels, but it now prefers the seed page first and only spends child-link crawl credits when the seed page is too short to stand on its own
 - if you run Firecrawl locally, set `FIRECRAWL_API_URL` to your local Firecrawl base URL and set `FIRECRAWL_API_KEY` to the key expected by that instance
 - webpage analysis endpoints require both `FIRECRAWL_API_KEY` and `SAMSAR_API_KEY`
 

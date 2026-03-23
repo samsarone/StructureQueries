@@ -10,6 +10,8 @@ const MAX_URL_SEEDS_PER_REQUEST = 50;
 const MAX_PRIMARY_RECORD_CONTENT_CHARS = 8_000;
 const MAX_CHILD_RECORD_CONTENT_CHARS = 1_600;
 const MAX_CHILD_RECORD_EXCERPT_CHARS = 900;
+const MAX_ADAPTIVE_CHILD_LINKS = 5;
+const MIN_PRIMARY_WORDS_FOR_CHILD_CRAWL = 1_200;
 const FIRECRAWL_MIN_REQUEST_INTERVAL_MS = 500;
 const FIRECRAWL_MIN_JOB_START_INTERVAL_MS = 8_000;
 const FIRECRAWL_MAX_RATE_LIMIT_RETRIES = 8;
@@ -411,6 +413,11 @@ function splitTextIntoChunks(text: string, maxChars: number) {
   }
 
   return chunks;
+}
+
+function countWords(text: string) {
+  const matches = text.trim().match(/\S+/g);
+  return matches ? matches.length : 0;
 }
 
 function normalizeUrlValue(value: unknown) {
@@ -1122,6 +1129,22 @@ async function crawlSeedUrlWithFallback(
   crawlLevels: number,
   crawlLimit: number
 ) {
+  const createPrimaryOnlyResult = (
+    primaryDocument: FirecrawlDocument,
+    crawlErrors: FirecrawlCrawlErrors = {
+      errors: [],
+      robotsBlocked: []
+    }
+  ) => ({
+    job: {
+      status: "completed",
+      creditsUsed: getFirecrawlCreditsUsedFromDocument(primaryDocument, 1),
+      completed: 1,
+      data: [primaryDocument]
+    } satisfies FirecrawlCrawlJob,
+    crawlErrors
+  });
+
   const genericCrawl = async () => {
     const job = (await firecrawlWithRetry(
       () =>
@@ -1172,24 +1195,33 @@ async function crawlSeedUrlWithFallback(
     };
   };
 
-  if (crawlLevels !== 2 || crawlLimit <= 1) {
-    return genericCrawl();
-  }
-
   const primaryDocument = await scrapePrimaryDocument(client, seedUrl);
 
   if (!primaryDocument) {
     return genericCrawl();
   }
 
+  const primarySection = buildDocumentSection(primaryDocument, seedUrl);
+  const primaryWordCount = countWords(
+    cleanEmbeddingSourceText(primarySection?.sectionText ?? extractDocumentText(primaryDocument))
+  );
+  const shouldCrawlChildren =
+    crawlLevels > 1 &&
+    crawlLimit > 1 &&
+    primaryWordCount < MIN_PRIMARY_WORDS_FOR_CHILD_CRAWL;
+
+  if (!shouldCrawlChildren) {
+    return createPrimaryOnlyResult(primaryDocument);
+  }
+
   const childUrls = selectPrioritizedChildLinks(
     seedUrl,
     primaryDocument,
-    Math.max(0, crawlLimit - 1)
+    Math.min(MAX_ADAPTIVE_CHILD_LINKS, Math.max(0, crawlLimit - 1))
   );
 
   if (childUrls.length === 0) {
-    return genericCrawl();
+    return createPrimaryOnlyResult(primaryDocument);
   }
 
   try {
@@ -1215,7 +1247,7 @@ async function crawlSeedUrlWithFallback(
       crawlErrors: batchResult.crawlErrors
     };
   } catch {
-    return genericCrawl();
+    return createPrimaryOnlyResult(primaryDocument);
   }
 }
 
