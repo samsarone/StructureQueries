@@ -115,15 +115,12 @@ function renderLandingPage(serviceName: string) {
       }
 
       .site-header {
-        position: fixed;
-        top: 16px;
-        left: 50%;
-        transform: translateX(-50%);
+        position: relative;
         z-index: 4;
-        width: min(420px, calc(100vw - 32px));
+        width: auto;
         display: flex;
         align-items: center;
-        justify-content: center;
+        justify-content: space-between;
         gap: 12px;
         padding: 10px 12px;
         border: 1px solid rgba(122, 177, 211, 0.08);
@@ -135,6 +132,7 @@ function renderLandingPage(serviceName: string) {
         backdrop-filter: blur(14px);
         opacity: 0.34;
         pointer-events: none;
+        margin-bottom: 18px;
       }
 
       .brand {
@@ -191,31 +189,18 @@ function renderLandingPage(serviceName: string) {
         max-width: 34ch;
         color: rgba(204, 219, 233, 0.72);
         font-size: 0.8rem;
-        line-height: 1.38;
-        text-align: center;
+        line-height: 1.48;
+        text-align: left;
       }
 
-      .site-nav {
-        display: flex;
-        align-items: center;
-        gap: 18px;
-        padding: 10px 14px;
-        border: 1px solid rgba(148, 163, 184, 0.16);
-        border-radius: 999px;
-        background: rgba(8, 18, 29, 0.58);
-      }
-
-      .site-nav a {
-        color: rgba(204, 219, 233, 0.8);
+      .site-banner-install {
+        color: rgba(204, 219, 233, 0.26);
         font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
-        font-size: 0.76rem;
-        letter-spacing: 0.14em;
-        text-decoration: none;
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.16em;
         text-transform: uppercase;
-      }
-
-      .site-nav a:hover {
-        color: var(--sq-ink);
+        white-space: nowrap;
       }
 
       .section {
@@ -261,7 +246,7 @@ function renderLandingPage(serviceName: string) {
         min-height: calc(100vh - 24px);
         display: flex;
         align-items: center;
-        padding-top: clamp(16px, 2vw, 24px);
+        padding-top: clamp(18px, 2vw, 28px);
       }
 
       .hero-grid {
@@ -288,7 +273,7 @@ function renderLandingPage(serviceName: string) {
         gap: 0.02em;
         justify-items: start;
         font-size: clamp(2.15rem, 4.2vw, 3.7rem);
-        line-height: 0.94;
+        line-height: 0.98;
         letter-spacing: -0.06em;
         text-wrap: balance;
       }
@@ -299,9 +284,9 @@ function renderLandingPage(serviceName: string) {
 
       .hero-title-line-support {
         max-width: 28ch;
-        margin-top: -0.08em;
+        margin-top: -0.14em;
         font-size: 0.28em;
-        line-height: 1.14;
+        line-height: 1.2;
         letter-spacing: -0.04em;
         color: rgba(228, 238, 248, 0.9);
         text-wrap: balance;
@@ -326,6 +311,8 @@ function renderLandingPage(serviceName: string) {
         opacity: 0;
         border-right: 0.05em solid rgba(123, 226, 255, 0.78);
         animation: hero-type-cycle 20s infinite;
+        animation-timing-function: steps(24, end);
+        animation-fill-mode: both;
         will-change: width, opacity;
       }
 
@@ -378,8 +365,8 @@ function renderLandingPage(serviceName: string) {
       .store-note,
       .asset-copy {
         color: rgba(164, 203, 223, 0.88);
-        font-size: 0.96rem;
-        line-height: 1.55;
+        font-size: 0.98rem;
+        line-height: 1.66;
       }
 
       .hero-description,
@@ -530,7 +517,7 @@ function renderLandingPage(serviceName: string) {
 
       .message p {
         font-size: 0.84rem;
-        line-height: 1.38;
+        line-height: 1.48;
         color: rgba(236, 243, 251, 0.94);
       }
 
@@ -562,7 +549,7 @@ function renderLandingPage(serviceName: string) {
         margin-top: 4px;
         color: rgba(155, 169, 186, 0.88);
         font-size: 0.76rem;
-        line-height: 1.34;
+        line-height: 1.44;
       }
 
       .section-header {
@@ -810,10 +797,7 @@ function renderLandingPage(serviceName: string) {
       @media (max-width: 980px) {
         #top {
           min-height: auto;
-        }
-
-        .hero-install-overlay {
-          display: none;
+          padding-top: 26px;
         }
 
         .install-shell {
@@ -869,14 +853,17 @@ function renderLandingPage(serviceName: string) {
           padding-top: 16px;
         }
 
-        .site-header {
-          flex-direction: column;
-          align-items: stretch;
+        #top {
+          padding-top: 96px;
         }
 
-        .site-nav {
-          flex-wrap: wrap;
-          justify-content: center;
+        .site-header {
+          position: fixed;
+          top: 12px;
+          left: 12px;
+          right: 12px;
+          margin-bottom: 0;
+          opacity: 0.46;
         }
 
         .section {
@@ -889,7 +876,7 @@ function renderLandingPage(serviceName: string) {
         }
 
         .hero-title {
-          font-size: clamp(2.8rem, 15vw, 4.25rem);
+          font-size: clamp(2.35rem, 12vw, 3.4rem);
         }
 
         .hero-title-rotator {
@@ -897,17 +884,31 @@ function renderLandingPage(serviceName: string) {
         }
 
         .hero-title-phrase {
-          font-size: 0.82em;
+          font-size: 0.76em;
         }
 
         .hero-title-line-support {
           max-width: 22ch;
           margin-top: 0;
-          font-size: 0.31em;
+          font-size: 0.28em;
         }
 
         .brand-name {
           max-width: none;
+          text-align: center;
+        }
+
+        .site-banner-install {
+          display: none;
+        }
+
+        .hero-description,
+        .section-copy,
+        .card-copy,
+        .store-note,
+        .asset-copy {
+          font-size: 0.92rem;
+          line-height: 1.6;
         }
       }
 
@@ -928,23 +929,22 @@ function renderLandingPage(serviceName: string) {
   </head>
   <body>
     <main>
-      <header class="site-header">
-        <div class="brand">
-          <div class="brand-emblem">
-            <img
-              src="${STRUCTURED_QUERIES_MONOGRAM_DATA_URL}"
-              alt="Structure Queries monogram"
-            />
-          </div>
-        <div class="brand-meta">
-          <p class="brand-overline">Structure Queries</p>
-          <p class="brand-name">Deep page analysis with voice-enabled Q&amp;A.</p>
-        </div>
-        </div>
-      </header>
-
       <section class="section" id="top">
-        <div class="hero-install-overlay">Install from WebStore</div>
+        <header class="site-header">
+          <div class="brand">
+            <div class="brand-emblem">
+              <img
+                src="${STRUCTURED_QUERIES_MONOGRAM_DATA_URL}"
+                alt="Structure Queries monogram"
+              />
+            </div>
+            <div class="brand-meta">
+              <p class="brand-overline">Structure Queries</p>
+              <p class="brand-name">Deep page analysis with voice-enabled Q&amp;A.</p>
+            </div>
+          </div>
+          <div class="site-banner-install">Install from WebStore</div>
+        </header>
         <div class="hero-grid">
           <div class="hero-copy">
             <h1 class="hero-title">
