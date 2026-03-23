@@ -110,21 +110,21 @@ function renderLandingPage(serviceName: string) {
         width: min(1180px, calc(100% - 32px));
         margin: 0 auto;
         display: grid;
-        gap: 18px;
-        padding: 14px 0 56px;
+        gap: 14px;
+        padding: 10px 0 48px;
       }
 
       .site-header {
-        position: sticky;
-        top: 12px;
+        position: relative;
+        top: 0;
         z-index: 3;
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 20px;
-        padding: 12px 14px;
+        justify-content: flex-start;
+        gap: 12px;
+        padding: 10px 12px;
         border: 1px solid rgba(122, 177, 211, 0.18);
-        border-radius: 24px;
+        border-radius: 22px;
         background:
           linear-gradient(180deg, rgba(10, 19, 32, 0.9), rgba(7, 13, 24, 0.88)),
           rgba(8, 16, 28, 0.82);
@@ -139,11 +139,11 @@ function renderLandingPage(serviceName: string) {
       }
 
       .brand-emblem {
-        width: 44px;
-        height: 44px;
+        width: 40px;
+        height: 40px;
         padding: 4px;
         flex-shrink: 0;
-        border-radius: 18px;
+        border-radius: 16px;
         border: 1px solid rgba(143, 223, 255, 0.16);
         background:
           linear-gradient(180deg, rgba(13, 24, 41, 0.86), rgba(7, 13, 23, 0.82)),
@@ -185,8 +185,8 @@ function renderLandingPage(serviceName: string) {
       .brand-name {
         max-width: 34ch;
         color: rgba(204, 219, 233, 0.84);
-        font-size: 0.92rem;
-        line-height: 1.45;
+        font-size: 0.84rem;
+        line-height: 1.38;
       }
 
       .site-nav {
@@ -255,31 +255,33 @@ function renderLandingPage(serviceName: string) {
         min-height: calc(100vh - 122px);
         display: flex;
         align-items: center;
+        padding-top: clamp(22px, 3vw, 34px);
       }
 
       .hero-grid {
         display: grid;
         width: 100%;
-        gap: 20px;
+        grid-template-columns: minmax(0, 1.04fr) minmax(340px, 0.84fr);
+        gap: 18px;
         align-items: center;
-        justify-items: center;
+        justify-items: stretch;
         min-height: 0;
       }
 
       .hero-copy {
-        max-width: 48rem;
-        text-align: center;
+        max-width: 38rem;
+        text-align: left;
       }
 
       .hero-title {
         margin: 0 0 14px;
-        max-width: 16ch;
-        margin-left: auto;
-        margin-right: auto;
+        max-width: 14.5ch;
+        margin-left: 0;
+        margin-right: 0;
         display: grid;
-        gap: 0.08em;
-        justify-items: center;
-        font-size: clamp(2.7rem, 5.9vw, 4.9rem);
+        gap: 0.1em;
+        justify-items: start;
+        font-size: clamp(2.35rem, 4.8vw, 4.2rem);
         line-height: 0.94;
         letter-spacing: -0.06em;
         text-wrap: balance;
@@ -290,9 +292,9 @@ function renderLandingPage(serviceName: string) {
       }
 
       .hero-title-line-support {
-        max-width: 14ch;
-        font-size: 0.38em;
-        line-height: 1.06;
+        max-width: 24ch;
+        font-size: 0.31em;
+        line-height: 1.12;
         letter-spacing: -0.04em;
         color: rgba(228, 238, 248, 0.9);
         text-wrap: balance;
@@ -300,29 +302,21 @@ function renderLandingPage(serviceName: string) {
 
       .hero-title-rotator {
         position: relative;
-        display: grid;
+        overflow: hidden;
         width: 100%;
-        min-height: 1.7em;
-        place-items: start center;
+        min-height: 0.98em;
       }
 
-      .hero-title-rotator span {
-        grid-area: 1 / 1;
-        opacity: 0;
-        transform: translate3d(0, 18px, 0);
-        animation: hero-phrase-cycle 12s infinite;
+      .hero-title-rotator-track {
+        display: grid;
+        grid-auto-rows: 1.04em;
+        justify-items: start;
+        animation: hero-phrase-cycle 12s cubic-bezier(0.65, 0, 0.35, 1) infinite;
       }
 
-      .hero-title-rotator span:nth-child(2) {
-        animation-delay: 3s;
-      }
-
-      .hero-title-rotator span:nth-child(3) {
-        animation-delay: 6s;
-      }
-
-      .hero-title-rotator span:nth-child(4) {
-        animation-delay: 9s;
+      .hero-title-rotator-track span {
+        white-space: nowrap;
+        font-size: 0.9em;
       }
 
       .hero-title .highlight {
@@ -332,21 +326,28 @@ function renderLandingPage(serviceName: string) {
 
       @keyframes hero-phrase-cycle {
         0%,
-        3% {
-          opacity: 0;
-          transform: translate3d(0, 18px, 0);
-        }
-
-        7%,
-        31% {
-          opacity: 1;
+        16% {
           transform: translate3d(0, 0, 0);
         }
 
-        35%,
+        20%,
+        41% {
+          transform: translate3d(0, -1.04em, 0);
+        }
+
+        45%,
+        66% {
+          transform: translate3d(0, -2.08em, 0);
+        }
+
+        70%,
+        91% {
+          transform: translate3d(0, -3.12em, 0);
+        }
+
+        95%,
         100% {
-          opacity: 0;
-          transform: translate3d(0, -18px, 0);
+          transform: translate3d(0, -4.16em, 0);
         }
       }
 
@@ -366,16 +367,16 @@ function renderLandingPage(serviceName: string) {
       }
 
       .hero-description {
-        max-width: 39rem;
-        margin: 0 auto;
+        max-width: 33rem;
+        margin: 0;
       }
 
       .cta-row {
         display: flex;
         flex-wrap: wrap;
         gap: 12px;
-        margin-top: 22px;
-        justify-content: center;
+        margin-top: 18px;
+        justify-content: flex-start;
       }
 
       .button {
@@ -445,9 +446,28 @@ function renderLandingPage(serviceName: string) {
         box-shadow: var(--sq-card-shadow);
       }
 
+      .hero-install-overlay {
+        position: absolute;
+        top: 22px;
+        right: 24px;
+        padding: 10px 14px;
+        border: 1px solid rgba(143, 223, 255, 0.18);
+        border-radius: 999px;
+        background: rgba(7, 13, 23, 0.08);
+        color: rgba(194, 228, 247, 0.22);
+        font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        pointer-events: none;
+        user-select: none;
+      }
+
       .preview-card {
-        width: min(100%, 860px);
-        padding: 18px;
+        width: min(100%, 420px);
+        justify-self: end;
+        padding: 16px;
       }
 
       .preview-top,
@@ -465,13 +485,13 @@ function renderLandingPage(serviceName: string) {
 
       .preview-top {
         margin-bottom: 12px;
-        padding-bottom: 10px;
+        padding-bottom: 9px;
         border-bottom: 1px solid rgba(148, 163, 184, 0.12);
       }
 
       .message {
-        margin-bottom: 10px;
-        padding: 14px 16px;
+        margin-bottom: 9px;
+        padding: 13px 14px;
         border: 1px solid rgba(148, 163, 184, 0.12);
         border-radius: 22px;
         background: linear-gradient(180deg, rgba(11, 21, 33, 0.92), rgba(8, 16, 27, 0.92));
@@ -488,8 +508,8 @@ function renderLandingPage(serviceName: string) {
       }
 
       .message p {
-        font-size: 0.92rem;
-        line-height: 1.5;
+        font-size: 0.88rem;
+        line-height: 1.42;
         color: rgba(236, 243, 251, 0.94);
       }
 
@@ -500,11 +520,11 @@ function renderLandingPage(serviceName: string) {
       .preview-stats {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 10px;
+        gap: 8px;
       }
 
       .stat {
-        padding: 12px;
+        padding: 10px;
         border: 1px solid rgba(148, 163, 184, 0.12);
         border-radius: 20px;
         background: rgba(255, 255, 255, 0.03);
@@ -518,10 +538,10 @@ function renderLandingPage(serviceName: string) {
 
       .stat span {
         display: block;
-        margin-top: 5px;
+        margin-top: 4px;
         color: rgba(155, 169, 186, 0.88);
-        font-size: 0.8rem;
-        line-height: 1.38;
+        font-size: 0.76rem;
+        line-height: 1.34;
       }
 
       .section-header {
@@ -771,8 +791,40 @@ function renderLandingPage(serviceName: string) {
           min-height: auto;
         }
 
+        .hero-install-overlay {
+          display: none;
+        }
+
         .install-shell {
           grid-template-columns: 1fr;
+        }
+
+        .hero-grid {
+          grid-template-columns: 1fr;
+          justify-items: center;
+        }
+
+        .hero-copy {
+          text-align: center;
+        }
+
+        .hero-title {
+          margin-left: auto;
+          margin-right: auto;
+          justify-items: center;
+        }
+
+        .hero-description {
+          margin: 0 auto;
+        }
+
+        .cta-row {
+          justify-content: center;
+        }
+
+        .preview-card {
+          width: min(100%, 860px);
+          justify-self: stretch;
         }
 
         .web-client-frame {
@@ -819,7 +871,7 @@ function renderLandingPage(serviceName: string) {
         }
 
         .hero-title-rotator {
-          min-height: 2.2em;
+          min-height: 1.12em;
         }
 
         .brand-name {
@@ -828,14 +880,9 @@ function renderLandingPage(serviceName: string) {
       }
 
       @media (prefers-reduced-motion: reduce) {
-        .hero-title-rotator span {
+        .hero-title-rotator-track {
           animation: none;
-          opacity: 0;
-          transform: none;
-        }
-
-        .hero-title-rotator span:first-child {
-          opacity: 1;
+          transform: translate3d(0, 0, 0);
         }
       }
     </style>
@@ -850,24 +897,15 @@ function renderLandingPage(serviceName: string) {
               alt="Structure Queries monogram"
             />
           </div>
-          <div class="brand-meta">
-            <p class="brand-overline">Structure Queries</p>
-            <p class="brand-name">Deep page analysis with voice-enabled Q&amp;A.</p>
-          </div>
+        <div class="brand-meta">
+          <p class="brand-overline">Structure Queries</p>
+          <p class="brand-name">Deep page analysis with voice-enabled Q&amp;A.</p>
         </div>
-
-        <nav class="site-nav" aria-label="Landing sections">
-          <a
-            href="${CHROME_WEB_STORE_PLACEHOLDER_URL}"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Install from WebStore
-          </a>
-        </nav>
+        </div>
       </header>
 
       <section class="section" id="top">
+        <div class="hero-install-overlay">Install from WebStore</div>
         <div class="hero-grid">
           <div class="hero-copy">
             <h1 class="hero-title">
@@ -878,10 +916,13 @@ function renderLandingPage(serviceName: string) {
                 class="hero-title-rotator"
                 aria-label="Articles, research papers, blog posts, technical documentation"
               >
-                <span>Articles</span>
-                <span>Research papers</span>
-                <span>Blog posts</span>
-                <span>Technical documentation</span>
+                <span class="hero-title-rotator-track">
+                  <span>Articles</span>
+                  <span>Research papers</span>
+                  <span>Blog posts</span>
+                  <span>Technical documentation</span>
+                  <span aria-hidden="true">Articles</span>
+                </span>
               </span>
               <span class="hero-title-line hero-title-line-support">
                 with voice-enabled page analysis and follow-up Q&amp;A.
@@ -913,7 +954,7 @@ function renderLandingPage(serviceName: string) {
 
             <div class="message">
               <span class="message-label">User</span>
-              <p>What are the main takeaways here, and which sections support them?</p>
+              <p>Summarize the main ideas and show which sections support them.</p>
             </div>
 
             <div class="message assistant-message">
