@@ -166,7 +166,13 @@ function renderLandingPage(serviceName: string) {
         min-height: calc(100vh - 24px);
         display: flex;
         align-items: center;
-        padding-top: clamp(18px, 2vw, 28px);
+        padding-block: clamp(18px, 2vw, 28px);
+      }
+
+      #install {
+        min-height: calc(100vh - 24px);
+        display: flex;
+        align-items: stretch;
       }
 
       .hero-grid {
@@ -174,26 +180,32 @@ function renderLandingPage(serviceName: string) {
         width: 100%;
         grid-template-columns: minmax(0, 1.04fr) minmax(340px, 0.84fr);
         gap: 18px;
-        align-items: center;
+        align-items: stretch;
         justify-items: stretch;
-        min-height: 0;
+        min-height: calc(100vh - 116px);
       }
 
       .hero-copy {
         max-width: 40rem;
         text-align: left;
+        min-height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: clamp(24px, 5vh, 64px);
+        padding-block: clamp(10px, 2.8vh, 26px);
       }
 
       .hero-title {
-        margin: 0 0 14px;
+        margin: 0;
         max-width: 18.8ch;
         margin-left: 0;
         margin-right: 0;
         display: grid;
-        gap: 0.02em;
+        gap: 0.06em;
         justify-items: start;
         font-size: clamp(2.15rem, 4.2vw, 3.7rem);
-        line-height: 0.98;
+        line-height: 1.02;
         letter-spacing: -0.06em;
         text-wrap: balance;
       }
@@ -204,9 +216,9 @@ function renderLandingPage(serviceName: string) {
 
       .hero-title-line-support {
         max-width: 28ch;
-        margin-top: -0.14em;
+        margin-top: 0;
         font-size: 0.28em;
-        line-height: 1.2;
+        line-height: 1.24;
         letter-spacing: -0.04em;
         color: rgba(228, 238, 248, 0.9);
         text-wrap: balance;
@@ -295,15 +307,16 @@ function renderLandingPage(serviceName: string) {
       }
 
       .hero-description {
-        max-width: 33rem;
+        max-width: 31rem;
         margin: 0;
+        line-height: 1.78;
       }
 
       .cta-row {
         display: flex;
         flex-wrap: wrap;
         gap: 12px;
-        margin-top: 18px;
+        margin-top: 0;
         justify-content: flex-start;
       }
 
@@ -374,27 +387,10 @@ function renderLandingPage(serviceName: string) {
         box-shadow: var(--sq-card-shadow);
       }
 
-      .hero-install-overlay {
-        position: absolute;
-        top: 18px;
-        right: 22px;
-        padding: 10px 14px;
-        border: 1px solid rgba(143, 223, 255, 0.18);
-        border-radius: 999px;
-        background: rgba(7, 13, 23, 0.08);
-        color: rgba(194, 228, 247, 0.2);
-        font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
-        font-size: 0.72rem;
-        font-weight: 600;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        pointer-events: none;
-        user-select: none;
-      }
-
       .preview-card {
         width: min(100%, 400px);
         justify-self: end;
+        align-self: center;
         padding: 15px;
       }
 
@@ -472,42 +468,29 @@ function renderLandingPage(serviceName: string) {
         line-height: 1.44;
       }
 
-      .section-header {
-        max-width: 46rem;
-        margin: 0 auto 28px;
-        text-align: center;
-      }
-
       h2,
       h3 {
         margin: 0;
       }
 
-      .section-title {
-        margin: 0 0 14px;
-        max-width: 14ch;
-        margin-left: auto;
-        margin-right: auto;
-        font-size: clamp(2.15rem, 5vw, 3.8rem);
-        line-height: 0.96;
-        letter-spacing: -0.05em;
-        text-wrap: balance;
-      }
-
       .install-shell {
         display: grid;
-        grid-template-columns: minmax(0, 1.06fr) minmax(280px, 0.94fr);
-        gap: 20px;
-        align-items: start;
+        width: 100%;
+        grid-template-rows: minmax(0, 1fr) auto;
+        gap: 14px;
+        align-items: stretch;
+        min-height: 100%;
       }
 
       .interactive-copy {
         display: grid;
-        gap: 14px;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
       }
 
       .interactive-point {
-        padding: 18px 20px;
+        min-height: 100%;
+        padding: 14px 16px;
         border: 1px solid rgba(122, 177, 211, 0.14);
         border-radius: 22px;
         background: linear-gradient(180deg, rgba(10, 18, 29, 0.88), rgba(5, 10, 18, 0.92));
@@ -516,25 +499,28 @@ function renderLandingPage(serviceName: string) {
 
       .interactive-point strong {
         display: block;
-        margin-bottom: 8px;
-        font-size: 1rem;
+        margin-bottom: 6px;
+        font-size: 0.96rem;
         letter-spacing: -0.02em;
       }
 
       .interactive-point span {
         display: block;
         color: rgba(164, 203, 223, 0.88);
-        line-height: 1.6;
+        font-size: 0.86rem;
+        line-height: 1.52;
       }
 
       .interactive-shell {
         display: grid;
-        gap: 18px;
+        gap: 12px;
+        min-height: 0;
       }
 
       .web-client-frame {
         width: 100%;
-        min-height: 1180px;
+        height: clamp(500px, 61vh, 640px);
+        min-height: 500px;
         border: 1px solid rgba(122, 177, 211, 0.16);
         border-radius: 30px;
         background:
@@ -714,23 +700,45 @@ function renderLandingPage(serviceName: string) {
         opacity: 0.76;
       }
 
+      @media (min-width: 981px) {
+        html {
+          scroll-snap-type: y mandatory;
+          scroll-padding-top: 10px;
+        }
+
+        .section {
+          scroll-snap-align: start;
+          scroll-snap-stop: always;
+        }
+      }
+
       @media (max-width: 980px) {
         #top {
           min-height: auto;
           padding-top: 26px;
         }
 
+        #install {
+          min-height: auto;
+          display: block;
+        }
+
         .install-shell {
-          grid-template-columns: 1fr;
+          grid-template-rows: auto auto;
         }
 
         .hero-grid {
           grid-template-columns: 1fr;
+          min-height: auto;
           justify-items: center;
         }
 
         .hero-copy {
           text-align: center;
+          min-height: auto;
+          display: grid;
+          gap: 20px;
+          padding-block: 0;
         }
 
         .hero-title {
@@ -753,7 +761,12 @@ function renderLandingPage(serviceName: string) {
           justify-self: stretch;
         }
 
+        .interactive-copy {
+          grid-template-columns: 1fr;
+        }
+
         .web-client-frame {
+          height: auto;
           min-height: 1260px;
         }
 
@@ -900,31 +913,7 @@ function renderLandingPage(serviceName: string) {
       </section>
 
       <section class="section" id="install">
-        <div class="section-header">
-          <p class="eyebrow">Web client</p>
-          <h2 class="section-title">Try the full Structure Queries workflow on any public URL.</h2>
-          <p class="section-copy">
-            This section embeds a web version of the plugin UI. Paste in a public URL, analyze the page,
-            and use the same voice-enabled Q&amp;A flow directly from the landing page.
-          </p>
-        </div>
-
         <div class="install-shell">
-          <div class="interactive-copy" aria-label="Web client overview">
-            <article class="interactive-point">
-              <strong>Enter any public page</strong>
-              <span>Use the embedded client for blog posts, docs, and dense webpages without needing the extension popup.</span>
-            </article>
-            <article class="interactive-point">
-              <strong>Sign in across Samsar subdomains</strong>
-              <span>If you already have a Samsar session, the web client picks it up here. If not, it opens a login or registration flow before analysis starts.</span>
-            </article>
-            <article class="interactive-point">
-              <strong>Analyze, ask, and recharge in one place</strong>
-              <span>The same page analysis, speaker selection, voice interaction, credits, and recharge logic now live inside this landing page section.</span>
-            </article>
-          </div>
-
           <div class="interactive-shell">
             <iframe
               class="web-client-frame"
@@ -932,6 +921,21 @@ function renderLandingPage(serviceName: string) {
               title="Structured Queries web client"
               loading="lazy"
             ></iframe>
+          </div>
+
+          <div class="interactive-copy" aria-label="Web client overview">
+            <article class="interactive-point">
+              <strong>Paste a public URL</strong>
+              <span>Run the full page analysis flow here for articles, docs, blog posts, and other dense webpages.</span>
+            </article>
+            <article class="interactive-point">
+              <strong>Reuse your Samsar session</strong>
+              <span>Existing samsar.one sessions carry across here. If needed, login or registration opens before analysis starts.</span>
+            </article>
+            <article class="interactive-point">
+              <strong>Ask by voice and manage credits</strong>
+              <span>Use voices, advanced options, credit usage, and recharge flows without leaving the landing page.</span>
+            </article>
           </div>
         </div>
       </section>

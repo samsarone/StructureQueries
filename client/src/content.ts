@@ -15,6 +15,7 @@ const ANALYSIS_BAND_MAX_HZ = 6000;
 const MIN_VOICE_BAND_SHARE = 0.6;
 const MAX_LOW_BAND_SHARE = 0.25;
 const MAX_HIGH_BAND_SHARE = 0.18;
+const OVERLAY_WIDTH_PX = 336;
 const OVERLAY_HOST_ID = "structuredqueries-overlay-host";
 const OVERLAY_FRAME_URL = chrome.runtime.getURL("popup.html");
 
@@ -414,7 +415,7 @@ function createOverlay() {
         position: fixed;
         top: 16px;
         right: 16px;
-        width: min(392px, calc(100vw - 24px));
+        width: min(${OVERLAY_WIDTH_PX}px, calc(100vw - 24px));
         height: min(664px, calc(100vh - 24px));
         z-index: 2147483647;
         pointer-events: none;
