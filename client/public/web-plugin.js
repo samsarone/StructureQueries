@@ -1220,7 +1220,7 @@
           email: refs.registerEmail?.value ?? "",
           username: refs.registerUsername?.value ?? "",
           password,
-          preferredLanguage: getSelectedLanguage() === "auto" ? "en" : getSelectedLanguage()
+          preferredLanguage: getSelectedLanguage()
         })
       });
 

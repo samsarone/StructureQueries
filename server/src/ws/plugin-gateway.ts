@@ -265,8 +265,8 @@ function resolveResponseLanguage(input: {
   detectedLanguage?: string | null;
 }) {
   return (
-    resolveRequestedLanguageKey(input.requestedLanguage) ??
     coerceLanguageHint(input.detectedLanguage) ??
+    resolveRequestedLanguageKey(input.requestedLanguage) ??
     null
   );
 }
@@ -470,7 +470,6 @@ async function transcribeAudio(
       enableLogging: true,
       modelId: "scribe_v2",
       file,
-      languageCode: normalizeLanguage(language),
       noVerbatim: true,
       tagAudioEvents: true,
       diarize: false,
