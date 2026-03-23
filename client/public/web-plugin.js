@@ -852,7 +852,7 @@
 
   function getSelectedVoiceId() {
     const value = readOptionalString(refs.voiceSelect?.value);
-    return value ?? null;
+    return value ?? state.preferredVoiceId ?? null;
   }
 
   function getSelectedVoiceName() {
@@ -1659,6 +1659,27 @@
     }
 
     if (payload.type === "voice_updated") {
+      const nextVoiceId = readOptionalString(payload.voiceId) ?? null;
+      const matchingVoice = nextVoiceId
+        ? state.voices.find((voice) => voice.voiceId === nextVoiceId)
+        : null;
+
+      state.preferredVoiceId = nextVoiceId;
+      if (matchingVoice) {
+        state.preferredVoiceName = matchingVoice.name;
+      }
+
+      if (
+        refs.voiceSelect &&
+        Array.from(refs.voiceSelect.options).some(
+          (option) => option.value === (nextVoiceId ?? "")
+        )
+      ) {
+        refs.voiceSelect.value = nextVoiceId ?? "";
+      }
+
+      saveRegistrationState();
+      render();
       return;
     }
 
@@ -2175,8 +2196,7 @@
       durationMs,
       mimeType,
       language: refs.languageSelect?.value ?? "auto",
-      templateId: state.currentTemplateId,
-      voiceId: getSelectedVoiceId()
+      templateId: state.currentTemplateId
     });
   }
 

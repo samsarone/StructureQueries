@@ -231,6 +231,10 @@ function normalizeLanguage(language?: string | null) {
   return ISO_639_3_TO_1_LANGUAGE_CODE[baseLanguage];
 }
 
+function readOptionalString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
 function coerceLanguageHint(language?: string | null) {
   const normalizedLanguage = normalizeLanguage(language);
 
@@ -531,7 +535,7 @@ async function initializeConversation(
   state.pageUrl = payload.pageUrl;
   state.pageTitle = payload.pageTitle;
   state.templateId = payload.templateId;
-  state.voiceId = payload.voiceId;
+  state.voiceId = readOptionalString(payload.voiceId);
   state.language = payload.language ?? null;
 
   sendMessage(socket, {
@@ -542,7 +546,7 @@ async function initializeConversation(
     pageUrl: payload.pageUrl,
     pageTitle: payload.pageTitle,
     templateId: state.templateId ?? null,
-    voiceId: payload.voiceId ?? null,
+    voiceId: state.voiceId ?? null,
     language: payload.language ?? null,
     analysisReady: Boolean(payload.templateId),
     analysis: null,
@@ -572,7 +576,8 @@ async function handleSubmitAudio(
     return;
   }
 
-  const activeVoiceId = payload.voiceId ?? state.voiceId;
+  const requestedVoiceId = readOptionalString(payload.voiceId);
+  const activeVoiceId = state.voiceId ?? requestedVoiceId;
   const activeLanguage = payload.language ?? state.language ?? null;
   const activeTemplateId = payload.templateId ?? state.templateId;
   state.voiceId = activeVoiceId;
@@ -769,10 +774,10 @@ function handleConnection(socket: WebSocket, request: IncomingMessage) {
     }
 
     if (message.type === "set_voice") {
-      state.voiceId = message.voiceId;
+      state.voiceId = readOptionalString(message.voiceId);
       sendMessage(socket, {
         type: "voice_updated",
-        voiceId: message.voiceId ?? null
+        voiceId: state.voiceId ?? null
       });
       return;
     }

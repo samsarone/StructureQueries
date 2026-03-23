@@ -327,8 +327,8 @@ function normalizeUrl(rawUrl: string) {
   }
 }
 
-function readOptionalString(value: string | null | undefined) {
-  const trimmed = value?.trim();
+function readOptionalString(value: unknown) {
+  const trimmed = typeof value === "string" ? value.trim() : undefined;
   return trimmed ? trimmed : undefined;
 }
 
@@ -2313,6 +2313,26 @@ function handleSocketMessage(event: MessageEvent<string>) {
   }
 
   if (payload.type === "voice_updated") {
+    const nextVoiceId = readOptionalString(payload.voiceId);
+    const matchingVoice = nextVoiceId
+      ? state.voices.find((voice) => voice.voiceId === nextVoiceId)
+      : undefined;
+
+    state.preferredVoiceId = nextVoiceId;
+    if (matchingVoice) {
+      state.preferredVoiceName = matchingVoice.name;
+    }
+
+    if (
+      voiceSelect &&
+      Array.from(voiceSelect.options).some(
+        (option) => option.value === (nextVoiceId ?? "")
+      )
+    ) {
+      voiceSelect.value = nextVoiceId ?? "";
+    }
+
+    renderVoicePreviewButton();
     return;
   }
 
@@ -2529,8 +2549,7 @@ async function submitRecordedAudioBase64(
     durationMs,
     mimeType,
     language: languageSelect?.value ?? "auto",
-    templateId: state.currentTemplateId,
-    voiceId: getSelectedVoiceId()
+    templateId: state.currentTemplateId
   });
 }
 
