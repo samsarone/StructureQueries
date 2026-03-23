@@ -111,25 +111,30 @@ function renderLandingPage(serviceName: string) {
         margin: 0 auto;
         display: grid;
         gap: 14px;
-        padding: 10px 0 48px;
+        padding: 10px 0 44px;
       }
 
       .site-header {
-        position: relative;
-        top: 0;
-        z-index: 3;
+        position: fixed;
+        top: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 4;
+        width: min(420px, calc(100vw - 32px));
         display: flex;
         align-items: center;
-        justify-content: flex-start;
+        justify-content: center;
         gap: 12px;
         padding: 10px 12px;
-        border: 1px solid rgba(122, 177, 211, 0.18);
+        border: 1px solid rgba(122, 177, 211, 0.08);
         border-radius: 22px;
         background:
-          linear-gradient(180deg, rgba(10, 19, 32, 0.9), rgba(7, 13, 24, 0.88)),
-          rgba(8, 16, 28, 0.82);
-        box-shadow: 0 18px 42px rgba(0, 0, 0, 0.24);
-        backdrop-filter: blur(20px);
+          linear-gradient(180deg, rgba(10, 19, 32, 0.22), rgba(7, 13, 24, 0.18)),
+          rgba(8, 16, 28, 0.14);
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
+        backdrop-filter: blur(14px);
+        opacity: 0.34;
+        pointer-events: none;
       }
 
       .brand {
@@ -144,12 +149,12 @@ function renderLandingPage(serviceName: string) {
         padding: 4px;
         flex-shrink: 0;
         border-radius: 16px;
-        border: 1px solid rgba(143, 223, 255, 0.16);
+        border: 1px solid rgba(143, 223, 255, 0.1);
         background:
-          linear-gradient(180deg, rgba(13, 24, 41, 0.86), rgba(7, 13, 23, 0.82)),
-          rgba(7, 13, 23, 0.72);
+          linear-gradient(180deg, rgba(13, 24, 41, 0.34), rgba(7, 13, 23, 0.3)),
+          rgba(7, 13, 23, 0.28);
         box-shadow:
-          0 14px 34px rgba(0, 0, 0, 0.22),
+          0 8px 20px rgba(0, 0, 0, 0.12),
           0 0 0 1px rgba(255, 255, 255, 0.02) inset;
       }
 
@@ -175,8 +180,8 @@ function renderLandingPage(serviceName: string) {
 
       .brand-overline,
       .eyebrow {
-        color: rgba(151, 222, 255, 0.78);
-        font-size: 0.74rem;
+        color: rgba(151, 222, 255, 0.68);
+        font-size: 0.7rem;
         font-weight: 600;
         letter-spacing: 0.2em;
         text-transform: uppercase;
@@ -184,9 +189,10 @@ function renderLandingPage(serviceName: string) {
 
       .brand-name {
         max-width: 34ch;
-        color: rgba(204, 219, 233, 0.84);
-        font-size: 0.84rem;
+        color: rgba(204, 219, 233, 0.72);
+        font-size: 0.8rem;
         line-height: 1.38;
+        text-align: center;
       }
 
       .site-nav {
@@ -252,10 +258,10 @@ function renderLandingPage(serviceName: string) {
       }
 
       #top {
-        min-height: calc(100vh - 122px);
+        min-height: calc(100vh - 24px);
         display: flex;
         align-items: center;
-        padding-top: clamp(22px, 3vw, 34px);
+        padding-top: clamp(16px, 2vw, 24px);
       }
 
       .hero-grid {
@@ -269,19 +275,19 @@ function renderLandingPage(serviceName: string) {
       }
 
       .hero-copy {
-        max-width: 38rem;
+        max-width: 40rem;
         text-align: left;
       }
 
       .hero-title {
         margin: 0 0 14px;
-        max-width: 14.5ch;
+        max-width: 18.8ch;
         margin-left: 0;
         margin-right: 0;
         display: grid;
-        gap: 0.1em;
+        gap: 0.02em;
         justify-items: start;
-        font-size: clamp(2.35rem, 4.8vw, 4.2rem);
+        font-size: clamp(2.15rem, 4.2vw, 3.7rem);
         line-height: 0.94;
         letter-spacing: -0.06em;
         text-wrap: balance;
@@ -292,9 +298,10 @@ function renderLandingPage(serviceName: string) {
       }
 
       .hero-title-line-support {
-        max-width: 24ch;
-        font-size: 0.31em;
-        line-height: 1.12;
+        max-width: 28ch;
+        margin-top: -0.08em;
+        font-size: 0.28em;
+        line-height: 1.14;
         letter-spacing: -0.04em;
         color: rgba(228, 238, 248, 0.9);
         text-wrap: balance;
@@ -304,19 +311,34 @@ function renderLandingPage(serviceName: string) {
         position: relative;
         overflow: hidden;
         width: 100%;
-        min-height: 0.98em;
+        min-height: 0.82em;
+        margin-top: -0.02em;
       }
 
-      .hero-title-rotator-track {
-        display: grid;
-        grid-auto-rows: 1.04em;
-        justify-items: start;
-        animation: hero-phrase-cycle 12s cubic-bezier(0.65, 0, 0.35, 1) infinite;
-      }
-
-      .hero-title-rotator-track span {
+      .hero-title-phrase {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 0;
+        overflow: hidden;
         white-space: nowrap;
-        font-size: 0.9em;
+        font-size: 0.74em;
+        opacity: 0;
+        border-right: 0.05em solid rgba(123, 226, 255, 0.78);
+        animation: hero-type-cycle 20s infinite;
+        will-change: width, opacity;
+      }
+
+      .hero-title-phrase:nth-child(2) {
+        animation-delay: 5s;
+      }
+
+      .hero-title-phrase:nth-child(3) {
+        animation-delay: 10s;
+      }
+
+      .hero-title-phrase:nth-child(4) {
+        animation-delay: 15s;
       }
 
       .hero-title .highlight {
@@ -324,30 +346,29 @@ function renderLandingPage(serviceName: string) {
         text-shadow: 0 0 18px rgba(96, 194, 245, 0.14);
       }
 
-      @keyframes hero-phrase-cycle {
+      @keyframes hero-type-cycle {
         0%,
-        16% {
-          transform: translate3d(0, 0, 0);
+        1% {
+          opacity: 1;
+          width: 0;
         }
 
-        20%,
-        41% {
-          transform: translate3d(0, -1.04em, 0);
+        10%,
+        18% {
+          opacity: 1;
+          width: var(--phrase-width);
         }
 
-        45%,
-        66% {
-          transform: translate3d(0, -2.08em, 0);
+        22%,
+        24% {
+          opacity: 1;
+          width: 0;
         }
 
-        70%,
-        91% {
-          transform: translate3d(0, -3.12em, 0);
-        }
-
-        95%,
+        25%,
         100% {
-          transform: translate3d(0, -4.16em, 0);
+          opacity: 0;
+          width: 0;
         }
       }
 
@@ -448,13 +469,13 @@ function renderLandingPage(serviceName: string) {
 
       .hero-install-overlay {
         position: absolute;
-        top: 22px;
-        right: 24px;
+        top: 18px;
+        right: 22px;
         padding: 10px 14px;
         border: 1px solid rgba(143, 223, 255, 0.18);
         border-radius: 999px;
         background: rgba(7, 13, 23, 0.08);
-        color: rgba(194, 228, 247, 0.22);
+        color: rgba(194, 228, 247, 0.2);
         font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
         font-size: 0.72rem;
         font-weight: 600;
@@ -465,9 +486,9 @@ function renderLandingPage(serviceName: string) {
       }
 
       .preview-card {
-        width: min(100%, 420px);
+        width: min(100%, 400px);
         justify-self: end;
-        padding: 16px;
+        padding: 15px;
       }
 
       .preview-top,
@@ -491,7 +512,7 @@ function renderLandingPage(serviceName: string) {
 
       .message {
         margin-bottom: 9px;
-        padding: 13px 14px;
+        padding: 12px 13px;
         border: 1px solid rgba(148, 163, 184, 0.12);
         border-radius: 22px;
         background: linear-gradient(180deg, rgba(11, 21, 33, 0.92), rgba(8, 16, 27, 0.92));
@@ -508,8 +529,8 @@ function renderLandingPage(serviceName: string) {
       }
 
       .message p {
-        font-size: 0.88rem;
-        line-height: 1.42;
+        font-size: 0.84rem;
+        line-height: 1.38;
         color: rgba(236, 243, 251, 0.94);
       }
 
@@ -812,6 +833,7 @@ function renderLandingPage(serviceName: string) {
           margin-left: auto;
           margin-right: auto;
           justify-items: center;
+          max-width: 16ch;
         }
 
         .hero-description {
@@ -874,15 +896,32 @@ function renderLandingPage(serviceName: string) {
           min-height: 1.12em;
         }
 
+        .hero-title-phrase {
+          font-size: 0.82em;
+        }
+
+        .hero-title-line-support {
+          max-width: 22ch;
+          margin-top: 0;
+          font-size: 0.31em;
+        }
+
         .brand-name {
           max-width: none;
         }
       }
 
       @media (prefers-reduced-motion: reduce) {
-        .hero-title-rotator-track {
+        .hero-title-phrase {
           animation: none;
-          transform: translate3d(0, 0, 0);
+          width: 0;
+          opacity: 0;
+          border-right: 0;
+        }
+
+        .hero-title-phrase:first-child {
+          width: var(--phrase-width);
+          opacity: 1;
         }
       }
     </style>
@@ -916,13 +955,10 @@ function renderLandingPage(serviceName: string) {
                 class="hero-title-rotator"
                 aria-label="Articles, research papers, blog posts, technical documentation"
               >
-                <span class="hero-title-rotator-track">
-                  <span>Articles</span>
-                  <span>Research papers</span>
-                  <span>Blog posts</span>
-                  <span>Technical documentation</span>
-                  <span aria-hidden="true">Articles</span>
-                </span>
+                <span class="hero-title-phrase" style="--phrase-width: 9ch;">Articles</span>
+                <span class="hero-title-phrase" style="--phrase-width: 16ch;">Research papers</span>
+                <span class="hero-title-phrase" style="--phrase-width: 12ch;">Blog posts</span>
+                <span class="hero-title-phrase" style="--phrase-width: 23ch;">Technical documentation</span>
               </span>
               <span class="hero-title-line hero-title-line-support">
                 with voice-enabled page analysis and follow-up Q&amp;A.
