@@ -266,18 +266,68 @@ function renderLandingPage(serviceName: string) {
 
       .hero-title {
         margin: 0 0 18px;
-        max-width: 11ch;
+        max-width: 13ch;
         margin-left: auto;
         margin-right: auto;
+        display: grid;
+        gap: 0.08em;
+        justify-items: center;
         font-size: clamp(3.25rem, 8vw, 6.4rem);
         line-height: 0.92;
         letter-spacing: -0.06em;
         text-wrap: balance;
       }
 
+      .hero-title-line {
+        display: block;
+      }
+
+      .hero-title-rotator {
+        position: relative;
+        display: grid;
+        width: 100%;
+        min-height: 2.05em;
+        place-items: start center;
+      }
+
+      .hero-title-rotator span {
+        grid-area: 1 / 1;
+        opacity: 0;
+        transform: translate3d(0, 18px, 0);
+        animation: hero-phrase-cycle 9s infinite;
+      }
+
+      .hero-title-rotator span:nth-child(2) {
+        animation-delay: 3s;
+      }
+
+      .hero-title-rotator span:nth-child(3) {
+        animation-delay: 6s;
+      }
+
       .hero-title .highlight {
         color: var(--sq-accent-cool);
         text-shadow: 0 0 18px rgba(96, 194, 245, 0.14);
+      }
+
+      @keyframes hero-phrase-cycle {
+        0%,
+        4% {
+          opacity: 0;
+          transform: translate3d(0, 18px, 0);
+        }
+
+        8%,
+        28% {
+          opacity: 1;
+          transform: translate3d(0, 0, 0);
+        }
+
+        32%,
+        100% {
+          opacity: 0;
+          transform: translate3d(0, -18px, 0);
+        }
       }
 
       .hero-description,
@@ -744,8 +794,24 @@ function renderLandingPage(serviceName: string) {
           font-size: clamp(2.8rem, 15vw, 4.25rem);
         }
 
+        .hero-title-rotator {
+          min-height: 2.2em;
+        }
+
         .brand-name {
           max-width: none;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .hero-title-rotator span {
+          animation: none;
+          opacity: 0;
+          transform: none;
+        }
+
+        .hero-title-rotator span:first-child {
+          opacity: 1;
         }
       }
     </style>
@@ -781,11 +847,21 @@ function renderLandingPage(serviceName: string) {
         <div class="hero-grid">
           <div class="hero-copy">
             <h1 class="hero-title">
-              <span class="highlight">Understand</span> complex webpages and blog posts faster.
+              <span class="hero-title-line">
+                <span class="highlight">Understand</span>
+              </span>
+              <span
+                class="hero-title-rotator"
+                aria-label="Dense articles, technical documentation, research papers"
+              >
+                <span>Dense articles</span>
+                <span>Technical documentation</span>
+                <span>Research papers</span>
+              </span>
             </h1>
             <p class="hero-description">
-              Structure Queries prepares the page, surfaces the key structure, and lets you ask grounded
-              follow-up questions by text or voice without losing the source context.
+              Structure Queries prepares the page, surfaces the key structure, and lets you ask
+              follow-up questions by voice without losing the source context.
             </p>
 
             <div class="cta-row">
@@ -797,12 +873,13 @@ function renderLandingPage(serviceName: string) {
               >
                 Install from WebStore
               </a>
-              <a class="button button-secondary" href="#install">See how it works</a>
+              <a class="button button-secondary" href="#install">Try the web client</a>
             </div>
 
             <div class="feature-row" aria-label="Key product capabilities">
-              <span class="feature-pill">Complex webpages</span>
-              <span class="feature-pill">Long-form blog posts</span>
+              <span class="feature-pill">Dense articles</span>
+              <span class="feature-pill">Technical documentation</span>
+              <span class="feature-pill">Research papers</span>
               <span class="feature-pill">Voice-enabled Q&amp;A</span>
             </div>
           </div>
@@ -820,7 +897,7 @@ function renderLandingPage(serviceName: string) {
 
             <div class="message assistant-message">
               <span class="message-label">Bot</span>
-              <p>I mapped the page structure, pulled out the key points, and can answer follow-up questions while staying grounded in the source.</p>
+              <p>I mapped the page structure, pulled out the key points, and can answer follow-up questions while staying close to the source.</p>
             </div>
 
             <div class="preview-stats" aria-label="Product highlights">
@@ -833,7 +910,7 @@ function renderLandingPage(serviceName: string) {
                 <span>Ask natural follow-up questions instead of reading line by line.</span>
               </div>
               <div class="stat">
-                <strong>Grounded</strong>
+                <strong>Source-backed</strong>
                 <span>Answers stay anchored to the source content already on the page.</span>
               </div>
             </div>

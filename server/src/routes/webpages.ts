@@ -16,8 +16,6 @@ import {
   getSamsarErrorStatus
 } from "../lib/samsar-errors.js";
 
-const EXTENSION_STARTER_SCAN_MAX_LINKS = 2;
-
 function createEmbeddingName(title: string | undefined, url: string) {
   try {
     const parsedUrl = new URL(url);
@@ -217,9 +215,7 @@ webpagesRouter.post("/analyze", async (request, response) => {
   }
 
   try {
-    const crawlResult = await crawlUrlsForPlainTextEmbeddings([url], {
-      maxLinks: EXTENSION_STARTER_SCAN_MAX_LINKS
-    });
+    const crawlResult = await crawlUrlsForPlainTextEmbeddings([url]);
     const crawlSummary = {
       url,
       inputUrlCount: crawlResult.inputUrlCount,

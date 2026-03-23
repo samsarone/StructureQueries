@@ -123,7 +123,7 @@ CURRENT_ENV=development
 
 FIRECRAWL_API_URL=https://api.firecrawl.dev
 FIRECRAWL_CRAWL_LEVELS=2
-FIRECRAWL_MAX_LINKS=5
+FIRECRAWL_MAX_LINKS=
 FIRECRAWL_POLL_INTERVAL_SECONDS=5
 FIRECRAWL_TIMEOUT_SECONDS=120
 
@@ -137,6 +137,7 @@ Firecrawl local/self-hosted note:
 
 - the server uses `@mendable/firecrawl-js`
 - by default it targets `https://api.firecrawl.dev`
+- leave `FIRECRAWL_MAX_LINKS` unset to remove the proxy-side crawl page cap; set it to a positive integer only if you want to reintroduce one
 - if you run Firecrawl locally, set `FIRECRAWL_API_URL` to your local Firecrawl base URL and set `FIRECRAWL_API_KEY` to the key expected by that instance
 - webpage analysis endpoints require both `FIRECRAWL_API_KEY` and `SAMSAR_API_KEY`
 

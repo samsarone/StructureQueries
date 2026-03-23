@@ -6,9 +6,7 @@ import {
   stripHtmlToText
 } from "./embedding-text-cleanup.js";
 
-const MAX_EMBEDDING_INPUT_CHARS = 6_000;
 const MAX_URL_SEEDS_PER_REQUEST = 50;
-const MAX_URL_CRAWL_LINKS_PER_REQUEST = 5;
 const FIRECRAWL_MIN_REQUEST_INTERVAL_MS = 500;
 const FIRECRAWL_MIN_JOB_START_INTERVAL_MS = 8_000;
 const FIRECRAWL_MAX_RATE_LIMIT_RETRIES = 8;
@@ -93,7 +91,7 @@ export interface UrlPlainTextCrawlResult {
   inputUrlCount: number;
   processedUrlCount: number;
   crawlLevels: number;
-  maxLinks: number;
+  maxLinks: number | null;
   firecrawlCreditsUsed: number;
   firecrawlJobId: string | null;
   firecrawlJobIds: string[];
@@ -299,18 +297,6 @@ function getFirecrawlCreditsUsedFromDocument(
   const parsed = Number(rawCreditsUsed);
 
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-function truncateText(text: string, maxChars = MAX_EMBEDDING_INPUT_CHARS) {
-  if (!text) {
-    return "";
-  }
-
-  if (text.length <= maxChars) {
-    return text;
-  }
-
-  return text.slice(0, maxChars);
 }
 
 function normalizeOptionalString(value: unknown) {
@@ -777,7 +763,7 @@ function buildUrlPlainTextRecord(
   });
 
   const combinedSectionText = sections.map((section) => section.sectionText).join("\n\n");
-  const content = truncateText(cleanEmbeddingSourceText(combinedSectionText));
+  const content = cleanEmbeddingSourceText(combinedSectionText);
 
   if (!content) {
     return {
@@ -959,13 +945,13 @@ async function crawlSeedUrlWithFallback(
   client: Firecrawl,
   seedUrl: string,
   crawlLevels: number,
-  crawlLimit: number
+  crawlLimit: number | null
 ) {
   const genericCrawl = async () => {
     const job = (await firecrawlWithRetry(
       () =>
         client.crawl(seedUrl, {
-          limit: crawlLimit,
+          ...(typeof crawlLimit === "number" ? { limit: crawlLimit } : {}),
           maxDiscoveryDepth: Math.max(0, crawlLevels - 1),
           sitemap: "skip",
           crawlEntireDomain: true,
@@ -1011,7 +997,7 @@ async function crawlSeedUrlWithFallback(
     };
   };
 
-  if (crawlLevels !== 2 || crawlLimit <= 1) {
+  if (crawlLevels !== 2 || typeof crawlLimit !== "number" || crawlLimit <= 1) {
     return genericCrawl();
   }
 
@@ -1073,12 +1059,13 @@ export async function crawlUrlsForPlainTextEmbeddings(
         : env.integrations.firecrawl.crawlLevels
     )
   );
-  const maxLinks = Math.min(
-    MAX_URL_CRAWL_LINKS_PER_REQUEST,
-    Number.isInteger(options?.maxLinks)
+  const maxLinks =
+    Number.isInteger(options?.maxLinks) && Number(options?.maxLinks) > 0
       ? Math.max(1, Number(options?.maxLinks))
-      : env.integrations.firecrawl.maxLinks
-  );
+      : typeof env.integrations.firecrawl.maxLinks === "number" &&
+            env.integrations.firecrawl.maxLinks > 0
+        ? env.integrations.firecrawl.maxLinks
+        : null;
 
   if (normalizedUrls.length > MAX_URL_SEEDS_PER_REQUEST) {
     throw createStatusError(
@@ -1097,7 +1084,8 @@ export async function crawlUrlsForPlainTextEmbeddings(
 
   for (
     let index = 0;
-    index < normalizedUrls.length && remainingLinks > 0;
+    index < normalizedUrls.length &&
+    (remainingLinks === null || remainingLinks > 0);
     index += 1
   ) {
     const seedUrl = normalizedUrls[index]!;
@@ -1105,7 +1093,9 @@ export async function crawlUrlsForPlainTextEmbeddings(
     const crawlLimit =
       crawlLevels === 1
         ? 1
-        : Math.max(1, Math.ceil(remainingLinks / remainingSeedUrls));
+        : remainingLinks === null
+          ? null
+          : Math.max(1, Math.ceil(remainingLinks / remainingSeedUrls));
 
     let job: FirecrawlCrawlJob;
     let jobErrors: FirecrawlCrawlErrors = {
@@ -1151,7 +1141,14 @@ export async function crawlUrlsForPlainTextEmbeddings(
           : job.completed ?? 0;
 
     firecrawlCreditsUsed += creditsUsed;
-    remainingLinks = Math.max(0, remainingLinks - Math.max(0, creditsUsed));
+
+    if (remainingLinks !== null) {
+      remainingLinks = Math.max(
+        0,
+        remainingLinks -
+          (crawlLevels === 1 ? 1 : typeof crawlLimit === "number" ? crawlLimit : 0)
+      );
+    }
 
     (jobErrors.errors ?? [])
       .map((entry) =>
