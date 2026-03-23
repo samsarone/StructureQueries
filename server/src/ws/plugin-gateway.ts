@@ -44,6 +44,11 @@ interface SetVoiceMessage {
   voiceId?: string;
 }
 
+interface SetLanguageMessage {
+  type: "set_language";
+  language?: string | null;
+}
+
 interface PingMessage {
   type: "ping";
 }
@@ -52,6 +57,7 @@ type ClientMessage =
   | SessionInitMessage
   | SubmitAudioMessage
   | SetVoiceMessage
+  | SetLanguageMessage
   | PingMessage;
 
 interface SocketState {
@@ -248,6 +254,21 @@ function coerceLanguageHint(language?: string | null) {
 
   const trimmed = language.trim().toLowerCase();
   return trimmed && trimmed !== "auto" ? trimmed : undefined;
+}
+
+function resolveRequestedLanguageKey(language?: string | null) {
+  return coerceLanguageHint(language) ?? null;
+}
+
+function resolveResponseLanguage(input: {
+  requestedLanguage?: string | null;
+  detectedLanguage?: string | null;
+}) {
+  return (
+    resolveRequestedLanguageKey(input.requestedLanguage) ??
+    coerceLanguageHint(input.detectedLanguage) ??
+    null
+  );
 }
 
 function createNoSpeechDetectedError(message = "No clear speech was detected.") {
@@ -536,7 +557,7 @@ async function initializeConversation(
   state.pageTitle = payload.pageTitle;
   state.templateId = payload.templateId;
   state.voiceId = readOptionalString(payload.voiceId);
-  state.language = payload.language ?? null;
+  state.language = readOptionalString(payload.language) ?? null;
 
   sendMessage(socket, {
     type: "session_ready",
@@ -547,7 +568,7 @@ async function initializeConversation(
     pageTitle: payload.pageTitle,
     templateId: state.templateId ?? null,
     voiceId: state.voiceId ?? null,
-    language: payload.language ?? null,
+    language: resolveRequestedLanguageKey(state.language),
     analysisReady: Boolean(payload.templateId),
     analysis: null,
     integrations: {
@@ -578,7 +599,8 @@ async function handleSubmitAudio(
 
   const requestedVoiceId = readOptionalString(payload.voiceId);
   const activeVoiceId = state.voiceId ?? requestedVoiceId;
-  const activeLanguage = payload.language ?? state.language ?? null;
+  const activeLanguage =
+    readOptionalString(payload.language) ?? state.language ?? null;
   const activeTemplateId = payload.templateId ?? state.templateId;
   state.voiceId = activeVoiceId;
   state.language = activeLanguage;
@@ -586,6 +608,7 @@ async function handleSubmitAudio(
 
   sendStatus(socket, "transcribing", "Processing recorded audio.");
   let transcription;
+  let responseLanguage: string | null = null;
 
   try {
     transcription = await transcribeAudio(
@@ -593,12 +616,16 @@ async function handleSubmitAudio(
       payload.mimeType ?? "audio/webm",
       activeLanguage
     );
+    responseLanguage = resolveResponseLanguage({
+      requestedLanguage: activeLanguage,
+      detectedLanguage: transcription.detectedLanguage
+    });
     await chargeExternalElevenLabsTranscriptionUsage({
       assistantSessionId: state.assistantSessionId,
       browserSessionId: state.browserSessionId,
       durationMs: transcription.durationMs ?? payload.durationMs,
       externalUserApiKey: state.externalUserApiKey,
-      language: transcription.detectedLanguage ?? activeLanguage,
+      language: responseLanguage ?? activeLanguage,
       mimeType: payload.mimeType ?? "audio/webm",
       pageTitle: state.pageTitle,
       pageUrl: state.pageUrl,
@@ -620,9 +647,6 @@ async function handleSubmitAudio(
     });
     return;
   }
-
-  const responseLanguage =
-    transcription.detectedLanguage ?? coerceLanguageHint(activeLanguage) ?? null;
 
   sendMessage(socket, {
     type: "transcript_ready",
@@ -698,6 +722,7 @@ async function handleSubmitAudio(
   sendMessage(socket, {
     type: "assistant_message",
     text: assistantText,
+    language: responseLanguage,
     source: assistantReply.provider,
     templateId: assistantReply.templateId ?? activeTemplateId ?? null,
     warnings: assistantReply.warnings ?? []
@@ -719,7 +744,8 @@ async function handleSubmitAudio(
   if (synthesizedAudio) {
     sendMessage(socket, {
       type: "assistant_audio",
-      ...synthesizedAudio
+      ...synthesizedAudio,
+      language: responseLanguage
     });
   }
 
@@ -778,6 +804,16 @@ function handleConnection(socket: WebSocket, request: IncomingMessage) {
       sendMessage(socket, {
         type: "voice_updated",
         voiceId: state.voiceId ?? null
+      });
+      return;
+    }
+
+    if (message.type === "set_language") {
+      state.language = readOptionalString(message.language) ?? null;
+      sendMessage(socket, {
+        type: "language_updated",
+        language: resolveRequestedLanguageKey(state.language),
+        selectedLanguage: state.language ?? null
       });
       return;
     }

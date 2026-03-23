@@ -155,6 +155,7 @@
     recording: false,
     assistantSpeaking: false,
     pendingAssistantText: null,
+    pendingAssistantLanguage: null,
     creditIssueMessage: null,
     creditBannerDismissed: false,
     noticeMessage: null,
@@ -703,6 +704,7 @@
         assistantSessionId: state.assistantSessionId,
         externalUser: state.currentUser,
         externalUserApiKey: state.externalUserApiKey,
+        preferredLanguage: getSelectedLanguage(),
         preferredVoiceId: state.preferredVoiceId,
         preferredVoiceName: state.preferredVoiceName
       })
@@ -727,6 +729,10 @@
           ? payload.externalUser
           : null;
       state.externalUserApiKey = readOptionalString(payload.externalUserApiKey) ?? null;
+      setSelectedLanguage(
+        readOptionalString(payload.preferredLanguage) ??
+          getPreferredLanguageFromUser(payload.externalUser)
+      );
       state.preferredVoiceId = readOptionalString(payload.preferredVoiceId) ?? null;
       state.preferredVoiceName = readOptionalString(payload.preferredVoiceName) ?? null;
       state.registrationRequired = !(state.externalUserApiKey && state.assistantSessionId);
@@ -750,7 +756,8 @@
       PAGE_STATE_STORAGE_KEY,
       JSON.stringify({
         url: state.currentPage?.url ?? "",
-        templateId: state.currentTemplateId ?? ""
+        templateId: state.currentTemplateId ?? "",
+        preferredLanguage: getSelectedLanguage()
       })
     );
   }
@@ -763,6 +770,7 @@
 
     try {
       const payload = JSON.parse(stored);
+      setSelectedLanguage(readOptionalString(payload?.preferredLanguage));
       const url = readOptionalString(payload?.url);
       if (!url || !refs.pageUrlInput) {
         return;
@@ -843,6 +851,10 @@
     state.externalUserApiKey =
       readOptionalString(payload.externalUserApiKey) ?? state.externalUserApiKey;
     state.registrationRequired = Boolean(payload.registrationRequired);
+    const preferredLanguage = getPreferredLanguageFromUser(state.currentUser);
+    if (preferredLanguage) {
+      setSelectedLanguage(preferredLanguage);
+    }
     syncCreditIssueStateWithBalance();
     populateProfileInputs(true);
     saveRegistrationState();
@@ -862,6 +874,45 @@
     return value ?? state.preferredVoiceId ?? null;
   }
 
+  function getSelectedLanguage() {
+    return readOptionalString(refs.languageSelect?.value) ?? "auto";
+  }
+
+  function setSelectedLanguage(language) {
+    if (!refs.languageSelect) {
+      return;
+    }
+
+    const nextLanguage = readOptionalString(language) ?? "auto";
+
+    if (
+      Array.from(refs.languageSelect.options).some(
+        (option) => option.value === nextLanguage
+      )
+    ) {
+      refs.languageSelect.value = nextLanguage;
+    }
+  }
+
+  function getPreferredLanguageFromUser(user) {
+    const browserInstallation =
+      user?.browserInstallation && typeof user.browserInstallation === "object"
+        ? user.browserInstallation
+        : user?.browser_installation && typeof user.browser_installation === "object"
+          ? user.browser_installation
+          : null;
+
+    if (!browserInstallation) {
+      return null;
+    }
+
+    return (
+      readOptionalString(browserInstallation.preferred_language) ??
+      readOptionalString(browserInstallation.preferredLanguage) ??
+      null
+    );
+  }
+
   function getSelectedVoiceName() {
     return readOptionalString(refs.voiceSelect?.selectedOptions?.[0]?.textContent) ?? "Browser voice fallback";
   }
@@ -875,6 +926,17 @@
     }
 
     return `${SERVER_HTTP_ORIGIN}/api/voices/preview?voiceId=${encodeURIComponent(selectedVoice.voiceId)}`;
+  }
+
+  function syncLanguagePreferenceToSocket() {
+    if (activeSocket?.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    sendSocketMessage({
+      type: "set_language",
+      language: getSelectedLanguage()
+    });
   }
 
   function renderVoiceOptions() {
@@ -1011,7 +1073,7 @@
         displayName: identity.displayName,
         email: identity.email,
         username: identity.username,
-        preferredLanguage: refs.languageSelect?.value ?? "auto",
+        preferredLanguage: getSelectedLanguage(),
         preferredVoiceId: getSelectedVoiceId(),
         grantStarterCredits: false
       })
@@ -1036,7 +1098,7 @@
         externalUser: state.currentUser,
         externalUserApiKey: state.externalUserApiKey,
         extensionId: EXTENSION_ID,
-        preferredLanguage: refs.languageSelect?.value ?? "auto",
+        preferredLanguage: getSelectedLanguage(),
         preferredVoiceId: getSelectedVoiceId(),
         userAgent: navigator.userAgent
       })
@@ -1071,7 +1133,7 @@
           displayName: identity.displayName,
           email: identity.email,
           username: identity.username,
-          preferredLanguage: refs.languageSelect?.value ?? "auto",
+          preferredLanguage: getSelectedLanguage(),
           preferredVoiceId: getSelectedVoiceId()
         })
       });
@@ -1158,7 +1220,7 @@
           email: refs.registerEmail?.value ?? "",
           username: refs.registerUsername?.value ?? "",
           password,
-          preferredLanguage: refs.languageSelect?.value ?? "en"
+          preferredLanguage: getSelectedLanguage() === "auto" ? "en" : getSelectedLanguage()
         })
       });
 
@@ -1218,7 +1280,7 @@
           externalUser: state.currentUser,
           externalUserApiKey: state.externalUserApiKey,
           extensionId: EXTENSION_ID,
-          preferredLanguage: refs.languageSelect?.value ?? "auto",
+          preferredLanguage: getSelectedLanguage(),
           preferredVoiceId: getSelectedVoiceId(),
           userAgent: navigator.userAgent
         })
@@ -1301,7 +1363,7 @@
           externalUserApiKey: state.externalUserApiKey,
           url: state.currentPage.url,
           title: state.currentPage.title,
-          preferredLanguage: refs.languageSelect?.value ?? "auto",
+          preferredLanguage: getSelectedLanguage(),
           preferredVoiceId: getSelectedVoiceId()
         })
       });
@@ -1380,13 +1442,13 @@
     return bytes;
   }
 
-  function chooseLocalSpeechVoice() {
+  function chooseLocalSpeechVoice(language) {
     if (!("speechSynthesis" in window)) {
       return undefined;
     }
 
     const availableVoices = window.speechSynthesis.getVoices();
-    const preferredLanguage = refs.languageSelect?.value;
+    const preferredLanguage = readOptionalString(language) ?? getSelectedLanguage();
 
     if (preferredLanguage && preferredLanguage !== "auto") {
       const byLanguage = availableVoices.find((voice) =>
@@ -1553,7 +1615,7 @@
     });
   }
 
-  function speakLocally(text) {
+  function speakLocally(text, language) {
     if (!("speechSynthesis" in window) || !text.trim()) {
       return Promise.resolve();
     }
@@ -1566,7 +1628,7 @@
 
     return new Promise((resolve, reject) => {
       const utterance = new SpeechSynthesisUtterance(text);
-      const voice = chooseLocalSpeechVoice();
+      const voice = chooseLocalSpeechVoice(language);
 
       if (voice) {
         utterance.voice = voice;
@@ -1626,10 +1688,12 @@
       if (phase === "idle") {
         if (state.pendingAssistantText) {
           const fallbackText = state.pendingAssistantText;
+          const fallbackLanguage = state.pendingAssistantLanguage;
           state.pendingAssistantText = null;
+          state.pendingAssistantLanguage = null;
 
           if (state.conversationActive && !assistantAudioReceivedForTurn) {
-            void speakLocally(fallbackText)
+            void speakLocally(fallbackText, fallbackLanguage)
               .catch((error) => {
                 console.error("Failed to play local speech", error);
               })
@@ -1666,6 +1730,7 @@
         typeof payload.text === "string" ? payload.text : "Assistant reply unavailable.";
       appendLog("assistant", text);
       state.pendingAssistantText = text;
+      state.pendingAssistantLanguage = readOptionalString(payload.language) ?? null;
       return;
     }
 
@@ -1696,7 +1761,10 @@
 
     if (payload.type === "assistant_audio") {
       const fallbackText = readOptionalString(state.pendingAssistantText);
+      const fallbackLanguage =
+        readOptionalString(payload.language) ?? state.pendingAssistantLanguage;
       state.pendingAssistantText = null;
+      state.pendingAssistantLanguage = null;
       assistantAudioReceivedForTurn = true;
       const audioBase64 = typeof payload.audioBase64 === "string" ? payload.audioBase64 : "";
       const mimeType = typeof payload.mimeType === "string" ? payload.mimeType : "audio/mpeg";
@@ -1706,7 +1774,7 @@
           .catch((error) => {
             console.error("Failed to play assistant audio", error);
             if (fallbackText && state.conversationActive) {
-              return speakLocally(fallbackText);
+              return speakLocally(fallbackText, fallbackLanguage);
             }
             return Promise.resolve();
           })
@@ -1798,6 +1866,7 @@
           state.recording = false;
           state.assistantSpeaking = false;
           state.pendingAssistantText = null;
+          state.pendingAssistantLanguage = null;
           render();
         }
       });
@@ -1822,7 +1891,7 @@
           pageTitle: state.currentPage?.title,
           templateId: state.currentTemplateId,
           voiceId: getSelectedVoiceId(),
-          language: refs.languageSelect?.value ?? "auto",
+          language: getSelectedLanguage(),
           userAgent: navigator.userAgent
         });
         resolve(socket);
@@ -2206,7 +2275,7 @@
       audioBase64,
       durationMs,
       mimeType,
-      language: refs.languageSelect?.value ?? "auto",
+      language: getSelectedLanguage(),
       templateId: state.currentTemplateId
     });
   }
@@ -2318,6 +2387,7 @@
     state.recording = false;
     state.assistantSpeaking = false;
     state.pendingAssistantText = null;
+    state.pendingAssistantLanguage = null;
     state.websocketState = "disconnected";
     state.websocketPhase = input?.phase || "idle";
     state.websocketDetail = input?.detail || "Idle";
@@ -2634,7 +2704,7 @@
     }
 
     if (refs.pageLanguage) {
-      const selectedLanguage = refs.languageSelect?.value || "auto";
+      const selectedLanguage = getSelectedLanguage();
       refs.pageLanguage.textContent = `Language: ${selectedLanguage === "auto" ? "automatic" : selectedLanguage}`;
     }
 
@@ -2822,6 +2892,10 @@
 
   refs.languageSelect?.addEventListener("change", () => {
     savePageState();
+    syncLanguagePreferenceToSocket();
+    void syncBrowserSession().catch((error) => {
+      console.error("Failed to update browser session", error);
+    });
     void refreshIndexStatus().finally(() => {
       render();
     });

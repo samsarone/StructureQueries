@@ -51,6 +51,7 @@ interface RegistrationStatePayload {
   assistantSessionId?: string;
   externalUser?: StructureQueriesExternalUserPayload | null;
   externalUserApiKey?: string;
+  preferredLanguage?: string;
   preferredVoiceId?: string;
   preferredVoiceName?: string;
 }
@@ -155,6 +156,7 @@ interface AppState {
   voicePreviewVoiceId?: string;
   notificationMessage?: string;
   pendingAssistantText?: string;
+  pendingAssistantLanguage?: string;
   conversationActive: boolean;
   assistantSpeaking: boolean;
   recording: boolean;
@@ -264,6 +266,7 @@ const state: AppState = {
   voicePreviewVoiceId: undefined,
   notificationMessage: undefined,
   conversationActive: false,
+  pendingAssistantLanguage: undefined,
   assistantSpeaking: false,
   recording: false
 };
@@ -458,6 +461,31 @@ function getPreferredVoiceIdFromUser(
     readOptionalString(
       typeof installation.preferredVoiceId === "string"
         ? installation.preferredVoiceId
+        : undefined
+    )
+  );
+}
+
+function getPreferredLanguageFromUser(
+  user?: StructureQueriesExternalUserPayload | null
+) {
+  const browserInstallation = user?.browserInstallation;
+
+  if (!browserInstallation || typeof browserInstallation !== "object") {
+    return undefined;
+  }
+
+  const installation = browserInstallation as Record<string, unknown>;
+
+  return (
+    readOptionalString(
+      typeof installation.preferred_language === "string"
+        ? installation.preferred_language
+        : undefined
+    ) ??
+    readOptionalString(
+      typeof installation.preferredLanguage === "string"
+        ? installation.preferredLanguage
         : undefined
     )
   );
@@ -908,6 +936,26 @@ function getSelectedVoiceId() {
   return value ?? readOptionalString(state.preferredVoiceId);
 }
 
+function getSelectedLanguage() {
+  return readOptionalString(languageSelect?.value) ?? "auto";
+}
+
+function setSelectedLanguage(language?: string | null) {
+  if (!languageSelect) {
+    return;
+  }
+
+  const nextLanguage = readOptionalString(language) ?? "auto";
+
+  if (
+    Array.from(languageSelect.options).some(
+      (option) => option.value === nextLanguage
+    )
+  ) {
+    languageSelect.value = nextLanguage;
+  }
+}
+
 function getSelectedVoiceOption() {
   const selectedVoiceId = getSelectedVoiceId();
 
@@ -936,6 +984,17 @@ function getSelectedVoicePreviewSource() {
   return `${SERVER_HTTP_ORIGIN}/api/voices/preview?voiceId=${encodeURIComponent(
     selectedVoice.voiceId
   )}`;
+}
+
+function syncLanguagePreferenceToSocket() {
+  if (activeSocket?.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
+  sendSocketMessage({
+    type: "set_language",
+    language: getSelectedLanguage()
+  });
 }
 
 function renderVoicePreviewButton() {
@@ -1664,6 +1723,7 @@ async function savePreferredVoicePreference() {
     assistantSessionId: state.assistantSessionId,
     externalUser: state.currentUser,
     externalUserApiKey: state.externalUserApiKey,
+    preferredLanguage: getSelectedLanguage(),
     preferredVoiceId: state.preferredVoiceId,
     preferredVoiceName: state.preferredVoiceName
   });
@@ -1690,6 +1750,10 @@ async function loadRegistrationState() {
     registration?.preferredVoiceId ??
     getPreferredVoiceIdFromUser(registration?.externalUser);
   state.preferredVoiceName = registration?.preferredVoiceName;
+  setSelectedLanguage(
+    registration?.preferredLanguage ??
+      getPreferredLanguageFromUser(registration?.externalUser)
+  );
   state.registrationRequired = !(
     state.externalUserApiKey && state.assistantSessionId
   );
@@ -1715,6 +1779,10 @@ function applyBrowserSessionPayload(payload: BrowserSessionPayload) {
         ? undefined
         : state.externalUserApiKey;
   state.registrationRequired = Boolean(payload.registrationRequired);
+  const preferredLanguage = getPreferredLanguageFromUser(state.currentUser);
+  if (preferredLanguage) {
+    setSelectedLanguage(preferredLanguage);
+  }
   syncCreditIssueStateWithBalance();
 }
 
@@ -1734,7 +1802,7 @@ async function syncBrowserSession() {
       externalUser: state.currentUser,
       externalUserApiKey: state.externalUserApiKey,
       extensionId: state.extensionId,
-      preferredLanguage: languageSelect?.value ?? "auto",
+      preferredLanguage: getSelectedLanguage(),
       preferredVoiceId: getSelectedVoiceId(),
       userAgent: navigator.userAgent
     })
@@ -1746,6 +1814,7 @@ async function syncBrowserSession() {
     assistantSessionId: state.assistantSessionId,
     externalUser: state.currentUser,
     externalUserApiKey: state.externalUserApiKey,
+    preferredLanguage: getSelectedLanguage(),
     preferredVoiceId: state.preferredVoiceId,
     preferredVoiceName: state.preferredVoiceName
   });
@@ -1783,7 +1852,7 @@ async function persistBrowserProfilePreferences() {
         displayName: state.currentUser?.displayName ?? "",
         email: state.currentUser?.email ?? "",
         username: state.currentUser?.username ?? "",
-        preferredLanguage: languageSelect?.value ?? "auto",
+        preferredLanguage: getSelectedLanguage(),
         preferredVoiceId: getSelectedVoiceId()
       })
     }
@@ -1795,6 +1864,7 @@ async function persistBrowserProfilePreferences() {
     assistantSessionId: state.assistantSessionId,
     externalUser: state.currentUser,
     externalUserApiKey: state.externalUserApiKey,
+    preferredLanguage: getSelectedLanguage(),
     preferredVoiceId: state.preferredVoiceId,
     preferredVoiceName: state.preferredVoiceName
   });
@@ -1829,7 +1899,7 @@ async function submitAccountProfile() {
         displayName: registrationDisplayNameNode?.value ?? "",
         email: registrationEmailNode?.value ?? "",
         username: registrationUsernameNode?.value ?? "",
-        preferredLanguage: languageSelect?.value ?? "auto",
+        preferredLanguage: getSelectedLanguage(),
         preferredVoiceId: getSelectedVoiceId()
       })
     });
@@ -1842,6 +1912,7 @@ async function submitAccountProfile() {
       assistantSessionId: state.assistantSessionId,
       externalUser: state.currentUser,
       externalUserApiKey: state.externalUserApiKey,
+      preferredLanguage: getSelectedLanguage(),
       preferredVoiceId: state.preferredVoiceId,
       preferredVoiceName: state.preferredVoiceName
     });
@@ -1891,7 +1962,7 @@ async function openSamsarClientLogin() {
           externalUser: state.currentUser,
           externalUserApiKey: state.externalUserApiKey,
           extensionId: state.extensionId,
-          preferredLanguage: languageSelect?.value ?? "auto",
+          preferredLanguage: getSelectedLanguage(),
           preferredVoiceId: getSelectedVoiceId(),
           userAgent: navigator.userAgent
         })
@@ -1906,6 +1977,7 @@ async function openSamsarClientLogin() {
       assistantSessionId: state.assistantSessionId,
       externalUser: state.currentUser,
       externalUserApiKey: state.externalUserApiKey,
+      preferredLanguage: getSelectedLanguage(),
       preferredVoiceId: state.preferredVoiceId,
       preferredVoiceName: state.preferredVoiceName
     });
@@ -1996,6 +2068,7 @@ function closeWebSocketSession(input?: {
   state.websocketPhase = input?.phase ?? "idle";
   state.websocketDetail = input?.detail ?? "Idle";
   state.pendingAssistantText = undefined;
+  state.pendingAssistantLanguage = undefined;
 }
 
 async function refreshIndexStatus() {
@@ -2218,9 +2291,9 @@ async function playAssistantAudio(audioBase64: string, mimeType: string) {
   });
 }
 
-function chooseLocalSpeechVoice() {
+function chooseLocalSpeechVoice(language?: string | null) {
   const availableVoices = window.speechSynthesis.getVoices();
-  const preferredLanguage = languageSelect?.value;
+  const preferredLanguage = readOptionalString(language) ?? getSelectedLanguage();
 
   if (preferredLanguage && preferredLanguage !== "auto") {
     const byLanguage = availableVoices.find((voice) =>
@@ -2235,7 +2308,7 @@ function chooseLocalSpeechVoice() {
   return availableVoices[0];
 }
 
-function speakLocally(text: string) {
+function speakLocally(text: string, language?: string | null) {
   if (!("speechSynthesis" in window) || !text.trim()) {
     return Promise.resolve();
   }
@@ -2248,7 +2321,7 @@ function speakLocally(text: string) {
 
   return new Promise<void>((resolve, reject) => {
     const utterance = new SpeechSynthesisUtterance(text);
-    const voice = chooseLocalSpeechVoice();
+    const voice = chooseLocalSpeechVoice(language);
 
     if (voice) {
       utterance.voice = voice;
@@ -2292,10 +2365,12 @@ function handleSocketMessage(event: MessageEvent<string>) {
     if (phase === "idle") {
       if (state.pendingAssistantText) {
         const localSpeechText = state.pendingAssistantText;
+        const localSpeechLanguage = state.pendingAssistantLanguage;
         state.pendingAssistantText = undefined;
+        state.pendingAssistantLanguage = undefined;
 
         if (state.conversationActive && !assistantAudioReceivedForTurn) {
-          void speakLocally(localSpeechText)
+          void speakLocally(localSpeechText, localSpeechLanguage)
             .catch((error) => {
               console.error("Failed to play local speech", error);
             })
@@ -2363,13 +2438,17 @@ function handleSocketMessage(event: MessageEvent<string>) {
         ? payload.text
         : "Assistant reply unavailable.";
     state.pendingAssistantText = text;
+    state.pendingAssistantLanguage = readOptionalString(payload.language);
     appendLog("assistant", text);
     return;
   }
 
   if (payload.type === "assistant_audio") {
     const fallbackText = state.pendingAssistantText;
+    const fallbackLanguage =
+      readOptionalString(payload.language) ?? state.pendingAssistantLanguage;
     state.pendingAssistantText = undefined;
+    state.pendingAssistantLanguage = undefined;
     assistantAudioReceivedForTurn = true;
     const audioBase64 =
       typeof payload.audioBase64 === "string" ? payload.audioBase64 : "";
@@ -2382,7 +2461,7 @@ function handleSocketMessage(event: MessageEvent<string>) {
           console.error("Failed to play assistant audio", error);
 
           if (fallbackText && state.conversationActive) {
-            return speakLocally(fallbackText);
+            return speakLocally(fallbackText, fallbackLanguage);
           }
 
           return Promise.resolve();
@@ -2482,6 +2561,8 @@ async function ensureWebSocketSession() {
         state.conversationActive = false;
         state.recording = false;
         state.assistantSpeaking = false;
+        state.pendingAssistantText = undefined;
+        state.pendingAssistantLanguage = undefined;
         state.websocketState = "disconnected";
         state.websocketPhase = "idle";
         state.websocketDetail = "Disconnected";
@@ -2507,7 +2588,7 @@ async function ensureWebSocketSession() {
         pageTitle: state.currentPage?.title,
         templateId: state.currentTemplateId,
         voiceId: getSelectedVoiceId(),
-        language: languageSelect?.value ?? "auto",
+        language: getSelectedLanguage(),
         userAgent: navigator.userAgent
       });
       resolve(socket);
@@ -2560,7 +2641,7 @@ async function submitRecordedAudioBase64(
     audioBase64,
     durationMs,
     mimeType,
-    language: languageSelect?.value ?? "auto",
+    language: getSelectedLanguage(),
     templateId: state.currentTemplateId
   });
 }
@@ -2703,7 +2784,7 @@ async function analyzeCurrentPage() {
         externalUserApiKey: state.externalUserApiKey,
         url: state.currentPage.url,
         title: state.currentPage.title,
-        preferredLanguage: languageSelect?.value ?? "auto",
+        preferredLanguage: getSelectedLanguage(),
         preferredVoiceId: getSelectedVoiceId()
       })
     });
@@ -2947,6 +3028,7 @@ voiceSelect?.addEventListener("change", () => {
 });
 
 languageSelect?.addEventListener("change", () => {
+  syncLanguagePreferenceToSocket();
   void persistBrowserProfilePreferences().catch((error) => {
     console.error("Failed to update browser session", error);
   });
