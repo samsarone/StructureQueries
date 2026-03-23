@@ -7,6 +7,9 @@ import {
 } from "./embedding-text-cleanup.js";
 
 const MAX_URL_SEEDS_PER_REQUEST = 50;
+const MAX_PRIMARY_RECORD_CONTENT_CHARS = 8_000;
+const MAX_CHILD_RECORD_CONTENT_CHARS = 1_600;
+const MAX_CHILD_RECORD_EXCERPT_CHARS = 900;
 const FIRECRAWL_MIN_REQUEST_INTERVAL_MS = 500;
 const FIRECRAWL_MIN_JOB_START_INTERVAL_MS = 8_000;
 const FIRECRAWL_MAX_RATE_LIMIT_RETRIES = 8;
@@ -62,6 +65,7 @@ type FirecrawlDocumentSection = {
   statusCode: number | null;
   publishedTime: string | null;
   modifiedTime: string | null;
+  rawText: string;
   sectionText: string;
 };
 
@@ -74,9 +78,9 @@ type PrioritizedLinkCandidate = {
 };
 
 type UrlPlainTextRecordBuildResult = {
-  record: Record<string, unknown> | null;
+  records: Array<Record<string, unknown>>;
   processedPageCount: number;
-  hasPrimarySection: boolean;
+  hasPrimaryRecord: boolean;
   skippedUrlMap: Map<string, string>;
 };
 
@@ -91,7 +95,7 @@ export interface UrlPlainTextCrawlResult {
   inputUrlCount: number;
   processedUrlCount: number;
   crawlLevels: number;
-  maxLinks: number | null;
+  maxLinks: number;
   firecrawlCreditsUsed: number;
   firecrawlJobId: string | null;
   firecrawlJobIds: string[];
@@ -306,6 +310,107 @@ function normalizeOptionalString(value: unknown) {
 
   const trimmed = value.trim();
   return trimmed || null;
+}
+
+function truncateText(text: string, maxChars: number) {
+  if (!text) {
+    return "";
+  }
+
+  if (text.length <= maxChars) {
+    return text;
+  }
+
+  return text.slice(0, maxChars).trimEnd();
+}
+
+function dedupeTextParts(parts: Array<string | null | undefined>) {
+  const deduped: string[] = [];
+  const seen = new Set<string>();
+
+  parts.forEach((part) => {
+    const normalized = normalizeOptionalString(part);
+
+    if (!normalized) {
+      return;
+    }
+
+    const comparable = normalized.toLowerCase();
+
+    if (seen.has(comparable)) {
+      return;
+    }
+
+    seen.add(comparable);
+    deduped.push(normalized);
+  });
+
+  return deduped;
+}
+
+function extractFirstParagraph(text: string) {
+  return (
+    text
+      .split(/\n{2,}/)
+      .map((paragraph) => paragraph.trim())
+      .find((paragraph) => paragraph.length > 0) ?? ""
+  );
+}
+
+function splitTextIntoChunks(text: string, maxChars: number) {
+  const normalizedMaxChars = Math.max(1, maxChars);
+  const paragraphs = text
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter((paragraph) => paragraph.length > 0);
+  const chunks: string[] = [];
+  let currentChunk = "";
+
+  const pushChunk = (value: string) => {
+    const normalized = value.trim();
+
+    if (normalized) {
+      chunks.push(normalized);
+    }
+  };
+
+  paragraphs.forEach((paragraph) => {
+    if (paragraph.length > normalizedMaxChars) {
+      if (currentChunk) {
+        pushChunk(currentChunk);
+        currentChunk = "";
+      }
+
+      let remaining = paragraph;
+
+      while (remaining.length > normalizedMaxChars) {
+        pushChunk(remaining.slice(0, normalizedMaxChars));
+        remaining = remaining.slice(normalizedMaxChars).trimStart();
+      }
+
+      if (remaining) {
+        currentChunk = remaining;
+      }
+
+      return;
+    }
+
+    const nextChunk = currentChunk ? `${currentChunk}\n\n${paragraph}` : paragraph;
+
+    if (nextChunk.length > normalizedMaxChars && currentChunk) {
+      pushChunk(currentChunk);
+      currentChunk = paragraph;
+      return;
+    }
+
+    currentChunk = nextChunk;
+  });
+
+  if (currentChunk) {
+    pushChunk(currentChunk);
+  }
+
+  return chunks;
 }
 
 function normalizeUrlValue(value: unknown) {
@@ -709,22 +814,102 @@ function buildDocumentSection(
     statusCode: Number.isFinite(statusCode) ? statusCode : null,
     publishedTime,
     modifiedTime,
+    rawText,
     sectionText
   };
 }
 
-function buildUrlPlainTextRecord(
+function buildPrimaryRecordContents(section: FirecrawlDocumentSection) {
+  const prefix = dedupeTextParts([section.title, section.description]).join("\n\n");
+  const cleanedBody = cleanEmbeddingSourceText(section.rawText);
+  const bodyChunkBudget = Math.max(
+    1_000,
+    MAX_PRIMARY_RECORD_CONTENT_CHARS - (prefix ? prefix.length + 2 : 0)
+  );
+  const bodyChunks = cleanedBody
+    ? splitTextIntoChunks(cleanedBody, bodyChunkBudget)
+    : [];
+
+  if (bodyChunks.length === 0) {
+    const fallbackContent = dedupeTextParts([prefix]).join("\n\n");
+    return fallbackContent ? [fallbackContent] : [];
+  }
+
+  return bodyChunks
+    .map((bodyChunk) =>
+      truncateText(
+        dedupeTextParts([prefix, bodyChunk]).join("\n\n"),
+        MAX_PRIMARY_RECORD_CONTENT_CHARS
+      )
+    )
+    .filter((content) => content.length > 0);
+}
+
+function buildChildRecordContent(section: FirecrawlDocumentSection) {
+  const cleanedBody = cleanEmbeddingSourceText(section.rawText);
+  const firstParagraph = extractFirstParagraph(cleanedBody);
+  const excerpt = truncateText(cleanedBody, MAX_CHILD_RECORD_EXCERPT_CHARS);
+  const content = dedupeTextParts([
+    section.title,
+    section.description,
+    firstParagraph,
+    excerpt
+  ]).join("\n\n");
+
+  return truncateText(content, MAX_CHILD_RECORD_CONTENT_CHARS);
+}
+
+function buildUrlPlainTextSectionRecord(
+  seedUrl: string,
+  section: FirecrawlDocumentSection,
+  isPrimary: boolean
+): Array<Record<string, unknown>> {
+  const contents = isPrimary
+    ? buildPrimaryRecordContents(section)
+    : [buildChildRecordContent(section)].filter((content) => content.length > 0);
+
+  const parsedUrl = new URL(section.sourceUrl);
+
+  return contents.map((content, index) => ({
+    id:
+      isPrimary && contents.length > 1
+        ? `${section.sourceUrl}#seed-${index + 1}`
+        : section.sourceUrl,
+    source_type: "url",
+    crawl_provider: "firecrawl",
+    seed_url: seedUrl,
+    is_seed: isPrimary,
+    chunk_index: index,
+    chunk_count: contents.length,
+    url: section.sourceUrl,
+    hostname: parsedUrl.hostname,
+    pathname: parsedUrl.pathname || "/",
+    ...(section.title ? { title: section.title } : {}),
+    ...(section.description ? { description: section.description } : {}),
+    ...(section.language ? { language: section.language } : {}),
+    status_code: section.statusCode,
+    content_length: content.length,
+    published_time: section.publishedTime,
+    modified_time: section.modifiedTime,
+    content
+  }));
+}
+
+function buildUrlPlainTextRecords(
   seedUrl: string,
   documents: FirecrawlDocument[],
   primaryDocument: FirecrawlDocument | null = null
 ): UrlPlainTextRecordBuildResult {
   const skippedUrlMap = new Map<string, string>();
-  const sections: FirecrawlDocumentSection[] = [];
+  const sections: Array<{
+    isPrimary: boolean;
+    section: FirecrawlDocumentSection;
+  }> = [];
   const seenUrls = new Set<string>();
   const candidateDocuments = primaryDocument
     ? [primaryDocument, ...documents]
     : [...documents];
-  let hasPrimarySection = false;
+  let hasPrimaryRecord = false;
 
   candidateDocuments.forEach((document, index) => {
     const fallbackUrl = index === 0 && primaryDocument ? seedUrl : null;
@@ -745,7 +930,7 @@ function buildUrlPlainTextRecord(
 
     if (seenUrls.has(section.sourceUrl)) {
       if (matchesSeedUrl) {
-        hasPrimarySection = true;
+        hasPrimaryRecord = true;
       }
       return;
     }
@@ -754,51 +939,37 @@ function buildUrlPlainTextRecord(
     skippedUrlMap.delete(section.sourceUrl);
 
     if (matchesSeedUrl) {
-      hasPrimarySection = true;
-      sections.unshift(section);
+      hasPrimaryRecord = true;
+      sections.unshift({
+        isPrimary: true,
+        section
+      });
       return;
     }
 
-    sections.push(section);
+    sections.push({
+      isPrimary: false,
+      section
+    });
   });
 
-  const combinedSectionText = sections.map((section) => section.sectionText).join("\n\n");
-  const content = cleanEmbeddingSourceText(combinedSectionText);
+  const records = sections.flatMap(({ section, isPrimary }) => {
+    return buildUrlPlainTextSectionRecord(seedUrl, section, isPrimary);
+  });
 
-  if (!content) {
+  if (records.length === 0) {
     return {
-      record: null,
+      records: [],
       processedPageCount: sections.length,
-      hasPrimarySection,
+      hasPrimaryRecord,
       skippedUrlMap
     };
   }
 
-  const primarySection =
-    sections.find((section) => section.sourceUrl === seedUrl) ?? sections[0] ?? null;
-  const parsedUrl = new URL(seedUrl);
-
   return {
-    record: {
-      id: seedUrl,
-      source_type: "url",
-      crawl_provider: "firecrawl",
-      url: seedUrl,
-      hostname: parsedUrl.hostname,
-      pathname: parsedUrl.pathname || "/",
-      ...(primarySection?.title ? { title: primarySection.title } : {}),
-      ...(primarySection?.description
-        ? { description: primarySection.description }
-        : {}),
-      ...(primarySection?.language ? { language: primarySection.language } : {}),
-      status_code: primarySection?.statusCode ?? null,
-      content_length: content.length,
-      published_time: primarySection?.publishedTime ?? null,
-      modified_time: primarySection?.modifiedTime ?? null,
-      content
-    },
+    records,
     processedPageCount: sections.length,
-    hasPrimarySection,
+    hasPrimaryRecord,
     skippedUrlMap
   };
 }
@@ -841,6 +1012,10 @@ function getDefaultUrlEmbeddingFieldOptions() {
   return {
     source_type: { filterable: true, searchable: false },
     crawl_provider: { filterable: true, searchable: false },
+    seed_url: { filterable: true, searchable: true, retrievable: true },
+    is_seed: { filterable: true, searchable: false },
+    chunk_index: { filterable: true, searchable: false },
+    chunk_count: { filterable: true, searchable: false },
     url: { searchable: true, retrievable: true },
     hostname: { filterable: true, searchable: true },
     pathname: { filterable: true, searchable: true },
@@ -945,13 +1120,13 @@ async function crawlSeedUrlWithFallback(
   client: Firecrawl,
   seedUrl: string,
   crawlLevels: number,
-  crawlLimit: number | null
+  crawlLimit: number
 ) {
   const genericCrawl = async () => {
     const job = (await firecrawlWithRetry(
       () =>
         client.crawl(seedUrl, {
-          ...(typeof crawlLimit === "number" ? { limit: crawlLimit } : {}),
+          limit: crawlLimit,
           maxDiscoveryDepth: Math.max(0, crawlLevels - 1),
           sitemap: "skip",
           crawlEntireDomain: true,
@@ -997,7 +1172,7 @@ async function crawlSeedUrlWithFallback(
     };
   };
 
-  if (crawlLevels !== 2 || typeof crawlLimit !== "number" || crawlLimit <= 1) {
+  if (crawlLevels !== 2 || crawlLimit <= 1) {
     return genericCrawl();
   }
 
@@ -1053,7 +1228,7 @@ export async function crawlUrlsForPlainTextEmbeddings(
   const crawlLevels = Math.max(
     1,
     Math.min(
-      3,
+      5,
       Number.isInteger(options?.crawlLevels)
         ? Number(options?.crawlLevels)
         : env.integrations.firecrawl.crawlLevels
@@ -1062,10 +1237,7 @@ export async function crawlUrlsForPlainTextEmbeddings(
   const maxLinks =
     Number.isInteger(options?.maxLinks) && Number(options?.maxLinks) > 0
       ? Math.max(1, Number(options?.maxLinks))
-      : typeof env.integrations.firecrawl.maxLinks === "number" &&
-            env.integrations.firecrawl.maxLinks > 0
-        ? env.integrations.firecrawl.maxLinks
-        : null;
+      : env.integrations.firecrawl.maxLinks;
 
   if (normalizedUrls.length > MAX_URL_SEEDS_PER_REQUEST) {
     throw createStatusError(
@@ -1084,8 +1256,7 @@ export async function crawlUrlsForPlainTextEmbeddings(
 
   for (
     let index = 0;
-    index < normalizedUrls.length &&
-    (remainingLinks === null || remainingLinks > 0);
+    index < normalizedUrls.length && remainingLinks > 0;
     index += 1
   ) {
     const seedUrl = normalizedUrls[index]!;
@@ -1093,9 +1264,7 @@ export async function crawlUrlsForPlainTextEmbeddings(
     const crawlLimit =
       crawlLevels === 1
         ? 1
-        : remainingLinks === null
-          ? null
-          : Math.max(1, Math.ceil(remainingLinks / remainingSeedUrls));
+        : Math.max(1, Math.ceil(remainingLinks / remainingSeedUrls));
 
     let job: FirecrawlCrawlJob;
     let jobErrors: FirecrawlCrawlErrors = {
@@ -1142,13 +1311,7 @@ export async function crawlUrlsForPlainTextEmbeddings(
 
     firecrawlCreditsUsed += creditsUsed;
 
-    if (remainingLinks !== null) {
-      remainingLinks = Math.max(
-        0,
-        remainingLinks -
-          (crawlLevels === 1 ? 1 : typeof crawlLimit === "number" ? crawlLimit : 0)
-      );
-    }
+    remainingLinks = Math.max(0, remainingLinks - (crawlLevels === 1 ? 1 : crawlLimit));
 
     (jobErrors.errors ?? [])
       .map((entry) =>
@@ -1184,9 +1347,9 @@ export async function crawlUrlsForPlainTextEmbeddings(
     }
 
     const crawledDocuments = Array.isArray(job.data) ? job.data : [];
-    let recordBuildResult = buildUrlPlainTextRecord(seedUrl, crawledDocuments);
+    let recordBuildResult = buildUrlPlainTextRecords(seedUrl, crawledDocuments);
 
-    if (!recordBuildResult.hasPrimarySection) {
+    if (!recordBuildResult.hasPrimaryRecord) {
       const primaryDocument = await scrapePrimaryDocument(client, seedUrl);
 
       if (primaryDocument) {
@@ -1194,7 +1357,7 @@ export async function crawlUrlsForPlainTextEmbeddings(
           primaryDocument,
           1
         );
-        recordBuildResult = buildUrlPlainTextRecord(
+        recordBuildResult = buildUrlPlainTextRecords(
           seedUrl,
           crawledDocuments,
           primaryDocument
@@ -1206,10 +1369,10 @@ export async function crawlUrlsForPlainTextEmbeddings(
       skippedUrlMap.set(url, message);
     });
 
-    if (recordBuildResult.record) {
-      records.push(recordBuildResult.record);
+    if (recordBuildResult.records.length > 0) {
+      records.push(...recordBuildResult.records);
       processedUrlCount += recordBuildResult.processedPageCount;
-      if (recordBuildResult.hasPrimarySection) {
+      if (recordBuildResult.hasPrimaryRecord) {
         skippedUrlMap.delete(seedUrl);
       } else if (!skippedUrlMap.has(seedUrl)) {
         skippedUrlMap.set(

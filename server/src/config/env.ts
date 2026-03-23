@@ -29,7 +29,8 @@ const DEFAULT_SAMSAR_EXTERNAL_ASSISTANT_PROMPT_VERSION =
   "structuredqueries-rag-voice-v1";
 const DEFAULT_SAMSAR_PUBLIC_API_BASE_URL = "https://api.samsar.one";
 const DEFAULT_FIRECRAWL_API_URL = "https://api.firecrawl.dev";
-const DEFAULT_FIRECRAWL_CRAWL_LEVELS = 2;
+const DEFAULT_FIRECRAWL_CRAWL_LEVELS = 5;
+const DEFAULT_FIRECRAWL_MAX_LINKS = 10;
 const DEFAULT_FIRECRAWL_POLL_INTERVAL_SECONDS = 5;
 const DEFAULT_FIRECRAWL_TIMEOUT_SECONDS = 120;
 
@@ -66,36 +67,6 @@ function parsePositiveInteger(
 
   return parsed;
 }
-
-function parseOptionalPositiveInteger(
-  value: string | undefined,
-  options?: {
-    min?: number;
-    max?: number;
-  }
-) {
-  const trimmed = value?.trim();
-
-  if (!trimmed) {
-    return undefined;
-  }
-
-  const parsed = Number.parseInt(trimmed, 10);
-
-  if (!Number.isInteger(parsed)) {
-    return undefined;
-  }
-
-  const min = options?.min ?? 1;
-  const max = options?.max ?? Number.MAX_SAFE_INTEGER;
-
-  if (parsed < min || parsed > max) {
-    return undefined;
-  }
-
-  return parsed;
-}
-
 function readOptional(value: string | undefined) {
   const trimmed = value?.trim();
 
@@ -124,12 +95,16 @@ export const env = {
         DEFAULT_FIRECRAWL_CRAWL_LEVELS,
         {
           min: 1,
-          max: 3
+          max: 5
         }
       ),
-      maxLinks: parseOptionalPositiveInteger(process.env.FIRECRAWL_MAX_LINKS, {
-        min: 1
-      }),
+      maxLinks: parsePositiveInteger(
+        process.env.FIRECRAWL_MAX_LINKS,
+        DEFAULT_FIRECRAWL_MAX_LINKS,
+        {
+          min: 1
+        }
+      ),
       pollIntervalSeconds: parsePositiveInteger(
         process.env.FIRECRAWL_POLL_INTERVAL_SECONDS,
         DEFAULT_FIRECRAWL_POLL_INTERVAL_SECONDS

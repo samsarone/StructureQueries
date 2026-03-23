@@ -33,6 +33,18 @@ function readOptionalString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+function summarizeEmbeddingRecords(records: Array<Record<string, unknown>>) {
+  return records.map((record) => ({
+    id: readOptionalString(record.id) ?? null,
+    seedUrl: readOptionalString(record.seed_url) ?? null,
+    url: readOptionalString(record.url) ?? null,
+    isSeed: record.is_seed === true,
+    contentLength:
+      typeof record.content_length === "number" ? record.content_length : null,
+    title: readOptionalString(record.title) ?? null
+  }));
+}
+
 function isPrivateHostname(hostname: string) {
   const normalized = hostname.toLowerCase();
 
@@ -250,7 +262,8 @@ webpagesRouter.post("/analyze", async (request, response) => {
       "[api][webpages][analyze] prepared plain-text payload",
       JSON.stringify({
         ...crawlSummary,
-        records: crawlResult.records
+        recordCount: crawlResult.records.length,
+        records: summarizeEmbeddingRecords(crawlResult.records)
       })
     );
 
