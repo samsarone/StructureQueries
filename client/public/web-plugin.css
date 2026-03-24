@@ -102,8 +102,62 @@ body.web-plugin-body {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.auth-dialog {
-  width: min(100%, 460px);
+.web-main-screen {
+  display: grid;
+  gap: 10px;
+}
+
+.web-auth-surface {
+  display: grid;
+  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+  grid-template-areas:
+    "hero summary"
+    "hero panel";
+  align-items: center;
+  gap: 14px 18px;
+  padding: 20px;
+  border-radius: 28px;
+}
+
+.web-auth-stage {
+  grid-area: hero;
+}
+
+.web-auth-summary {
+  grid-area: summary;
+  min-height: 0;
+}
+
+.web-auth-panel {
+  grid-area: panel;
+  min-width: 0;
+  width: min(100%, 620px);
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.web-auth-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.web-auth-wordmark {
+  width: min(100%, 232px);
+}
+
+.web-auth-panel .dialog-back-button {
+  margin-left: auto;
+}
+
+.web-auth-panel .dialog-actions {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.web-auth-panel .primary-button {
+  width: 100%;
 }
 
 .auth-tabs {
@@ -166,6 +220,8 @@ body.web-plugin-body {
 }
 
 .notice-banner[hidden],
+#auth-overlay[hidden],
+#main-screen[hidden],
 #credit-warning[hidden],
 #voice-warning[hidden],
 #logout-button[hidden],
@@ -259,8 +315,20 @@ body.web-plugin-body {
 }
 
 @media (max-width: 900px) {
+  .web-auth-surface,
   .web-hero-surface {
     grid-template-columns: 1fr;
+  }
+
+  .web-auth-surface {
+    grid-template-areas:
+      "hero"
+      "summary"
+      "panel";
+    gap: 12px;
+  }
+
+  .web-hero-surface {
     grid-template-areas:
       "hero"
       "url"
@@ -269,8 +337,13 @@ body.web-plugin-body {
     gap: 12px;
   }
 
-  .hero-stage {
+  .hero-stage,
+  .web-auth-stage {
     justify-self: center;
+  }
+
+  .web-auth-panel {
+    width: 100%;
   }
 
   .meta-grid {
@@ -291,6 +364,7 @@ body.web-plugin-body {
     padding-bottom: 4px;
   }
 
+  .web-auth-surface,
   .web-hero-surface {
     padding: 18px;
     border-radius: 24px;
@@ -307,7 +381,14 @@ body.web-plugin-body {
     grid-template-columns: 1fr;
   }
 
-  .auth-dialog {
-    width: min(100%, 404px);
+  .web-auth-panel-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .web-auth-panel .dialog-back-button {
+    margin-left: 0;
+    width: 100%;
+    justify-content: center;
   }
 }

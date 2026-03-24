@@ -26,7 +26,7 @@ const DEFAULT_SAMSAR_RETRIEVAL_LIMIT = 6;
 const DEFAULT_SAMSAR_SIMILARITY_LIMIT = 8;
 const DEFAULT_SAMSAR_EXTERNAL_USER_PROVIDER = "structuredqueries";
 const DEFAULT_SAMSAR_EXTERNAL_ASSISTANT_PROMPT_VERSION =
-  "structuredqueries-rag-voice-v1";
+  "structuredqueries-rag-voice-v2";
 const DEFAULT_SAMSAR_PUBLIC_API_BASE_URL = "https://api.samsar.one";
 const DEFAULT_FIRECRAWL_API_URL = "https://api.firecrawl.dev";
 const DEFAULT_FIRECRAWL_CRAWL_LEVELS = 5;

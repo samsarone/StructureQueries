@@ -97,6 +97,7 @@
     creditWarningButton: document.querySelector("#credit-warning-button"),
     creditWarningDismissButton: document.querySelector("#credit-warning-dismiss-button"),
     noticeBanner: document.querySelector("#notice-banner"),
+    mainScreen: document.querySelector("#main-screen"),
     urlForm: document.querySelector("#url-form"),
     pageUrlInput: document.querySelector("#page-url-input"),
     pageTitle: document.querySelector("#page-title"),
@@ -300,7 +301,9 @@
     const observedElements = [
       document.documentElement,
       document.body,
-      document.querySelector(".web-overlay-shell")
+      document.querySelector(".web-overlay-shell"),
+      refs.authOverlay,
+      refs.mainScreen
     ].filter(Boolean);
 
     if (typeof ResizeObserver === "function") {
@@ -2860,7 +2863,11 @@
     }
 
     if (refs.authOverlay) {
-      refs.authOverlay.classList.toggle("is-hidden", !state.authOverlayOpen);
+      refs.authOverlay.hidden = !state.authOverlayOpen;
+    }
+
+    if (refs.mainScreen) {
+      refs.mainScreen.hidden = state.authOverlayOpen;
     }
 
     if (refs.authTitle) {
@@ -2910,6 +2917,10 @@
       refs.authCloseButton.disabled = state.authSubmitting;
     }
 
+    if (refs.advancedButton) {
+      refs.advancedButton.disabled = state.authOverlayOpen;
+    }
+
     if (refs.loginSubmitButton) {
       refs.loginSubmitButton.disabled = state.authSubmitting;
       refs.loginSubmitButton.textContent = state.authSubmitting ? "Logging in..." : "Login";
@@ -2937,12 +2948,6 @@
 
   refs.authCloseButton?.addEventListener("click", () => {
     closeAuthOverlay();
-  });
-
-  refs.authOverlay?.addEventListener("click", (event) => {
-    if (event.target === refs.authOverlay) {
-      closeAuthOverlay();
-    }
   });
 
   refs.loginForm?.addEventListener("submit", (event) => {

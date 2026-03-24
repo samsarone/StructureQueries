@@ -8,146 +8,6 @@
     <link rel="stylesheet" href="/landing-assets/web-plugin.css" />
   </head>
   <body class="web-plugin-body">
-    <div id="auth-overlay" class="registration-overlay is-hidden">
-      <div class="registration-dialog auth-dialog">
-        <div class="dialog-header">
-          <div class="dialog-brand">
-            <div class="brand-emblem dialog-emblem">
-              <img
-                src="/landing-assets/structured-queries-monogram.svg"
-                class="brand-mark"
-                alt="Structured Queries monogram"
-              />
-            </div>
-            <div class="dialog-brand-copy">
-              <p class="eyebrow">Samsar account</p>
-              <h2 id="auth-title">Login to continue</h2>
-            </div>
-          </div>
-          <button
-            id="auth-close-button"
-            class="secondary-button dialog-back-button"
-            type="button"
-            aria-label="Close login dialog"
-          >
-            <span aria-hidden="true">×</span>
-            <span>Close</span>
-          </button>
-        </div>
-
-        <img
-          src="/landing-assets/structured-queries-wordmark.svg"
-          class="dialog-wordmark"
-          alt="Structured Queries"
-        />
-
-        <p id="auth-subtitle" class="registration-copy">
-          Sign in to analyze pages, start voice Q&amp;A, and use your Samsar credits.
-        </p>
-
-        <div class="auth-tabs" role="tablist" aria-label="Authentication mode">
-          <button
-            id="auth-mode-login"
-            class="auth-tab is-active"
-            type="button"
-            role="tab"
-            aria-selected="true"
-          >
-            Login
-          </button>
-          <button
-            id="auth-mode-register"
-            class="auth-tab"
-            type="button"
-            role="tab"
-            aria-selected="false"
-          >
-            Register
-          </button>
-        </div>
-
-        <form id="login-form" class="auth-form">
-          <label class="field">
-            <span>Email</span>
-            <input id="login-email" type="email" autocomplete="email" required />
-          </label>
-          <label class="field">
-            <span>Password</span>
-            <input
-              id="login-password"
-              type="password"
-              autocomplete="current-password"
-              required
-            />
-          </label>
-          <div class="dialog-actions">
-            <button id="login-submit-button" class="primary-button" type="submit">
-              Login
-            </button>
-          </div>
-        </form>
-
-        <form id="register-form" class="auth-form" hidden>
-          <div class="auth-row">
-            <label class="field">
-              <span>Display Name</span>
-              <input
-                id="register-display-name"
-                type="text"
-                autocomplete="name"
-              />
-            </label>
-            <label class="field">
-              <span>Username</span>
-              <input
-                id="register-username"
-                type="text"
-                autocomplete="username"
-                required
-              />
-            </label>
-          </div>
-          <label class="field">
-            <span>Email</span>
-            <input id="register-email" type="email" autocomplete="email" required />
-          </label>
-          <div class="auth-row">
-            <label class="field">
-              <span>Password</span>
-              <input
-                id="register-password"
-                type="password"
-                autocomplete="new-password"
-                required
-              />
-            </label>
-            <label class="field">
-              <span>Confirm Password</span>
-              <input
-                id="register-confirm-password"
-                type="password"
-                autocomplete="new-password"
-                required
-              />
-            </label>
-          </div>
-          <div class="dialog-actions">
-            <button
-              id="register-submit-button"
-              class="primary-button"
-              type="submit"
-            >
-              Create account
-            </button>
-          </div>
-        </form>
-
-        <p id="auth-status" class="registration-status">
-          Use your existing Samsar account or create one here.
-        </p>
-      </div>
-    </div>
-
     <main class="overlay-shell web-overlay-shell">
       <header class="topbar">
         <div class="topbar-brand">
@@ -208,8 +68,8 @@
 
       <p id="notice-banner" class="notice-banner" hidden></p>
 
-      <section class="hero-surface web-hero-surface">
-        <div class="hero-stage">
+      <section id="auth-overlay" class="hero-surface web-auth-surface" hidden>
+        <div class="hero-stage web-auth-stage">
           <div class="hero-emblem">
             <img
               src="/landing-assets/structured-queries-monogram.svg"
@@ -234,210 +94,367 @@
           </div>
         </div>
 
-        <form id="url-form" class="url-form">
-          <label class="field url-field">
-            <span>Enter URL</span>
-            <input
-              id="page-url-input"
-              class="url-input"
-              type="url"
-              placeholder="https://example.com/article"
-              autocomplete="url"
-            />
-          </label>
-        </form>
-
-        <section class="page-summary" aria-live="polite">
-          <p class="surface-label">Web Page</p>
-          <h1 id="page-title" class="page-title">Paste a public URL to begin</h1>
-          <p id="surface-status" class="surface-status">
-            Sign in, analyze a page, then start voice.
+        <section class="page-summary web-auth-summary">
+          <p class="surface-label">Samsar account</p>
+          <h1 id="auth-title" class="page-title">Login to continue</h1>
+          <p id="auth-subtitle" class="surface-status">
+            Sign in to analyze pages, start voice Q&amp;A, and use your Samsar credits.
           </p>
         </section>
 
-        <div id="button-row" class="button-row">
-          <button
-            id="analyze-button"
-            class="secondary-button action-button"
-            type="button"
-          >
-            <span
-              id="analyze-button-icon"
-              class="button-icon"
-              aria-hidden="true"
-            ></span>
-            <span id="analyze-button-label">Analyze page</span>
-          </button>
-          <button
-            id="voice-toggle-button"
-            class="primary-button action-button"
-            type="button"
-          >
-            <span
-              id="voice-toggle-button-icon"
-              class="button-icon"
-              aria-hidden="true"
-            ></span>
-            <span id="voice-toggle-button-label">Speak</span>
-          </button>
+        <div class="web-auth-panel">
+          <div class="web-auth-panel-header">
+            <img
+              src="/landing-assets/structured-queries-wordmark.svg"
+              class="dialog-wordmark web-auth-wordmark"
+              alt="Structured Queries"
+            />
+            <button
+              id="auth-close-button"
+              class="secondary-button dialog-back-button"
+              type="button"
+              aria-label="Back to main view"
+            >
+              <span aria-hidden="true">←</span>
+              <span>Back</span>
+            </button>
+          </div>
+
+          <div class="auth-tabs" role="tablist" aria-label="Authentication mode">
+            <button
+              id="auth-mode-login"
+              class="auth-tab is-active"
+              type="button"
+              role="tab"
+              aria-selected="true"
+            >
+              Login
+            </button>
+            <button
+              id="auth-mode-register"
+              class="auth-tab"
+              type="button"
+              role="tab"
+              aria-selected="false"
+            >
+              Register
+            </button>
+          </div>
+
+          <form id="login-form" class="auth-form">
+            <label class="field">
+              <span>Email</span>
+              <input id="login-email" type="email" autocomplete="email" required />
+            </label>
+            <label class="field">
+              <span>Password</span>
+              <input
+                id="login-password"
+                type="password"
+                autocomplete="current-password"
+                required
+              />
+            </label>
+            <div class="dialog-actions">
+              <button id="login-submit-button" class="primary-button" type="submit">
+                Login
+              </button>
+            </div>
+          </form>
+
+          <form id="register-form" class="auth-form" hidden>
+            <div class="auth-row">
+              <label class="field">
+                <span>Display Name</span>
+                <input
+                  id="register-display-name"
+                  type="text"
+                  autocomplete="name"
+                />
+              </label>
+              <label class="field">
+                <span>Username</span>
+                <input
+                  id="register-username"
+                  type="text"
+                  autocomplete="username"
+                  required
+                />
+              </label>
+            </div>
+            <label class="field">
+              <span>Email</span>
+              <input id="register-email" type="email" autocomplete="email" required />
+            </label>
+            <div class="auth-row">
+              <label class="field">
+                <span>Password</span>
+                <input
+                  id="register-password"
+                  type="password"
+                  autocomplete="new-password"
+                  required
+                />
+              </label>
+              <label class="field">
+                <span>Confirm Password</span>
+                <input
+                  id="register-confirm-password"
+                  type="password"
+                  autocomplete="new-password"
+                  required
+                />
+              </label>
+            </div>
+            <div class="dialog-actions">
+              <button
+                id="register-submit-button"
+                class="primary-button"
+                type="submit"
+              >
+                Create account
+              </button>
+            </div>
+          </form>
+
+          <p id="auth-status" class="registration-status">
+            Use your existing Samsar account or create one here.
+          </p>
         </div>
       </section>
 
-      <details id="advanced-drawer" class="drawer advanced-drawer">
-        <summary>
-          <span>Advanced options</span>
-          <span class="drawer-hint">language, speaker, account</span>
-        </summary>
+      <div id="main-screen" class="web-main-screen">
+        <section class="hero-surface web-hero-surface">
+          <div class="hero-stage">
+            <div class="hero-emblem">
+              <img
+                src="/landing-assets/structured-queries-monogram.svg"
+                class="hero-mark"
+                alt=""
+              />
 
-        <div class="drawer-body">
-          <section class="top-credit-banner settings-credit-banner" aria-live="polite">
-            <p class="top-credit-banner-message settings-credit-summary">
-              <span class="settings-credit-label">Credits</span>
-              <span id="settings-credits-remaining" class="settings-credit-value">
-                Checking...
-              </span>
-            </p>
-            <p id="settings-credits-caption" class="settings-credit-caption">
-              Your available credits appear here.
+              <div class="voice-orb-shell" aria-hidden="true">
+                <div class="voice-ring voice-ring-one"></div>
+                <div class="voice-ring voice-ring-two"></div>
+                <div class="voice-orb">
+                  <div class="voice-eq">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                  <div class="voice-orb-core"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <form id="url-form" class="url-form">
+            <label class="field url-field">
+              <span>Enter URL</span>
+              <input
+                id="page-url-input"
+                class="url-input"
+                type="url"
+                placeholder="https://example.com/article"
+                autocomplete="url"
+              />
+            </label>
+          </form>
+
+          <section class="page-summary" aria-live="polite">
+            <p class="surface-label">Web Page</p>
+            <h1 id="page-title" class="page-title">Paste a public URL to begin</h1>
+            <p id="surface-status" class="surface-status">
+              Sign in, analyze a page, then start voice.
             </p>
           </section>
 
-          <label class="field prepare-credit-field">
-            <span>Max credits per Prepare page</span>
-            <input
-              id="prepare-max-credits-input"
-              type="number"
-              min="1"
-              max="100"
-              step="1"
-              value="20"
-              inputmode="numeric"
-            />
-            <small class="field-hint">
-              Default 20. Child-link crawl text is compressed first to stay under this cap.
-            </small>
-          </label>
+          <div id="button-row" class="button-row">
+            <button
+              id="analyze-button"
+              class="secondary-button action-button"
+              type="button"
+            >
+              <span
+                id="analyze-button-icon"
+                class="button-icon"
+                aria-hidden="true"
+              ></span>
+              <span id="analyze-button-label">Analyze page</span>
+            </button>
+            <button
+              id="voice-toggle-button"
+              class="primary-button action-button"
+              type="button"
+            >
+              <span
+                id="voice-toggle-button-icon"
+                class="button-icon"
+                aria-hidden="true"
+              ></span>
+              <span id="voice-toggle-button-label">Speak</span>
+            </button>
+          </div>
+        </section>
 
-          <div class="advanced-grid">
-            <label class="field field-select advanced-language-field">
-              <span>Language</span>
-              <select id="language-select">
-                <option value="auto">Auto</option>
-                <option value="en">English</option>
-                <option value="es">Spanish</option>
-                <option value="fr">French</option>
-                <option value="de">German</option>
-                <option value="hi">Hindi</option>
-                <option value="pt">Portuguese</option>
-              </select>
-            </label>
-            <label class="field">
-              <span>Display Name</span>
-              <input id="advanced-display-name" type="text" autocomplete="name" />
-            </label>
-            <label class="field">
-              <span>Email</span>
-              <input id="advanced-email" type="email" autocomplete="email" />
-            </label>
-            <label class="field">
-              <span>Username</span>
+        <details id="advanced-drawer" class="drawer advanced-drawer">
+          <summary>
+            <span>Advanced options</span>
+            <span class="drawer-hint">language, speaker, account</span>
+          </summary>
+
+          <div class="drawer-body">
+            <section class="top-credit-banner settings-credit-banner" aria-live="polite">
+              <p class="top-credit-banner-message settings-credit-summary">
+                <span class="settings-credit-label">Credits</span>
+                <span id="settings-credits-remaining" class="settings-credit-value">
+                  Checking...
+                </span>
+              </p>
+              <p id="settings-credits-caption" class="settings-credit-caption">
+                Your available credits appear here.
+              </p>
+            </section>
+
+            <label class="field prepare-credit-field">
+              <span>Max credits per Prepare page</span>
               <input
-                id="advanced-username"
-                type="text"
-                autocomplete="username"
+                id="prepare-max-credits-input"
+                type="number"
+                min="1"
+                max="100"
+                step="1"
+                value="20"
+                inputmode="numeric"
               />
+              <small class="field-hint">
+                Default 20. Child-link crawl text is compressed first to stay under this cap.
+              </small>
             </label>
-            <label class="field field-select">
-              <span>Speaker</span>
-              <select id="voice-select"></select>
-            </label>
+
+            <div class="advanced-grid">
+              <label class="field field-select advanced-language-field">
+                <span>Language</span>
+                <select id="language-select">
+                  <option value="auto">Auto</option>
+                  <option value="en">English</option>
+                  <option value="es">Spanish</option>
+                  <option value="fr">French</option>
+                  <option value="de">German</option>
+                  <option value="hi">Hindi</option>
+                  <option value="pt">Portuguese</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Display Name</span>
+                <input id="advanced-display-name" type="text" autocomplete="name" />
+              </label>
+              <label class="field">
+                <span>Email</span>
+                <input id="advanced-email" type="email" autocomplete="email" />
+              </label>
+              <label class="field">
+                <span>Username</span>
+                <input
+                  id="advanced-username"
+                  type="text"
+                  autocomplete="username"
+                />
+              </label>
+              <label class="field field-select">
+                <span>Speaker</span>
+                <select id="voice-select"></select>
+              </label>
+            </div>
+
+            <div class="voice-field">
+              <button
+                id="voice-preview-button"
+                class="secondary-button preview-button"
+                type="button"
+              >
+                Play preview
+              </button>
+              <p id="voice-warning" class="detail-line voice-warning" hidden></p>
+            </div>
+
+            <div class="dialog-actions advanced-actions">
+              <button
+                id="save-settings-button"
+                class="secondary-button"
+                type="button"
+              >
+                Save advanced
+              </button>
+              <button
+                id="recharge-button"
+                class="secondary-button"
+                type="button"
+              >
+                Recharge Credits
+              </button>
+              <button id="auth-open-button" class="primary-button" type="button">
+                Login / Register
+              </button>
+              <button id="logout-button" class="danger-button" type="button">
+                Log out
+              </button>
+            </div>
+
+            <p id="advanced-status" class="registration-status">
+              Language, speaker, and account preferences live here.
+            </p>
           </div>
+        </details>
 
-          <div class="voice-field">
-            <button
-              id="voice-preview-button"
-              class="secondary-button preview-button"
-              type="button"
-            >
-              Play preview
-            </button>
-            <p id="voice-warning" class="detail-line voice-warning" hidden></p>
+        <details id="session-drawer" class="drawer">
+          <summary>
+            <span>Session details</span>
+            <span class="drawer-hint">status and transcript</span>
+          </summary>
+
+          <div class="drawer-body">
+            <div class="meta-grid">
+              <article class="meta-card">
+                <p class="status-label">User</p>
+                <p id="account-name" class="status-value">Guest</p>
+                <p id="account-hint" class="detail-line">
+                  Sign in to start.
+                </p>
+              </article>
+              <article class="meta-card">
+                <p class="status-label">Email</p>
+                <p id="account-email" class="status-value">Not provided</p>
+              </article>
+              <article class="meta-card">
+                <p class="status-label">Username</p>
+                <p id="account-username" class="status-value">Not provided</p>
+              </article>
+              <article class="meta-card meta-card-wide">
+                <p class="status-label">Status</p>
+                <p id="analysis-status" class="detail-line">Waiting...</p>
+              </article>
+              <article class="meta-card meta-card-wide">
+                <p class="status-label">Page</p>
+                <p id="page-url" class="detail-line">No URL selected yet.</p>
+                <p id="page-language" class="detail-line">
+                  Language: automatic
+                </p>
+                <p id="account-user-id" class="detail-line">Session pending</p>
+              </article>
+            </div>
+
+            <div id="conversation-log" class="conversation-log">
+              <article class="log-item log-item-system">
+                <p class="log-role">System</p>
+                <p class="log-text">Sign in, paste a public URL, analyze it, then ask by voice.</p>
+              </article>
+            </div>
           </div>
-
-          <div class="dialog-actions advanced-actions">
-            <button
-              id="save-settings-button"
-              class="secondary-button"
-              type="button"
-            >
-              Save advanced
-            </button>
-            <button
-              id="recharge-button"
-              class="secondary-button"
-              type="button"
-            >
-              Recharge Credits
-            </button>
-            <button id="auth-open-button" class="primary-button" type="button">
-              Login / Register
-            </button>
-            <button id="logout-button" class="danger-button" type="button">
-              Log out
-            </button>
-          </div>
-
-          <p id="advanced-status" class="registration-status">
-            Language, speaker, and account preferences live here.
-          </p>
-        </div>
-      </details>
-
-      <details id="session-drawer" class="drawer">
-        <summary>
-          <span>Session details</span>
-          <span class="drawer-hint">status and transcript</span>
-        </summary>
-
-        <div class="drawer-body">
-          <div class="meta-grid">
-            <article class="meta-card">
-              <p class="status-label">User</p>
-              <p id="account-name" class="status-value">Guest</p>
-              <p id="account-hint" class="detail-line">
-                Sign in to start.
-              </p>
-            </article>
-            <article class="meta-card">
-              <p class="status-label">Email</p>
-              <p id="account-email" class="status-value">Not provided</p>
-            </article>
-            <article class="meta-card">
-              <p class="status-label">Username</p>
-              <p id="account-username" class="status-value">Not provided</p>
-            </article>
-            <article class="meta-card meta-card-wide">
-              <p class="status-label">Status</p>
-              <p id="analysis-status" class="detail-line">Waiting...</p>
-            </article>
-            <article class="meta-card meta-card-wide">
-              <p class="status-label">Page</p>
-              <p id="page-url" class="detail-line">No URL selected yet.</p>
-              <p id="page-language" class="detail-line">
-                Language: automatic
-              </p>
-              <p id="account-user-id" class="detail-line">Session pending</p>
-            </article>
-          </div>
-
-          <div id="conversation-log" class="conversation-log">
-            <article class="log-item log-item-system">
-              <p class="log-role">System</p>
-              <p class="log-text">Sign in, paste a public URL, analyze it, then ask by voice.</p>
-            </article>
-          </div>
-        </div>
-      </details>
+        </details>
+      </div>
     </main>
 
     <script src="/landing-assets/web-plugin.js"></script>

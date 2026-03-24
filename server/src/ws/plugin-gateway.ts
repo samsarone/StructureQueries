@@ -5,11 +5,13 @@ import { WebSocketServer, type RawData, type WebSocket } from "ws";
 
 import { elevenLabsAdapter } from "../adapters/elevenlabs.js";
 import { env } from "../config/env.js";
+import { ensureSessionPronunciationDictionary } from "../lib/elevenlabs-pronunciation.js";
 import { generateGroundedAssistantReply } from "../lib/chat-agent.js";
 import {
   chargeExternalElevenLabsSynthesisUsage,
   chargeExternalElevenLabsTranscriptionUsage
 } from "../lib/external-usage-billing.js";
+import { prepareAssistantTextForSpeech } from "../lib/speech-prep.js";
 import {
   getSamsarErrorMessage,
   isSamsarCreditsIssue
@@ -497,28 +499,58 @@ async function transcribeAudio(
 }
 
 async function synthesizeAssistantAudio(
-  text: string,
-  voiceId?: string,
-  language?: string | null
+  input: {
+    browserSessionId?: string;
+    language?: string | null;
+    retrievalChunks?: Array<{
+      id: string;
+      score?: number;
+      text: string;
+    }>;
+    text: string;
+    voiceId?: string;
+  }
 ) {
-  const resolvedVoiceId = voiceId ?? env.integrations.elevenLabs.defaultVoiceId;
-  const resolvedLanguage = normalizeLanguage(language);
+  const resolvedVoiceId =
+    input.voiceId ?? env.integrations.elevenLabs.defaultVoiceId;
+  const resolvedLanguage = normalizeLanguage(input.language);
 
   if (!resolvedVoiceId || !elevenLabsAdapter.isConfigured()) {
     return null;
   }
 
   try {
+    const preparedSpeech = prepareAssistantTextForSpeech({
+      language: input.language,
+      retrievalChunks: input.retrievalChunks,
+      text: input.text
+    });
+    const pronunciationDictionaryLocators =
+      await ensureSessionPronunciationDictionary({
+        rules: preparedSpeech.pronunciationRules,
+        sessionKey: input.browserSessionId
+      });
     const result = await elevenLabsAdapter.synthesize({
       voiceId: resolvedVoiceId,
-      text,
-      ...(resolvedLanguage ? { languageCode: resolvedLanguage } : {})
+      text: preparedSpeech.speechText,
+      ...(resolvedLanguage ? { languageCode: resolvedLanguage } : {}),
+      applyTextNormalization: "auto",
+      pronunciationDictionaryLocators,
+      voiceSettings: {
+        similarityBoost: 0.78,
+        speed: 1,
+        stability: 0.36,
+        style: 0.2,
+        useSpeakerBoost: true
+      }
     });
 
     return {
       audioBase64: result.audioBuffer.toString("base64"),
       characterCount: result.characterCount,
       mimeType: "audio/mpeg",
+      preparedText: preparedSpeech.speechText,
+      pronunciationTerms: preparedSpeech.technicalTerms,
       requestId: result.requestId,
       source: "elevenlabs" as const,
       voiceId: resolvedVoiceId
@@ -691,9 +723,13 @@ async function handleSubmitAudio(
 
     try {
       synthesizedAudio = await synthesizeAssistantAudio(
-        assistantText,
-        activeVoiceId,
-        responseLanguage
+        {
+          browserSessionId: state.browserSessionId,
+          language: responseLanguage,
+          retrievalChunks: assistantReply.retrieval?.chunks,
+          text: assistantText,
+          voiceId: activeVoiceId
+        }
       );
 
       if (synthesizedAudio) {
@@ -705,7 +741,7 @@ async function handleSubmitAudio(
           pageTitle: state.pageTitle,
           pageUrl: state.pageUrl,
           requestId: synthesizedAudio.requestId,
-          text: assistantText,
+          text: synthesizedAudio.preparedText ?? assistantText,
           voiceId: activeVoiceId
         });
       }
