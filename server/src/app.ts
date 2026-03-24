@@ -620,9 +620,10 @@ function renderLandingPage(serviceName: string) {
       }
 
       .web-client-frame {
+        display: block;
         width: 100%;
-        height: clamp(500px, 61vh, 640px);
-        min-height: 500px;
+        height: 620px;
+        min-height: 520px;
         border: 1px solid rgba(122, 177, 211, 0.16);
         border-radius: 30px;
         background:
@@ -631,6 +632,7 @@ function renderLandingPage(serviceName: string) {
         box-shadow:
           0 26px 80px rgba(0, 0, 0, 0.38),
           0 0 0 1px rgba(122, 177, 211, 0.08) inset;
+        transition: height 180ms ease;
       }
 
       .step-list {
@@ -803,8 +805,12 @@ function renderLandingPage(serviceName: string) {
       }
 
       @media (min-width: 981px) {
-        html {
+        html,
+        body {
           scroll-snap-type: y mandatory;
+        }
+
+        html {
           scroll-padding-top: 10px;
         }
 
@@ -873,8 +879,8 @@ function renderLandingPage(serviceName: string) {
         }
 
         .web-client-frame {
-          height: auto;
-          min-height: 1260px;
+          height: 920px;
+          min-height: 920px;
         }
 
         .preview-stats {
@@ -1102,6 +1108,8 @@ function renderLandingPage(serviceName: string) {
     </main>
     <script>
       (() => {
+        const webClientFrame = document.querySelector(".web-client-frame");
+
         const syncHeroPhraseWidths = () => {
           const phrases = document.querySelectorAll(".hero-title-phrase");
           for (const phrase of phrases) {
@@ -1110,6 +1118,39 @@ function renderLandingPage(serviceName: string) {
             }
 
             phrase.style.setProperty("--phrase-width", phrase.scrollWidth + "px");
+          }
+        };
+
+        const setWebClientFrameHeight = (height) => {
+          if (!(webClientFrame instanceof HTMLIFrameElement)) {
+            return;
+          }
+
+          const nextHeight = Math.max(520, Math.ceil(height));
+          webClientFrame.style.height = nextHeight + "px";
+        };
+
+        const syncWebClientFrameFromDocument = () => {
+          if (!(webClientFrame instanceof HTMLIFrameElement)) {
+            return;
+          }
+
+          try {
+            const frameDocument = webClientFrame.contentDocument;
+            if (!frameDocument) {
+              return;
+            }
+
+            const nextHeight = Math.max(
+              frameDocument.documentElement?.scrollHeight ?? 0,
+              frameDocument.body?.scrollHeight ?? 0
+            );
+
+            if (nextHeight > 0) {
+              setWebClientFrameHeight(nextHeight);
+            }
+          } catch {
+            // Ignore iframe sizing failures and keep the fallback height.
           }
         };
 
@@ -1124,6 +1165,33 @@ function renderLandingPage(serviceName: string) {
         }
 
         window.addEventListener("resize", syncHeroPhraseWidths);
+
+        if (webClientFrame instanceof HTMLIFrameElement) {
+          webClientFrame.addEventListener("load", () => {
+            syncWebClientFrameFromDocument();
+          });
+
+          window.addEventListener("message", (event) => {
+            if (event.origin !== window.location.origin) {
+              return;
+            }
+
+            if (event.source !== webClientFrame.contentWindow) {
+              return;
+            }
+
+            const payload = event.data;
+            if (
+              !payload ||
+              payload.type !== "structuredqueries:web-client-height" ||
+              typeof payload.height !== "number"
+            ) {
+              return;
+            }
+
+            setWebClientFrameHeight(payload.height);
+          });
+        }
       })();
     </script>
   </body>

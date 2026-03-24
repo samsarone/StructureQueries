@@ -22,6 +22,7 @@
   const MAX_LOW_BAND_SHARE = 0.25;
   const MAX_HIGH_BAND_SHARE = 0.18;
   const EXTENSION_ID = "structurequeries_web_client";
+  const EMBED_HEIGHT_MESSAGE_TYPE = "structuredqueries:web-client-height";
   const creditCountFormatter = new Intl.NumberFormat();
 
   const BUTTON_ICONS = {
@@ -84,6 +85,7 @@
     registerSubmitButton: document.querySelector("#register-submit-button"),
     advancedButton: document.querySelector("#advanced-button"),
     advancedDrawer: document.querySelector("#advanced-drawer"),
+    sessionDrawer: document.querySelector("#session-drawer"),
     headerCredits: document.querySelector("#header-credits"),
     analysisPill: document.querySelector("#analysis-pill"),
     creditWarning: document.querySelector("#credit-warning"),
@@ -187,6 +189,8 @@
   let sustainedVoiceFrames = 0;
   let stopRequested = false;
   let assistantAudioReceivedForTurn = false;
+  let embedHeightFrameId = 0;
+  let embedHeightObserver;
 
   function readOptionalString(value) {
     return typeof value === "string" && value.trim() ? value.trim() : undefined;
@@ -229,6 +233,84 @@
     }
 
     return null;
+  }
+
+  function postEmbeddedHeight() {
+    if (window.parent === window) {
+      return;
+    }
+
+    const nextHeight = Math.ceil(
+      Math.max(
+        document.documentElement?.scrollHeight ?? 0,
+        document.documentElement?.offsetHeight ?? 0,
+        document.body?.scrollHeight ?? 0,
+        document.body?.offsetHeight ?? 0
+      )
+    );
+
+    if (!Number.isFinite(nextHeight) || nextHeight <= 0) {
+      return;
+    }
+
+    window.parent.postMessage(
+      {
+        type: EMBED_HEIGHT_MESSAGE_TYPE,
+        height: nextHeight
+      },
+      window.location.origin
+    );
+  }
+
+  function scheduleEmbeddedHeightSync() {
+    if (window.parent === window || embedHeightFrameId) {
+      return;
+    }
+
+    embedHeightFrameId = window.requestAnimationFrame(() => {
+      embedHeightFrameId = 0;
+      postEmbeddedHeight();
+    });
+  }
+
+  function bindEmbeddedHeightSync() {
+    if (window.parent === window) {
+      return;
+    }
+
+    const observedElements = [
+      document.documentElement,
+      document.body,
+      document.querySelector(".web-overlay-shell")
+    ].filter(Boolean);
+
+    if (typeof ResizeObserver === "function") {
+      embedHeightObserver = new ResizeObserver(() => {
+        scheduleEmbeddedHeightSync();
+      });
+
+      for (const element of observedElements) {
+        embedHeightObserver.observe(element);
+      }
+    }
+
+    document.addEventListener(
+      "toggle",
+      () => {
+        scheduleEmbeddedHeightSync();
+      },
+      true
+    );
+
+    window.addEventListener("resize", scheduleEmbeddedHeightSync);
+
+    if (document.fonts?.ready) {
+      document.fonts.ready.then(() => {
+        scheduleEmbeddedHeightSync();
+      });
+    }
+
+    scheduleEmbeddedHeightSync();
   }
 
   function setAuthCookie(token) {
@@ -2432,7 +2514,7 @@
     }
 
     if (state.isAnalyzing) {
-      return "Preparing the page structure for grounded Q&A.";
+      return "Preparing the page structure for follow-up Q&A.";
     }
 
     if (state.recording) {
@@ -2452,7 +2534,7 @@
     }
 
     if (state.currentPage?.url) {
-      return "Analyze this page to prepare a grounded conversation.";
+      return "Analyze this page to prepare the conversation.";
     }
 
     return "Paste a public URL, then analyze it.";
@@ -2460,10 +2542,10 @@
 
   function getAnalyzeButtonLabel() {
     if (state.isAnalyzing) {
-      return "Preparing...";
+      return "Analyzing...";
     }
 
-    return state.analysisReady ? "Re-analyze" : "Prepare page";
+    return state.analysisReady ? "Re-analyze" : "Analyze page";
   }
 
   function getVoiceButtonLabel() {
@@ -2472,10 +2554,10 @@
     }
 
     if (state.conversationActive || state.recording || state.assistantSpeaking) {
-      return "Stop voice";
+      return "Stop";
     }
 
-    return "Start voice";
+    return "Speak";
   }
 
   function getUserDisplayName() {
@@ -2770,6 +2852,8 @@
         ? "Creating account..."
         : "Create account";
     }
+
+    scheduleEmbeddedHeightSync();
   }
 
   refs.authModeLoginButton?.addEventListener("click", () => {
@@ -2806,12 +2890,15 @@
     }
 
     refs.advancedDrawer.open = !refs.advancedDrawer.open;
-    if (refs.advancedDrawer.open) {
-      refs.advancedDrawer.scrollIntoView({
-        behavior: "smooth",
-        block: "nearest"
-      });
-    }
+    scheduleEmbeddedHeightSync();
+  });
+
+  refs.advancedDrawer?.addEventListener("toggle", () => {
+    scheduleEmbeddedHeightSync();
+  });
+
+  refs.sessionDrawer?.addEventListener("toggle", () => {
+    scheduleEmbeddedHeightSync();
   });
 
   refs.urlForm?.addEventListener("submit", (event) => {
@@ -2945,5 +3032,6 @@
     render();
   }
 
+  bindEmbeddedHeightSync();
   void boot();
 })();
