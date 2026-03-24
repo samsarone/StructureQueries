@@ -175,6 +175,13 @@ function sendSocketError(
   });
 }
 
+function logGatewayEvent(event: string, context: Record<string, unknown> = {}) {
+  console.log("[plugin-gateway]", {
+    ...context,
+    event
+  });
+}
+
 function logTtsFailure(
   stage: string,
   error: unknown,
@@ -573,6 +580,18 @@ async function synthesizeAssistantAudio(
     retrievalChunks: input.retrievalChunks,
     text: input.text
   });
+  logGatewayEvent("tts_requested", {
+    browserSessionId: input.browserSessionId,
+    language: resolvedLanguage ?? input.language ?? null,
+    request: summarizeTtsRequest({
+      languageCode: resolvedLanguage,
+      locators: undefined,
+      text: preparedSpeech.speechText,
+      voiceId: resolvedVoiceId
+    }),
+    technicalTerms: preparedSpeech.technicalTerms,
+    voiceId: resolvedVoiceId
+  });
 
   let pronunciationDictionaryLocators:
     | Awaited<ReturnType<typeof ensureSessionPronunciationDictionary>>
@@ -638,6 +657,13 @@ async function synthesizeAssistantAudio(
       return null;
     }
 
+    logGatewayEvent("tts_succeeded", {
+      browserSessionId: input.browserSessionId,
+      characterCount: response.characterCount,
+      hasDictionary: Boolean(pronunciationDictionaryLocators?.length),
+      requestId: response.requestId,
+      voiceId: resolvedVoiceId
+    });
     return response;
   } catch (error) {
     logTtsFailure("synthesize_primary", error, {
@@ -672,6 +698,12 @@ async function synthesizeAssistantAudio(
           return null;
         }
 
+        logGatewayEvent("tts_succeeded_fallback_plain", {
+          browserSessionId: input.browserSessionId,
+          characterCount: fallbackResponse.characterCount,
+          requestId: fallbackResponse.requestId,
+          voiceId: resolvedVoiceId
+        });
         return fallbackResponse;
       } catch (retryError) {
         logTtsFailure("synthesize_fallback_plain", retryError, {
@@ -722,6 +754,14 @@ async function initializeConversation(
   state.voiceId = readOptionalString(payload.voiceId);
   state.language = readOptionalString(payload.language) ?? null;
 
+  logGatewayEvent("session_ready", {
+    assistantSessionId: payload.assistantSessionId,
+    browserSessionId: payload.browserSessionId,
+    language: state.language,
+    pageUrl: payload.pageUrl,
+    templateId: state.templateId ?? null,
+    voiceId: state.voiceId ?? null
+  });
   sendMessage(socket, {
     type: "session_ready",
     assistantSessionId: payload.assistantSessionId,
@@ -768,6 +808,16 @@ async function handleSubmitAudio(
   state.voiceId = activeVoiceId;
   state.language = activeLanguage;
   state.templateId = activeTemplateId;
+  logGatewayEvent("submit_audio_received", {
+    assistantSessionId: state.assistantSessionId,
+    browserSessionId: state.browserSessionId,
+    durationMs: payload.durationMs ?? null,
+    hasAudioBase64: Boolean(payload.audioBase64),
+    language: activeLanguage,
+    mimeType: payload.mimeType ?? "audio/webm",
+    templateId: activeTemplateId ?? null,
+    voiceId: activeVoiceId ?? null
+  });
 
   sendStatus(socket, "transcribing", "Processing recorded audio.");
   let transcription;
@@ -796,6 +846,11 @@ async function handleSubmitAudio(
     });
   } catch (error) {
     if (isNoSpeechDetectedError(error)) {
+      logGatewayEvent("transcription_skipped_no_speech", {
+        assistantSessionId: state.assistantSessionId,
+        browserSessionId: state.browserSessionId,
+        voiceId: activeVoiceId ?? null
+      });
       sendStatus(
         socket,
         "idle",
@@ -804,6 +859,18 @@ async function handleSubmitAudio(
       return;
     }
 
+    console.error("[plugin-gateway] transcription failed", {
+      assistantSessionId: state.assistantSessionId,
+      browserSessionId: state.browserSessionId,
+      error:
+        error instanceof Error
+          ? {
+              message: error.message,
+              stack: error.stack
+            }
+          : error,
+      voiceId: activeVoiceId ?? null
+    });
     sendSocketError(socket, error, {
       fallbackMessage: "Transcription failed",
       statusDetail: "Transcription failed."
@@ -816,6 +883,14 @@ async function handleSubmitAudio(
     transcript: transcription.transcript,
     language: responseLanguage,
     source: transcription.source
+  });
+  logGatewayEvent("transcription_ready", {
+    assistantSessionId: state.assistantSessionId,
+    browserSessionId: state.browserSessionId,
+    detectedLanguage: transcription.detectedLanguage,
+    responseLanguage,
+    transcriptLength: transcription.transcript.length,
+    voiceId: activeVoiceId ?? null
   });
 
   sendStatus(socket, "thinking", "Generating assistant reply.");
@@ -840,6 +915,20 @@ async function handleSubmitAudio(
       user: state.browserSessionId
     });
   } catch (error) {
+    console.error("[plugin-gateway] assistant generation failed", {
+      assistantSessionId: state.assistantSessionId,
+      browserSessionId: state.browserSessionId,
+      error:
+        error instanceof Error
+          ? {
+              message: error.message,
+              stack: error.stack
+            }
+          : error,
+      templateId: activeTemplateId ?? null,
+      transcriptLength: transcription.transcript.length,
+      voiceId: activeVoiceId ?? null
+    });
     sendSocketError(socket, error, {
       fallbackMessage: "Assistant generation failed",
       statusDetail: "Assistant generation failed."
@@ -849,6 +938,17 @@ async function handleSubmitAudio(
 
   const assistantText = assistantReply.text;
   let synthesizedAudio = null;
+  logGatewayEvent("assistant_reply_ready", {
+    assistantSessionId: state.assistantSessionId,
+    browserSessionId: state.browserSessionId,
+    hasImages: assistantReply.images.length > 0,
+    provider: assistantReply.provider,
+    retrievalChunkCount: assistantReply.retrieval?.chunks?.length ?? 0,
+    responseLanguage,
+    templateId: assistantReply.templateId ?? activeTemplateId ?? null,
+    textLength: assistantText.length,
+    voiceId: activeVoiceId ?? null
+  });
 
   sendMessage(socket, {
     type: "assistant_message",
@@ -914,6 +1014,14 @@ async function handleSubmitAudio(
       });
       synthesizedAudio = null;
     }
+  } else {
+    logGatewayEvent("tts_skipped_empty_reply", {
+      assistantSessionId: state.assistantSessionId,
+      browserSessionId: state.browserSessionId,
+      provider: assistantReply.provider,
+      templateId: assistantReply.templateId ?? activeTemplateId ?? null,
+      voiceId: activeVoiceId ?? null
+    });
   }
 
   if (synthesizedAudio) {
@@ -921,6 +1029,21 @@ async function handleSubmitAudio(
       type: "assistant_audio",
       ...synthesizedAudio,
       language: responseLanguage
+    });
+    logGatewayEvent("assistant_audio_sent", {
+      assistantSessionId: state.assistantSessionId,
+      audioBase64Length: synthesizedAudio.audioBase64.length,
+      browserSessionId: state.browserSessionId,
+      characterCount: synthesizedAudio.characterCount,
+      requestId: synthesizedAudio.requestId,
+      voiceId: activeVoiceId ?? null
+    });
+  } else {
+    logGatewayEvent("assistant_audio_unavailable", {
+      assistantSessionId: state.assistantSessionId,
+      browserSessionId: state.browserSessionId,
+      responseLanguage,
+      voiceId: activeVoiceId ?? null
     });
   }
 

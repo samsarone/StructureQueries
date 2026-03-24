@@ -1002,6 +1002,13 @@
           : state.currentUser;
     state.externalUserApiKey =
       readOptionalString(payload.externalUserApiKey) ?? state.externalUserApiKey;
+    const payloadCreditsRemaining = Number(payload.creditsRemaining);
+    if (state.currentUser && Number.isFinite(payloadCreditsRemaining)) {
+      state.currentUser = {
+        ...state.currentUser,
+        generationCredits: Math.max(0, Math.floor(payloadCreditsRemaining))
+      };
+    }
     state.registrationRequired = Boolean(payload.registrationRequired);
     const preferredLanguage = getPreferredLanguageFromUser(state.currentUser);
     if (preferredLanguage) {

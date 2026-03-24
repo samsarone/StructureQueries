@@ -20,6 +20,19 @@ function readOptionalString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+function readOptionalNumber(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
+  return undefined;
+}
+
 function readOptionalBoolean(value: unknown) {
   return typeof value === "boolean" ? value : undefined;
 }
@@ -82,6 +95,60 @@ function summarizeExternalUserRecord(
   );
 }
 
+function normalizeExternalUserCredits(
+  externalUser: ReturnType<typeof summarizeStructureQueriesExternalUser> | null,
+  sessionResponse:
+    | {
+        data?: Record<string, unknown> | null | undefined;
+        creditsRemaining?: unknown;
+      }
+    | null
+    | undefined,
+  context: {
+    browserSessionId: string;
+    source: "refresh" | "register" | "profile";
+  }
+) {
+  if (!externalUser) {
+    return externalUser;
+  }
+
+  const sessionData =
+    sessionResponse?.data && typeof sessionResponse.data === "object"
+      ? sessionResponse.data
+      : undefined;
+  const remainingCredits =
+    readOptionalNumber(sessionData?.remainingCredits) ??
+    readOptionalNumber(sessionData?.remaining_credits) ??
+    readOptionalNumber(sessionResponse?.creditsRemaining);
+
+  if (remainingCredits === undefined) {
+    return externalUser;
+  }
+
+  const normalizedRemainingCredits = Math.max(0, Math.floor(remainingCredits));
+
+  if (
+    typeof externalUser.generationCredits === "number" &&
+    externalUser.generationCredits !== normalizedRemainingCredits
+  ) {
+    console.warn(
+      "[browser-sessions] overriding external-user generationCredits with session remainingCredits",
+      {
+        browserSessionId: context.browserSessionId,
+        generationCredits: externalUser.generationCredits,
+        remainingCredits: normalizedRemainingCredits,
+        source: context.source
+      }
+    );
+  }
+
+  return {
+    ...externalUser,
+    generationCredits: normalizedRemainingCredits
+  };
+}
+
 function shouldGrantStarterCredits(
   externalUser:
     | ReturnType<typeof summarizeStructureQueriesExternalUser>
@@ -134,6 +201,10 @@ async function upsertExternalUserProfile(
       externalSession.data.externalUser) as Record<string, unknown> | null,
     externalUserIdentity
   );
+  externalUser = normalizeExternalUserCredits(externalUser, externalSession, {
+    browserSessionId: session.browserSessionId,
+    source: options?.createAssistantSession === false ? "profile" : "register"
+  });
   let starterCreditsGranted: number | null = null;
 
   if (
@@ -153,6 +224,10 @@ async function upsertExternalUserProfile(
         grantResult.data.external_user) as Record<string, unknown> | null,
       externalUserIdentity
     );
+    externalUser = normalizeExternalUserCredits(externalUser, grantResult, {
+      browserSessionId: session.browserSessionId,
+      source: options?.createAssistantSession === false ? "profile" : "register"
+    });
   }
 
   await samsarAdapter.setExternalAssistantSystemPrompt(
@@ -194,6 +269,7 @@ async function upsertExternalUserProfile(
     externalUserApiKey,
     assistantSessionId,
     externalUser,
+    creditsRemaining: externalUser?.generationCredits ?? null,
     registrationRequired: !(externalUserApiKey && assistantSessionId),
     starterCreditsGranted,
     warnings: []
@@ -242,6 +318,14 @@ browserSessionsRouter.post("/", async (request, response) => {
           refreshedSession.data.externalUser) as Record<string, unknown> | null,
         externalUserIdentity
       );
+      const normalizedExternalUser = normalizeExternalUserCredits(
+        refreshedExternalUser,
+        refreshedSession,
+        {
+          browserSessionId: session.browserSessionId,
+          source: "refresh"
+        }
+      );
 
       response.json({
         ok: true,
@@ -251,7 +335,8 @@ browserSessionsRouter.post("/", async (request, response) => {
           externalUserApiKey ??
           null,
         assistantSessionId: assistantSessionId ?? null,
-        externalUser: refreshedExternalUser,
+        externalUser: normalizedExternalUser,
+        creditsRemaining: normalizedExternalUser?.generationCredits ?? null,
         registrationRequired: !(
           (readOptionalString(refreshedSession.data.external_api_key) ??
             externalUserApiKey) &&
@@ -274,6 +359,7 @@ browserSessionsRouter.post("/", async (request, response) => {
     externalUserApiKey: externalUserApiKey ?? null,
     assistantSessionId: assistantSessionId ?? null,
     externalUser,
+    creditsRemaining: externalUser?.generationCredits ?? null,
     registrationRequired: !(externalUserApiKey && assistantSessionId),
     warnings: []
   });

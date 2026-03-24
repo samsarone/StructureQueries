@@ -79,6 +79,7 @@ interface PreparePageRequestCacheEntry {
 interface BrowserSessionPayload {
   ok: boolean;
   assistantSessionId?: string | null;
+  creditsRemaining?: number | null;
   externalUser?: StructureQueriesExternalUserPayload | null;
   externalUserApiKey?: string | null;
   registrationRequired?: boolean;
@@ -2029,6 +2030,13 @@ function applyBrowserSessionPayload(payload: BrowserSessionPayload) {
       : payload.externalUserApiKey === null
         ? undefined
         : state.externalUserApiKey;
+  const payloadCreditsRemaining = Number(payload.creditsRemaining);
+  if (state.currentUser && Number.isFinite(payloadCreditsRemaining)) {
+    state.currentUser = {
+      ...state.currentUser,
+      generationCredits: Math.max(0, Math.floor(payloadCreditsRemaining))
+    };
+  }
   state.registrationRequired = Boolean(payload.registrationRequired);
   const preferredLanguage = getPreferredLanguageFromUser(state.currentUser);
   if (preferredLanguage) {
