@@ -84,7 +84,9 @@ export const env = {
     elevenLabs: {
       apiKey: readOptional(process.env.ELEVENLABS_API_KEY),
       defaultVoiceId: readOptional(process.env.ELEVENLABS_DEFAULT_VOICE_ID),
-      defaultModelId: DEFAULT_ELEVENLABS_MODEL_ID,
+      defaultModelId:
+        readOptional(process.env.ELEVENLABS_DEFAULT_MODEL_ID) ??
+        DEFAULT_ELEVENLABS_MODEL_ID,
       timeoutSeconds: DEFAULT_TIMEOUT_SECONDS
     },
     firecrawl: {

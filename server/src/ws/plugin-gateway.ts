@@ -175,6 +175,43 @@ function sendSocketError(
   });
 }
 
+function logTtsFailure(
+  stage: string,
+  error: unknown,
+  context: Record<string, unknown> = {}
+) {
+  console.error("[plugin-gateway] ElevenLabs TTS failed", {
+    ...context,
+    error:
+      error instanceof Error
+        ? {
+            message: error.message,
+            stack: error.stack
+          }
+        : error,
+    stage
+  });
+}
+
+function summarizeTtsRequest(input: {
+  languageCode?: string;
+  locators?: Array<{
+    pronunciationDictionaryId: string;
+    versionId?: string;
+  }> | undefined;
+  text: string;
+  voiceId: string;
+}) {
+  return {
+    hasPronunciationDictionaryLocators: Boolean(input.locators?.length),
+    languageCode: input.languageCode ?? null,
+    pronunciationDictionaryLocators: input.locators ?? [],
+    textPreview: input.text.slice(0, 240),
+    textLength: input.text.length,
+    voiceId: input.voiceId
+  };
+}
+
 function rawDataToString(rawData: RawData) {
   if (typeof rawData === "string") {
     return rawData;
@@ -519,31 +556,44 @@ async function synthesizeAssistantAudio(
     return null;
   }
 
+  const preparedSpeech = prepareAssistantTextForSpeech({
+    language: input.language,
+    retrievalChunks: input.retrievalChunks,
+    text: input.text
+  });
+
+  let pronunciationDictionaryLocators:
+    | Awaited<ReturnType<typeof ensureSessionPronunciationDictionary>>
+    | undefined = undefined;
+
   try {
-    const preparedSpeech = prepareAssistantTextForSpeech({
-      language: input.language,
-      retrievalChunks: input.retrievalChunks,
-      text: input.text
-    });
-    const pronunciationDictionaryLocators =
+    pronunciationDictionaryLocators =
       await ensureSessionPronunciationDictionary({
         rules: preparedSpeech.pronunciationRules,
         sessionKey: input.browserSessionId
       });
-    const result = await elevenLabsAdapter.synthesize({
+  } catch (error) {
+    logTtsFailure("dictionary_sync", error, {
+      browserSessionId: input.browserSessionId,
+      technicalTerms: preparedSpeech.technicalTerms,
+      voiceId: resolvedVoiceId
+    });
+    pronunciationDictionaryLocators = undefined;
+  }
+
+  const synthesize = async (locators?: typeof pronunciationDictionaryLocators) => {
+    const request = {
       voiceId: resolvedVoiceId,
       text: preparedSpeech.speechText,
       ...(resolvedLanguage ? { languageCode: resolvedLanguage } : {}),
-      applyTextNormalization: "auto",
-      pronunciationDictionaryLocators,
-      voiceSettings: {
-        similarityBoost: 0.78,
-        speed: 1,
-        stability: 0.36,
-        style: 0.2,
-        useSpeakerBoost: true
-      }
-    });
+      applyTextNormalization: "auto" as const,
+      ...(locators?.length
+        ? {
+            pronunciationDictionaryLocators: locators
+          }
+        : {})
+    };
+    const result = await elevenLabsAdapter.synthesize(request);
 
     return {
       audioBase64: result.audioBuffer.toString("base64"),
@@ -555,7 +605,42 @@ async function synthesizeAssistantAudio(
       source: "elevenlabs" as const,
       voiceId: resolvedVoiceId
     };
-  } catch {
+  };
+
+  try {
+    return await synthesize(pronunciationDictionaryLocators);
+  } catch (error) {
+    logTtsFailure("synthesize_primary", error, {
+      browserSessionId: input.browserSessionId,
+      hasDictionary: Boolean(pronunciationDictionaryLocators?.length),
+      request: summarizeTtsRequest({
+        languageCode: resolvedLanguage,
+        locators: pronunciationDictionaryLocators,
+        text: preparedSpeech.speechText,
+        voiceId: resolvedVoiceId
+      }),
+      technicalTerms: preparedSpeech.technicalTerms,
+      voiceId: resolvedVoiceId
+    });
+
+    if (pronunciationDictionaryLocators?.length) {
+      try {
+        return await synthesize(undefined);
+      } catch (retryError) {
+        logTtsFailure("synthesize_fallback_plain", retryError, {
+          browserSessionId: input.browserSessionId,
+          request: summarizeTtsRequest({
+            languageCode: resolvedLanguage,
+            locators: undefined,
+            text: preparedSpeech.speechText,
+            voiceId: resolvedVoiceId
+          }),
+          technicalTerms: preparedSpeech.technicalTerms,
+          voiceId: resolvedVoiceId
+        });
+      }
+    }
+
     return null;
   }
 }
@@ -718,42 +803,6 @@ async function handleSubmitAudio(
   const assistantText = assistantReply.text;
   let synthesizedAudio = null;
 
-  if (assistantText.trim()) {
-    sendStatus(socket, "synthesizing", "Synthesizing assistant voice.");
-
-    try {
-      synthesizedAudio = await synthesizeAssistantAudio(
-        {
-          browserSessionId: state.browserSessionId,
-          language: responseLanguage,
-          retrievalChunks: assistantReply.retrieval?.chunks,
-          text: assistantText,
-          voiceId: activeVoiceId
-        }
-      );
-
-      if (synthesizedAudio) {
-        await chargeExternalElevenLabsSynthesisUsage({
-          assistantSessionId: state.assistantSessionId,
-          browserSessionId: state.browserSessionId,
-          charactersUsed: synthesizedAudio.characterCount ?? undefined,
-          externalUserApiKey: state.externalUserApiKey,
-          pageTitle: state.pageTitle,
-          pageUrl: state.pageUrl,
-          requestId: synthesizedAudio.requestId,
-          text: synthesizedAudio.preparedText ?? assistantText,
-          voiceId: activeVoiceId
-        });
-      }
-    } catch (error) {
-      sendSocketError(socket, error, {
-        fallbackMessage: "Assistant voice billing failed",
-        statusDetail: "Assistant voice billing failed."
-      });
-      return;
-    }
-  }
-
   sendMessage(socket, {
     type: "assistant_message",
     text: assistantText,
@@ -776,6 +825,50 @@ async function handleSubmitAudio(
     });
   }
 
+  if (assistantText.trim()) {
+    sendStatus(socket, "synthesizing", "Synthesizing assistant voice.");
+
+    try {
+      synthesizedAudio = await synthesizeAssistantAudio({
+        browserSessionId: state.browserSessionId,
+        language: responseLanguage,
+        retrievalChunks: assistantReply.retrieval?.chunks,
+        text: assistantText,
+        voiceId: activeVoiceId
+      });
+
+      if (synthesizedAudio) {
+        try {
+          await chargeExternalElevenLabsSynthesisUsage({
+            assistantSessionId: state.assistantSessionId,
+            browserSessionId: state.browserSessionId,
+            charactersUsed: synthesizedAudio.characterCount ?? undefined,
+            externalUserApiKey: state.externalUserApiKey,
+            pageTitle: state.pageTitle,
+            pageUrl: state.pageUrl,
+            requestId: synthesizedAudio.requestId,
+            text: synthesizedAudio.preparedText ?? assistantText,
+            voiceId: activeVoiceId
+          });
+        } catch (error) {
+          logTtsFailure("billing", error, {
+            assistantSessionId: state.assistantSessionId,
+            browserSessionId: state.browserSessionId,
+            requestId: synthesizedAudio.requestId,
+            voiceId: activeVoiceId
+          });
+        }
+      }
+    } catch (error) {
+      logTtsFailure("unexpected_synthesis", error, {
+        assistantSessionId: state.assistantSessionId,
+        browserSessionId: state.browserSessionId,
+        voiceId: activeVoiceId
+      });
+      synthesizedAudio = null;
+    }
+  }
+
   if (synthesizedAudio) {
     sendMessage(socket, {
       type: "assistant_audio",
@@ -791,7 +884,7 @@ async function handleSubmitAudio(
       ? "Assistant audio delivered."
       : assistantReply.images.length > 0
         ? "Assistant response delivered with image output."
-        : "Assistant text delivered. No remote audio was generated."
+        : "Assistant text delivered. Remote audio failed or was unavailable."
   );
 }
 

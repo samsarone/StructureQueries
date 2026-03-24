@@ -126,6 +126,72 @@ function normalizeWhitespace(value: string) {
   return value.replace(/\s+/g, " ").trim();
 }
 
+function stripMarkdownForSpeech(value: string) {
+  return value
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/__([^_]+)__/g, "$1")
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1")
+    .replace(/^\s{0,3}[-*+]\s+/gm, "")
+    .replace(/^\s{0,3}\d+\.\s+/gm, "")
+    .replace(/^>\s+/gm, "")
+    .replace(/\|/g, " ");
+}
+
+function applyEnglishContractions(value: string) {
+  return value
+    .replace(/\bI am\b/g, "I'm")
+    .replace(/\bI will\b/g, "I'll")
+    .replace(/\bI would\b/g, "I'd")
+    .replace(/\bit is\b/gi, "it's")
+    .replace(/\bthat is\b/gi, "that's")
+    .replace(/\bthere is\b/gi, "there's")
+    .replace(/\bwe are\b/gi, "we're")
+    .replace(/\bwe will\b/gi, "we'll")
+    .replace(/\bthey are\b/gi, "they're")
+    .replace(/\bdo not\b/gi, "don't")
+    .replace(/\bdoes not\b/gi, "doesn't")
+    .replace(/\bdid not\b/gi, "didn't")
+    .replace(/\bcannot\b/gi, "can't")
+    .replace(/\bwill not\b/gi, "won't")
+    .replace(/\bis not\b/gi, "isn't")
+    .replace(/\bare not\b/gi, "aren't")
+    .replace(/\bwas not\b/gi, "wasn't")
+    .replace(/\bwere not\b/gi, "weren't")
+    .replace(/\bhave not\b/gi, "haven't")
+    .replace(/\bhas not\b/gi, "hasn't");
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function applyKnownTechnicalSpeechRewrites(value: string) {
+  let nextValue = value;
+  const knownTerms = [...EXACT_SPOKEN_FORMS.keys()].sort(
+    (left, right) => right.length - left.length
+  );
+
+  for (const term of knownTerms) {
+    const spokenForm = EXACT_SPOKEN_FORMS.get(term);
+
+    if (!spokenForm) {
+      continue;
+    }
+
+    const boundaryWrapped = /^[A-Za-z0-9]+$/.test(term)
+      ? `\\b${escapeRegExp(term)}\\b`
+      : escapeRegExp(term);
+
+    nextValue = nextValue.replace(
+      new RegExp(boundaryWrapped, "g"),
+      spokenForm
+    );
+  }
+
+  return nextValue;
+}
+
 function normalizeLanguageKey(language?: string | null) {
   const trimmed = language?.trim().toLowerCase();
 
@@ -138,10 +204,11 @@ function normalizeLanguageKey(language?: string | null) {
 
 function normalizeSpeechText(value: string, language?: string | null) {
   const languageKey = normalizeLanguageKey(language);
+  const cleanedText = stripMarkdownForSpeech(value);
   const baseText =
     languageKey && languageKey !== "en"
-      ? value
-      : value
+      ? cleanedText
+      : cleanedText
           .replace(/\be\.g\./gi, "for example")
           .replace(/\bi\.e\./gi, "that is")
           .replace(/\betc\./gi, "etcetera")
@@ -149,8 +216,15 @@ function normalizeSpeechText(value: string, language?: string | null) {
           .replace(/\bw\//gi, "with ")
           .replace(/\s*&\s*/g, " and ")
           .replace(/\b[vV](\d+(?:\.\d+)+(?:[a-z])?)\b/g, "version $1");
+  const normalizedText = normalizeWhitespace(baseText.replace(/;\s+/g, ". "));
 
-  return normalizeWhitespace(baseText.replace(/;\s+/g, ". "));
+  if (languageKey && languageKey !== "en") {
+    return normalizedText;
+  }
+
+  return normalizeWhitespace(
+    applyEnglishContractions(applyKnownTechnicalSpeechRewrites(normalizedText))
+  );
 }
 
 function getSpokenOverride(value: string) {
