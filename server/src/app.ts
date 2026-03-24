@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import cors from "cors";
@@ -25,6 +26,11 @@ const CHROME_WEB_STORE_PLACEHOLDER_URL = "https://chromewebstore.google.com/";
 const CLIENT_PUBLIC_DIR = fileURLToPath(
   new URL("../../client/public/", import.meta.url)
 );
+const STRUCTURED_QUERIES_MONOGRAM_DATA_URL = `data:image/svg+xml;base64,${Buffer.from(
+  readFileSync(
+    new URL("../../client/public/structured-queries-monogram.svg", import.meta.url)
+  )
+).toString("base64")}`;
 
 function renderLandingPage(serviceName: string) {
   return `<!doctype html>
@@ -165,7 +171,10 @@ function renderLandingPage(serviceName: string) {
       #top {
         min-height: calc(100vh - 24px);
         display: flex;
-        align-items: center;
+        flex-direction: column;
+        align-items: stretch;
+        justify-content: space-between;
+        gap: clamp(16px, 2.4vw, 22px);
         padding-block: clamp(18px, 2vw, 28px);
       }
 
@@ -175,6 +184,72 @@ function renderLandingPage(serviceName: string) {
         align-items: stretch;
       }
 
+      .site-banner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        width: 100%;
+        padding: 12px 14px;
+        border: 1px solid rgba(122, 177, 211, 0.18);
+        border-radius: 24px;
+        background:
+          linear-gradient(180deg, rgba(10, 19, 32, 0.7), rgba(7, 13, 24, 0.62)),
+          rgba(8, 16, 28, 0.56);
+        box-shadow:
+          0 16px 42px rgba(0, 0, 0, 0.18),
+          0 0 0 1px rgba(255, 255, 255, 0.02) inset;
+        backdrop-filter: blur(14px);
+      }
+
+      .site-banner-brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+      }
+
+      .site-banner-mark {
+        width: 44px;
+        height: 44px;
+        padding: 4px;
+        flex-shrink: 0;
+        border-radius: 16px;
+        border: 1px solid rgba(143, 223, 255, 0.12);
+        background:
+          linear-gradient(180deg, rgba(13, 24, 41, 0.56), rgba(7, 13, 23, 0.48)),
+          rgba(7, 13, 23, 0.42);
+        box-shadow:
+          0 8px 20px rgba(0, 0, 0, 0.16),
+          0 0 0 1px rgba(255, 255, 255, 0.02) inset;
+      }
+
+      .site-banner-mark img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+
+      .site-banner-copy {
+        display: grid;
+        gap: 2px;
+        min-width: 0;
+      }
+
+      .site-banner-title {
+        color: rgba(236, 243, 251, 0.96);
+        font-size: 0.96rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+      }
+
+      .site-banner-subtitle {
+        color: rgba(164, 203, 223, 0.82);
+        font-size: 0.82rem;
+        line-height: 1.45;
+      }
+
       .hero-grid {
         display: grid;
         width: 100%;
@@ -182,7 +257,7 @@ function renderLandingPage(serviceName: string) {
         gap: 18px;
         align-items: stretch;
         justify-items: stretch;
-        min-height: calc(100vh - 116px);
+        min-height: calc(100vh - 196px);
       }
 
       .hero-copy {
@@ -199,7 +274,7 @@ function renderLandingPage(serviceName: string) {
       .hero-copy-stack {
         display: grid;
         align-content: center;
-        gap: clamp(22px, 4vh, 40px);
+        gap: clamp(28px, 5vh, 50px);
       }
 
       .hero-title {
@@ -208,7 +283,7 @@ function renderLandingPage(serviceName: string) {
         margin-left: 0;
         margin-right: 0;
         display: grid;
-        gap: 0.08em;
+        gap: 0.14em;
         justify-items: start;
         font-size: clamp(2.15rem, 4.2vw, 3.7rem);
         line-height: 1.04;
@@ -222,9 +297,9 @@ function renderLandingPage(serviceName: string) {
 
       .hero-title-line-support {
         max-width: 28ch;
-        margin-top: 0;
+        margin-top: 0.06em;
         font-size: 0.28em;
-        line-height: 1.24;
+        line-height: 1.28;
         letter-spacing: -0.04em;
         color: rgba(228, 238, 248, 0.9);
         text-wrap: balance;
@@ -234,8 +309,8 @@ function renderLandingPage(serviceName: string) {
         position: relative;
         overflow: hidden;
         width: 100%;
-        min-height: 0.82em;
-        margin-top: -0.02em;
+        min-height: 0.88em;
+        margin-top: 0.03em;
       }
 
       .hero-title-phrase {
@@ -243,16 +318,26 @@ function renderLandingPage(serviceName: string) {
         top: 0;
         left: 0;
         width: 0;
-        padding-right: 0.04em;
+        padding-right: 0.06em;
         overflow: hidden;
         white-space: nowrap;
         font-size: 0.74em;
         opacity: 0;
-        border-right: 0.04em solid rgba(123, 226, 255, 0.72);
         animation: hero-type-cycle 20s infinite;
         animation-timing-function: steps(24, end);
         animation-fill-mode: both;
         will-change: width, opacity;
+      }
+
+      .hero-title-phrase::after {
+        content: "";
+        position: absolute;
+        top: 0.08em;
+        right: 0;
+        width: 0.04em;
+        height: calc(100% - 0.16em);
+        border-radius: 999px;
+        background: rgba(123, 226, 255, 0.8);
       }
 
       .hero-title-phrase:nth-child(2) {
@@ -366,6 +451,14 @@ function renderLandingPage(serviceName: string) {
 
       .button-full {
         width: 100%;
+      }
+
+      .site-banner-action {
+        min-height: 44px;
+        padding: 0 18px;
+        flex-shrink: 0;
+        border-radius: 16px;
+        font-size: 0.84rem;
       }
 
       .feature-row {
@@ -751,7 +844,7 @@ function renderLandingPage(serviceName: string) {
         }
 
         .hero-copy-stack {
-          gap: 18px;
+          gap: 22px;
         }
 
         .hero-title {
@@ -800,6 +893,28 @@ function renderLandingPage(serviceName: string) {
           padding-top: 16px;
         }
 
+        .site-banner {
+          flex-wrap: wrap;
+          gap: 14px;
+          padding: 14px;
+        }
+
+        .site-banner-brand {
+          width: 100%;
+        }
+
+        .site-banner-title {
+          font-size: 0.92rem;
+        }
+
+        .site-banner-subtitle {
+          font-size: 0.78rem;
+        }
+
+        .site-banner-action {
+          width: 100%;
+        }
+
         .section {
           padding: 24px 20px;
           border-radius: 24px;
@@ -842,7 +957,11 @@ function renderLandingPage(serviceName: string) {
           animation: none;
           width: 0;
           opacity: 0;
-          border-right: 0;
+          padding-right: 0;
+        }
+
+        .hero-title-phrase::after {
+          display: none;
         }
 
         .hero-title-phrase:first-child {
@@ -855,6 +974,30 @@ function renderLandingPage(serviceName: string) {
   <body>
     <main>
       <section class="section" id="top">
+        <header class="site-banner" aria-label="Install banner">
+          <div class="site-banner-brand">
+            <span class="site-banner-mark">
+              <img
+                src="${STRUCTURED_QUERIES_MONOGRAM_DATA_URL}"
+                alt="Structure Queries monogram"
+              />
+            </span>
+            <div class="site-banner-copy">
+              <span class="site-banner-title">Structure Queries</span>
+              <span class="site-banner-subtitle">
+                Deep page analysis with voice-enabled Q&amp;A.
+              </span>
+            </div>
+          </div>
+          <a
+            class="button button-primary site-banner-action"
+            href="${CHROME_WEB_STORE_PLACEHOLDER_URL}"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Install from WebStore
+          </a>
+        </header>
         <div class="hero-grid">
           <div class="hero-copy">
             <div class="hero-copy-stack">
