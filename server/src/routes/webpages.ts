@@ -11,6 +11,11 @@ import {
   isExternalUtilityBillingEnabled
 } from "../lib/external-usage-billing.js";
 import {
+  createPreparePageRequestId,
+  getPreparePageRequest,
+  upsertPreparePageRequest
+} from "../lib/prepare-page-requests.js";
+import {
   getSamsarErrorContext,
   getSamsarErrorMessage,
   getSamsarErrorStatus,
@@ -42,6 +47,14 @@ function normalizePreparePageCreditCap(value: unknown) {
   }
 
   return Math.max(1, Math.min(100, Math.floor(parsed)));
+}
+
+function normalizePreparePageStatus(
+  value: unknown,
+  fallback = "pending"
+) {
+  const status = readOptionalString(value);
+  return status ? status.toLowerCase() : fallback;
 }
 
 function summarizeEmbeddingRecords(records: Array<Record<string, unknown>>) {
@@ -104,22 +117,126 @@ function getAnalyzeUrlError(rawUrl: string) {
   }
 }
 
+async function refreshTrackedPreparePageRequest(requestId: string) {
+  const trackedRequest = getPreparePageRequest(requestId);
+
+  if (
+    !trackedRequest ||
+    trackedRequest.status === "completed" ||
+    trackedRequest.status === "failed" ||
+    !trackedRequest.templateId ||
+    !samsarAdapter.isConfigured()
+  ) {
+    return trackedRequest;
+  }
+
+  try {
+    const embeddingStatus = await samsarAdapter.getEmbeddingStatus(
+      trackedRequest.templateId
+    );
+    const analysisAvailable = Boolean(embeddingStatus.data.has_embeddings);
+
+    return upsertPreparePageRequest({
+      requestId,
+      status: analysisAvailable
+        ? "completed"
+        : normalizePreparePageStatus(
+            embeddingStatus.data.status,
+            trackedRequest.status
+          ),
+      analysisAvailable,
+      templateId: embeddingStatus.data.template_id ?? trackedRequest.templateId,
+      recordCount:
+        typeof embeddingStatus.data.record_count === "number"
+          ? embeddingStatus.data.record_count
+          : trackedRequest.recordCount,
+      completedAt: analysisAvailable
+        ? new Date().toISOString()
+        : trackedRequest.completedAt ?? null
+    });
+  } catch (error) {
+    console.warn("Failed to refresh tracked prepare-page request status", {
+      requestId,
+      templateId: trackedRequest.templateId,
+      error: error instanceof Error ? error.message : error
+    });
+    return trackedRequest;
+  }
+}
+
 export const webpagesRouter = Router();
 
 webpagesRouter.get("/status", async (request, response) => {
   const rawUrl =
     typeof request.query.url === "string" ? request.query.url.trim() : "";
+  const requestId =
+    typeof request.query.requestId === "string"
+      ? request.query.requestId.trim()
+      : typeof request.query.request_id === "string"
+        ? request.query.request_id.trim()
+        : "";
   const templateId =
     typeof request.query.templateId === "string"
       ? request.query.templateId.trim()
       : "";
 
-  if (!rawUrl && !templateId) {
+  if (!rawUrl && !templateId && !requestId) {
     response.status(400).json({
       ok: false,
-      error: "url or templateId is required"
+      error: "url, templateId, or requestId is required"
     });
     return;
+  }
+
+  if (requestId) {
+    const trackedRequest = await refreshTrackedPreparePageRequest(requestId);
+
+    if (trackedRequest) {
+      const status =
+        trackedRequest.status === "completed" && trackedRequest.analysisAvailable
+          ? "completed"
+          : trackedRequest.status;
+
+      response.json({
+        ok: true,
+        url: trackedRequest.url || rawUrl || null,
+        indexed: Boolean(
+          trackedRequest.templateId && trackedRequest.analysisAvailable
+        ),
+        status,
+        checkedAt: new Date().toISOString(),
+        reason:
+          status === "failed"
+            ? "prepare_request_failed"
+            : status === "completed"
+              ? "prepare_request_completed"
+              : "prepare_request_pending",
+        analysisAvailable: trackedRequest.analysisAvailable,
+        lastAnalyzedAt: trackedRequest.completedAt ?? null,
+        templateId: trackedRequest.templateId ?? templateId ?? null,
+        requestId: trackedRequest.requestId,
+        error: trackedRequest.error ?? null,
+        code: trackedRequest.code ?? null,
+        creditsRemaining:
+          typeof trackedRequest.creditsRemaining === "number"
+            ? trackedRequest.creditsRemaining
+            : null,
+        recordCount:
+          typeof trackedRequest.recordCount === "number"
+            ? trackedRequest.recordCount
+            : null
+      });
+      return;
+    }
+
+    if (!templateId) {
+      response.status(404).json({
+        ok: false,
+        error: "Prepare request not found.",
+        requestId
+      });
+      return;
+    }
   }
 
   if (!templateId) {
@@ -194,6 +311,10 @@ webpagesRouter.post("/analyze", async (request, response) => {
   const maxPrepareCredits = normalizePreparePageCreditCap(
     request.body?.maxPrepareCredits ?? request.body?.max_prepare_credits
   );
+  const prepareRequestId =
+    readOptionalString(request.body?.prepareRequestId) ??
+    readOptionalString(request.body?.requestId) ??
+    createPreparePageRequestId();
 
   if (!url) {
     response.status(400).json({
@@ -241,6 +362,18 @@ webpagesRouter.post("/analyze", async (request, response) => {
   }
 
   try {
+    upsertPreparePageRequest({
+      requestId: prepareRequestId,
+      browserSessionId: browserSessionId || undefined,
+      url,
+      title: title || null,
+      status: "crawling",
+      analysisAvailable: false,
+      error: null,
+      code: null,
+      completedAt: null
+    });
+
     const crawlResult = await crawlUrlsForPlainTextEmbeddings([url], {
       maxPrepareCredits: maxPrepareCredits ?? undefined
     });
@@ -284,28 +417,92 @@ webpagesRouter.post("/analyze", async (request, response) => {
       })
     );
 
+    upsertPreparePageRequest({
+      requestId: prepareRequestId,
+      status: "embedding",
+      analysisAvailable: false,
+      error: null,
+      code: null,
+      completedAt: null
+    });
+
     const result = await samsarAdapter.generateEmbeddingsFromPlainText({
       name: createEmbeddingName(title || undefined, url),
       plain_text: crawlResult.records,
       field_options: getUrlEmbeddingFieldOptions()
     });
 
+    const rawAnalysis = result.data as Record<string, unknown>;
+    const templateId = readOptionalString(result.data.template_id);
+    const upstreamRequestId = readOptionalString(
+      rawAnalysis.request_id
+    );
+    let prepareStatus = normalizePreparePageStatus(result.data.status, "completed");
+    let analysisAvailable = prepareStatus === "completed";
+    let recordCount =
+      typeof result.data.record_count === "number"
+        ? result.data.record_count
+        : null;
+
+    if (templateId) {
+      try {
+        const embeddingStatus = await samsarAdapter.getEmbeddingStatus(templateId);
+        analysisAvailable = Boolean(embeddingStatus.data.has_embeddings);
+        prepareStatus = analysisAvailable
+          ? "completed"
+          : normalizePreparePageStatus(
+              embeddingStatus.data.status,
+              prepareStatus
+            );
+        recordCount =
+          typeof embeddingStatus.data.record_count === "number"
+            ? embeddingStatus.data.record_count
+            : recordCount;
+      } catch (error) {
+        console.warn("Failed to fetch embedding status after prepare-page run", {
+          prepareRequestId,
+          templateId,
+          error: error instanceof Error ? error.message : error
+        });
+      }
+    }
+
+    upsertPreparePageRequest({
+      requestId: prepareRequestId,
+      status: prepareStatus,
+      analysisAvailable,
+      templateId,
+      upstreamRequestId,
+      recordCount,
+      creditsRemaining:
+        typeof result.creditsRemaining === "number"
+          ? result.creditsRemaining
+          : null,
+      error: null,
+      code: null,
+      completedAt: analysisAvailable ? new Date().toISOString() : null
+    });
+
     response.json({
       ok: true,
-      indexed: true,
+      prepareRequestId,
+      prepareStatus,
+      indexed: analysisAvailable,
+      analysisAvailable,
       provider: "samsar",
       analysis: {
         url,
         title: title || undefined,
-        templateId: result.data.template_id,
+        templateId,
         templateHash: result.data.template_hash,
-        recordCount: result.data.record_count,
+        recordCount: recordCount ?? result.data.record_count,
         source: "samsar",
-        status: result.data.status ?? "completed",
+        status: prepareStatus,
         analyzedAt,
         raw: {
           ...result.data,
-          status: result.data.status ?? "completed",
+          request_id: upstreamRequestId ?? rawAnalysis.request_id,
+          status: prepareStatus,
           input_url_count: crawlResult.inputUrlCount,
           processed_url_count: crawlResult.processedUrlCount,
           firecrawl_credits_used: crawlResult.firecrawlCreditsUsed,
@@ -337,6 +534,10 @@ webpagesRouter.post("/analyze", async (request, response) => {
   } catch (error) {
     const samsarErrorContext = getSamsarErrorContext(error);
     const insufficientCredits = isSamsarCreditsIssue(error);
+    const errorMessage = getSamsarErrorMessage(
+      error,
+      "Failed to analyze this document with Samsar."
+    );
 
     console.error("Failed to analyze webpage with Samsar", {
       url,
@@ -365,9 +566,26 @@ webpagesRouter.post("/analyze", async (request, response) => {
         ? (error as { statusCode: number }).statusCode
         : getSamsarErrorStatus(error);
 
+    upsertPreparePageRequest({
+      requestId: prepareRequestId,
+      browserSessionId: browserSessionId || undefined,
+      url,
+      title: title || null,
+      status: "failed",
+      analysisAvailable: false,
+      error: errorMessage,
+      code: insufficientCredits ? "insufficient_credits" : null,
+      creditsRemaining:
+        typeof samsarErrorContext?.creditsRemaining === "number"
+          ? samsarErrorContext.creditsRemaining
+          : null,
+      completedAt: new Date().toISOString()
+    });
+
     response.status(statusCode).json({
       ok: false,
-      error: getSamsarErrorMessage(error, "Failed to analyze this document with Samsar."),
+      prepareRequestId,
+      error: errorMessage,
       ...(insufficientCredits
         ? {
             code: "insufficient_credits",

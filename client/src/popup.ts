@@ -8,6 +8,7 @@ const SERVER_WS_URL = __STRUCTUREDQUERIES_SERVER_WS_URL__;
 const ANALYZED_PAGES_STORAGE_KEY = "structuredqueries.analyzedPages";
 const REGISTRATION_STORAGE_KEY = "structuredqueries.registration";
 const PREPARE_PAGE_SETTINGS_STORAGE_KEY = "structuredqueries.preparePageSettings";
+const PREPARE_PAGE_REQUESTS_STORAGE_KEY = "structuredqueries.preparePageRequests";
 const LEGACY_ANALYZED_PAGES_STORAGE_KEY = "telepathy.analyzedPages";
 const LEGACY_REGISTRATION_STORAGE_KEY = "telepathy.registration";
 const STARTER_CREDITS = 50;
@@ -64,6 +65,17 @@ interface PreparePageSettingsPayload {
   maxPrepareCredits?: number;
 }
 
+interface PreparePageRequestCacheEntry {
+  requestId: string;
+  browserSessionId?: string;
+  url: string;
+  title?: string;
+  templateId?: string;
+  status?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface BrowserSessionPayload {
   ok: boolean;
   assistantSessionId?: string | null;
@@ -89,14 +101,26 @@ interface PageContext {
 interface PageStatusPayload {
   ok: boolean;
   indexed: boolean;
+  status?: string;
+  reason?: string;
   analysisAvailable?: boolean;
   templateId?: string;
+  requestId?: string;
+  error?: string | null;
+  code?: string | null;
+  creditsRemaining?: number | null;
+  recordCount?: number | null;
+  lastAnalyzedAt?: string | null;
 }
 
 interface AnalyzePayload {
   ok: boolean;
+  prepareRequestId?: string;
+  prepareStatus?: string;
+  analysisAvailable?: boolean;
   analysis?: {
     templateId?: string;
+    status?: string;
     source?: string;
     raw?: {
       creditsRemaining?: number | null;
@@ -170,6 +194,8 @@ interface AppState {
   notificationAction?: NotificationAction;
   pendingAssistantText?: string;
   pendingAssistantLanguage?: string;
+  currentPrepareRequestId?: string;
+  currentPrepareStatus?: string;
   conversationActive: boolean;
   assistantSpeaking: boolean;
   recording: boolean;
@@ -300,9 +326,11 @@ let activeSocketPromise: Promise<WebSocket> | undefined;
 let activeAssistantAudio: HTMLAudioElement | undefined;
 let activeAssistantAudioObjectUrl: string | undefined;
 let activeVoicePreviewAudio: HTMLAudioElement | undefined;
+let activeAnalyzeRequestController: AbortController | undefined;
 let resumeConversationTimer: number | undefined;
 let conversationIdleTimer: number | undefined;
 let notificationTimer: number | undefined;
+let prepareStatusPollTimer: number | undefined;
 let assistantAudioReceivedForTurn = false;
 let creditsRefreshPending = false;
 
@@ -382,6 +410,24 @@ function getErrorCode(error: unknown) {
     error.code.trim()
       ? error.code.trim()
       : undefined
+  );
+}
+
+function getErrorStatus(error: unknown) {
+  return (
+    error &&
+    typeof error === "object" &&
+    "status" in error &&
+    typeof error.status === "number"
+      ? error.status
+      : undefined
+  );
+}
+
+function isAbortError(error: unknown) {
+  return Boolean(
+    (error instanceof DOMException && error.name === "AbortError") ||
+      (error instanceof Error && error.name === "AbortError")
   );
 }
 
@@ -569,6 +615,21 @@ function clearNotificationTimer() {
   }
 
   notificationTimer = undefined;
+}
+
+function clearPrepareStatusPollTimer() {
+  if (typeof prepareStatusPollTimer === "number") {
+    window.clearTimeout(prepareStatusPollTimer);
+  }
+
+  prepareStatusPollTimer = undefined;
+}
+
+function abortActiveAnalyzeRequest() {
+  if (activeAnalyzeRequestController) {
+    activeAnalyzeRequestController.abort();
+    activeAnalyzeRequestController = undefined;
+  }
 }
 
 function hideNotification() {
@@ -1759,6 +1820,55 @@ async function getAnalyzedPageState(url: string) {
   return cache[normalizeUrl(url)];
 }
 
+async function getPreparePageRequestsCache() {
+  const stored = await chrome.storage.local.get(PREPARE_PAGE_REQUESTS_STORAGE_KEY);
+  const cache = stored[PREPARE_PAGE_REQUESTS_STORAGE_KEY];
+
+  if (!cache || typeof cache !== "object") {
+    return {} as Record<string, PreparePageRequestCacheEntry>;
+  }
+
+  return cache as Record<string, PreparePageRequestCacheEntry>;
+}
+
+async function savePendingPreparePageRequest(
+  url: string,
+  entry: PreparePageRequestCacheEntry
+) {
+  const cache = await getPreparePageRequestsCache();
+  cache[normalizeUrl(url)] = entry;
+  await chrome.storage.local.set({
+    [PREPARE_PAGE_REQUESTS_STORAGE_KEY]: cache
+  });
+}
+
+async function removePendingPreparePageRequest(
+  url: string,
+  requestId?: string
+) {
+  const cache = await getPreparePageRequestsCache();
+  const normalizedUrl = normalizeUrl(url);
+  const existing = cache[normalizedUrl];
+
+  if (!existing) {
+    return;
+  }
+
+  if (requestId && existing.requestId !== requestId) {
+    return;
+  }
+
+  delete cache[normalizedUrl];
+  await chrome.storage.local.set({
+    [PREPARE_PAGE_REQUESTS_STORAGE_KEY]: cache
+  });
+}
+
+async function getPendingPreparePageRequest(url: string) {
+  const cache = await getPreparePageRequestsCache();
+  return cache[normalizeUrl(url)];
+}
+
 async function getRegistrationState(browserSessionId: string) {
   const stored = await chrome.storage.local.get([
     REGISTRATION_STORAGE_KEY,
@@ -2252,6 +2362,257 @@ async function refreshIndexStatus() {
     console.error("Failed to check webpage status", error);
     state.analysisReady = Boolean(localAnalysis?.analyzed);
   }
+}
+
+async function syncCreditsRemainingFromPrepareRequest(creditsRemaining: unknown) {
+  const parsedCredits = Number(creditsRemaining);
+
+  if (!state.currentUser || !Number.isFinite(parsedCredits)) {
+    return false;
+  }
+
+  state.currentUser = {
+    ...state.currentUser,
+    generationCredits: Math.max(0, Math.floor(parsedCredits))
+  };
+  syncCreditIssueStateWithBalance();
+  await saveCurrentRegistrationState();
+  return true;
+}
+
+function setCurrentPrepareRequest(
+  request: PreparePageRequestCacheEntry | null | undefined
+) {
+  state.currentPrepareRequestId = request?.requestId;
+  state.currentPrepareStatus = request?.status;
+}
+
+async function finalizePreparedPage(input: {
+  url: string;
+  requestId: string;
+  templateId?: string;
+  creditsRemaining?: number | null;
+  connectSocket?: boolean;
+  logMessage?: string;
+}) {
+  clearPrepareStatusPollTimer();
+  setCurrentPrepareRequest(null);
+  state.isAnalyzing = false;
+  state.analysisReady = true;
+  state.currentTemplateId = input.templateId ?? state.currentTemplateId;
+
+  await markPageAnalyzed(input.url, {
+    analyzed: true,
+    templateId: state.currentTemplateId
+  });
+  await removePendingPreparePageRequest(input.url, input.requestId);
+
+  const creditsPersisted = await syncCreditsRemainingFromPrepareRequest(
+    input.creditsRemaining
+  );
+
+  if (!creditsPersisted) {
+    await refreshCreditsAfterRequest();
+  }
+
+  render();
+
+  if (input.logMessage) {
+    appendLog("system", input.logMessage);
+  }
+
+  if (input.connectSocket) {
+    void ensureWebSocketSession().catch((error) => {
+      console.error("Failed to prime websocket session after prepare-page", error);
+    });
+  }
+}
+
+async function failPreparedPage(input: {
+  url: string;
+  requestId: string;
+  message?: string | null;
+  code?: string | null;
+  creditsRemaining?: number | null;
+}) {
+  clearPrepareStatusPollTimer();
+  setCurrentPrepareRequest(null);
+  state.isAnalyzing = false;
+  await removePendingPreparePageRequest(input.url, input.requestId);
+
+  const message =
+    readOptionalString(input.message) ?? "Failed to prepare this page.";
+
+  if (
+    input.code === "insufficient_credits" ||
+    isInsufficientCreditsMessage(message)
+  ) {
+    showInsufficientCreditsState(message);
+    return;
+  }
+
+  await syncCreditsRemainingFromPrepareRequest(input.creditsRemaining);
+  render();
+  appendLog("system", message);
+}
+
+function schedulePendingPreparePageStatusPoll(delayMs = 2_500) {
+  clearPrepareStatusPollTimer();
+
+  if (
+    !state.serverOnline ||
+    !state.currentPage?.url ||
+    !state.currentPrepareRequestId
+  ) {
+    return;
+  }
+
+  prepareStatusPollTimer = window.setTimeout(() => {
+    prepareStatusPollTimer = undefined;
+    void reconcilePendingPreparePageRequest().catch((error) => {
+      console.error("Failed to reconcile pending prepare-page request", error);
+    });
+  }, delayMs);
+}
+
+async function reconcilePendingPreparePageRequest(
+  pendingRequest?: PreparePageRequestCacheEntry
+) {
+  const currentPageUrl = state.currentPage?.url;
+
+  if (!currentPageUrl) {
+    clearPrepareStatusPollTimer();
+    setCurrentPrepareRequest(null);
+    state.isAnalyzing = false;
+    return;
+  }
+
+  const activeRequest =
+    pendingRequest ?? (await getPendingPreparePageRequest(currentPageUrl));
+
+  if (!activeRequest) {
+    clearPrepareStatusPollTimer();
+    setCurrentPrepareRequest(null);
+    state.isAnalyzing = false;
+    return;
+  }
+
+  if (
+    activeRequest.browserSessionId &&
+    state.browserSessionId &&
+    activeRequest.browserSessionId !== state.browserSessionId
+  ) {
+    await removePendingPreparePageRequest(currentPageUrl, activeRequest.requestId);
+    clearPrepareStatusPollTimer();
+    setCurrentPrepareRequest(null);
+    state.isAnalyzing = false;
+    return;
+  }
+
+  state.isAnalyzing = true;
+  setCurrentPrepareRequest(activeRequest);
+  render();
+
+  if (!state.serverOnline) {
+    return;
+  }
+
+  try {
+    const query = new URLSearchParams({
+      requestId: activeRequest.requestId,
+      url: currentPageUrl
+    });
+
+    if (activeRequest.templateId) {
+      query.set("templateId", activeRequest.templateId);
+    }
+
+    const payload = await fetchJson<PageStatusPayload>(
+      `/api/webpages/status?${query.toString()}`
+    );
+    const nextTemplateId = payload.templateId ?? activeRequest.templateId;
+    const nextStatus =
+      readOptionalString(payload.status) ?? activeRequest.status ?? "pending";
+
+    if (payload.analysisAvailable && nextTemplateId) {
+      await finalizePreparedPage({
+        url: currentPageUrl,
+        requestId: payload.requestId ?? activeRequest.requestId,
+        templateId: nextTemplateId,
+        creditsRemaining: payload.creditsRemaining,
+        logMessage: "Page ready for QA."
+      });
+      return;
+    }
+
+    if (
+      nextStatus === "failed" ||
+      payload.reason === "prepare_request_failed" ||
+      payload.code === "insufficient_credits"
+    ) {
+      await failPreparedPage({
+        url: currentPageUrl,
+        requestId: activeRequest.requestId,
+        message: payload.error,
+        code: payload.code,
+        creditsRemaining: payload.creditsRemaining
+      });
+      return;
+    }
+
+    const updatedRequest: PreparePageRequestCacheEntry = {
+      ...activeRequest,
+      requestId: payload.requestId ?? activeRequest.requestId,
+      templateId: nextTemplateId,
+      status: nextStatus,
+      updatedAt: new Date().toISOString()
+    };
+
+    await savePendingPreparePageRequest(currentPageUrl, updatedRequest);
+    state.isAnalyzing = true;
+    setCurrentPrepareRequest(updatedRequest);
+    render();
+    schedulePendingPreparePageStatusPoll();
+  } catch (error) {
+    const status = getErrorStatus(error);
+
+    if (status === 404) {
+      await failPreparedPage({
+        url: currentPageUrl,
+        requestId: activeRequest.requestId,
+        message:
+          "The previous prepare-page request could not be resumed. Start it again."
+      });
+      return;
+    }
+
+    console.error("Failed to refresh pending prepare-page request", error);
+    state.isAnalyzing = true;
+    setCurrentPrepareRequest(activeRequest);
+    render();
+    schedulePendingPreparePageStatusPoll(4_000);
+  }
+}
+
+async function restorePendingPreparePageRequest() {
+  clearPrepareStatusPollTimer();
+  setCurrentPrepareRequest(null);
+  state.isAnalyzing = false;
+
+  if (!state.currentPage?.url) {
+    return;
+  }
+
+  const pendingRequest = await getPendingPreparePageRequest(state.currentPage.url);
+
+  if (!pendingRequest) {
+    return;
+  }
+
+  state.isAnalyzing = true;
+  setCurrentPrepareRequest(pendingRequest);
+  render();
+  await reconcilePendingPreparePageRequest(pendingRequest);
 }
 
 function sendSocketMessage(message: RuntimeMessage) {
@@ -2927,8 +3288,25 @@ async function analyzeCurrentPage() {
     return;
   }
 
+  const requestId = crypto.randomUUID();
+  const pendingRequest: PreparePageRequestCacheEntry = {
+    requestId,
+    browserSessionId: state.browserSessionId,
+    url: state.currentPage.url,
+    title: state.currentPage.title,
+    status: "crawling",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  await savePendingPreparePageRequest(state.currentPage.url, pendingRequest);
+  clearPrepareStatusPollTimer();
+  setCurrentPrepareRequest(pendingRequest);
   state.isAnalyzing = true;
   render();
+
+  const controller = new AbortController();
+  activeAnalyzeRequestController = controller;
 
   try {
     const payload = await fetchJson<AnalyzePayload>("/api/webpages/analyze", {
@@ -2936,9 +3314,11 @@ async function analyzeCurrentPage() {
       headers: {
         "Content-Type": "application/json"
       },
+      signal: controller.signal,
       body: JSON.stringify({
         browserSessionId: state.browserSessionId,
         externalUserApiKey: state.externalUserApiKey,
+        prepareRequestId: requestId,
         url: state.currentPage.url,
         title: state.currentPage.title,
         preferredLanguage: getSelectedLanguage(),
@@ -2947,48 +3327,68 @@ async function analyzeCurrentPage() {
       })
     });
 
-    if (payload.ok) {
-      const creditsRemaining = Number(payload.analysis?.raw?.creditsRemaining);
+    const persistedRequestId = payload.prepareRequestId ?? requestId;
+    const templateId =
+      typeof payload.analysis?.templateId === "string"
+        ? payload.analysis.templateId
+        : pendingRequest.templateId;
+    const prepareStatus =
+      readOptionalString(payload.prepareStatus) ??
+      readOptionalString(payload.analysis?.status) ??
+      "pending";
+    const nextPendingRequest: PreparePageRequestCacheEntry = {
+      ...pendingRequest,
+      requestId: persistedRequestId,
+      templateId,
+      status: prepareStatus,
+      updatedAt: new Date().toISOString()
+    };
+    const creditsRemaining = Number(payload.analysis?.raw?.creditsRemaining);
+    const analysisAvailable = payload.analysisAvailable ?? true;
 
-      state.analysisReady = true;
-      state.currentTemplateId =
-        typeof payload.analysis?.templateId === "string"
-          ? payload.analysis.templateId
-          : undefined;
-      if (state.currentUser && Number.isFinite(creditsRemaining)) {
-        state.currentUser = {
-          ...state.currentUser,
-          generationCredits: Math.max(0, Math.floor(creditsRemaining))
-        };
-        syncCreditIssueStateWithBalance();
-        await saveCurrentRegistrationState();
-      }
-      await markPageAnalyzed(state.currentPage.url, {
-        analyzed: true,
-        templateId: state.currentTemplateId
+    if (analysisAvailable && templateId) {
+      await finalizePreparedPage({
+        url: state.currentPage.url,
+        requestId: persistedRequestId,
+        templateId,
+        creditsRemaining: Number.isFinite(creditsRemaining)
+          ? creditsRemaining
+          : null,
+        connectSocket: true,
+        logMessage: "Page ready for QA."
       });
-      appendLog(
-        "system",
-        "Page ready for QA."
-      );
-      if (!Number.isFinite(creditsRemaining)) {
-        await refreshCreditsAfterRequest();
-      }
-      await ensureWebSocketSession();
+      return;
     }
+
+    await savePendingPreparePageRequest(state.currentPage.url, nextPendingRequest);
+    state.isAnalyzing = true;
+    setCurrentPrepareRequest(nextPendingRequest);
+    render();
+    schedulePendingPreparePageStatusPoll();
   } catch (error) {
+    if (isAbortError(error)) {
+      state.isAnalyzing = true;
+      setCurrentPrepareRequest(pendingRequest);
+      schedulePendingPreparePageStatusPoll();
+      return;
+    }
+
     console.error("Failed to analyze document", error);
     const message =
       error instanceof Error ? error.message : "Failed to analyze document.";
     const code = getErrorCode(error);
 
-    if (code === "insufficient_credits" || isInsufficientCreditsMessage(message)) {
-      showInsufficientCreditsState(message);
-    } else {
-      appendLog("system", message);
-    }
+    await failPreparedPage({
+      url: state.currentPage.url,
+      requestId,
+      message,
+      code
+    });
   } finally {
-    state.isAnalyzing = false;
+    if (activeAnalyzeRequestController === controller) {
+      activeAnalyzeRequestController = undefined;
+    }
+
     render();
   }
 }
@@ -3027,6 +3427,7 @@ async function refreshAll() {
     }
 
     await refreshIndexStatus();
+    await restorePendingPreparePageRequest();
   } catch (error) {
     console.error("Failed to refresh popup state", error);
   } finally {
@@ -3228,6 +3629,8 @@ prepareMaxCreditsInput?.addEventListener("blur", () => {
 });
 
 window.addEventListener("pagehide", () => {
+  clearPrepareStatusPollTimer();
+  abortActiveAnalyzeRequest();
   stopVoicePreviewPlayback();
   void stopRecording();
 });
