@@ -7,11 +7,17 @@ import {
 } from "./embedding-text-cleanup.js";
 
 const MAX_URL_SEEDS_PER_REQUEST = 50;
+const DEFAULT_PREPARE_PAGE_MAX_CREDITS = 20;
+const MIN_PREPARE_PAGE_MAX_CREDITS = 1;
+const MAX_PREPARE_PAGE_MAX_CREDITS = 100;
 const MAX_PRIMARY_RECORD_CONTENT_CHARS = 8_000;
 const MAX_CHILD_RECORD_CONTENT_CHARS = 1_600;
 const MAX_CHILD_RECORD_EXCERPT_CHARS = 900;
 const MAX_ADAPTIVE_CHILD_LINKS = 5;
 const MIN_PRIMARY_WORDS_FOR_CHILD_CRAWL = 1_200;
+const PREPARE_PAGE_CRAWL_LINK_BUDGET_RATIO = 0.5;
+const PREPARE_PAGE_EMBEDDING_CHAR_BUDGET_PER_CREDIT = 14_000;
+const PREPARE_PAGE_MIN_EMBEDDING_CHAR_BUDGET = 10_000;
 const FIRECRAWL_MIN_REQUEST_INTERVAL_MS = 500;
 const FIRECRAWL_MIN_JOB_START_INTERVAL_MS = 8_000;
 const FIRECRAWL_MAX_RATE_LIMIT_RETRIES = 8;
@@ -98,6 +104,7 @@ export interface UrlPlainTextCrawlResult {
   processedUrlCount: number;
   crawlLevels: number;
   maxLinks: number;
+  maxPrepareCredits: number | null;
   firecrawlCreditsUsed: number;
   firecrawlJobId: string | null;
   firecrawlJobIds: string[];
@@ -108,6 +115,7 @@ export interface UrlPlainTextCrawlResult {
 export interface UrlPlainTextCrawlOptions {
   crawlLevels?: number;
   maxLinks?: number;
+  maxPrepareCredits?: number;
 }
 
 let firecrawlClient: Firecrawl | undefined;
@@ -314,6 +322,19 @@ function normalizeOptionalString(value: unknown) {
   return trimmed || null;
 }
 
+function normalizePreparePageCreditCap(value: unknown) {
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+
+  return Math.max(
+    MIN_PREPARE_PAGE_MAX_CREDITS,
+    Math.min(MAX_PREPARE_PAGE_MAX_CREDITS, Math.floor(parsed))
+  );
+}
+
 function truncateText(text: string, maxChars: number) {
   if (!text) {
     return "";
@@ -418,6 +439,13 @@ function splitTextIntoChunks(text: string, maxChars: number) {
 function countWords(text: string) {
   const matches = text.trim().match(/\S+/g);
   return matches ? matches.length : 0;
+}
+
+function getPreparePageCrawlLinkBudget(maxPrepareCredits: number) {
+  return Math.max(
+    1,
+    Math.ceil(maxPrepareCredits * PREPARE_PAGE_CRAWL_LINK_BUDGET_RATIO)
+  );
 }
 
 function normalizeUrlValue(value: unknown) {
@@ -981,6 +1009,206 @@ function buildUrlPlainTextRecords(
   };
 }
 
+function getRecordContent(record: Record<string, unknown>) {
+  return typeof record.content === "string" ? record.content.trim() : "";
+}
+
+function setRecordContent(
+  record: Record<string, unknown>,
+  content: string
+): Record<string, unknown> {
+  return {
+    ...record,
+    content,
+    content_length: content.length
+  };
+}
+
+function sumRecordContentLengths(records: Array<Record<string, unknown>>) {
+  return records.reduce((total, record) => total + getRecordContent(record).length, 0);
+}
+
+function capChildRecordContent(
+  record: Record<string, unknown>,
+  index: number,
+  totalBudget: number
+) {
+  const content = getRecordContent(record);
+
+  if (!content) {
+    return null;
+  }
+
+  const relaxedCaps = [1_200, 920, 680, 460];
+  const tightCaps = [920, 700, 500, 320];
+  const strictCaps = [720, 520, 360, 220];
+  const capSet =
+    totalBudget >= 120_000
+      ? relaxedCaps
+      : totalBudget >= 60_000
+        ? tightCaps
+        : strictCaps;
+  const cap = capSet[index] ?? (totalBudget >= 120_000 ? 280 : totalBudget >= 60_000 ? 200 : 140);
+
+  return setRecordContent(record, truncateText(content, cap));
+}
+
+function shrinkRecordsToBudget(
+  records: Array<Record<string, unknown>>,
+  budget: number,
+  getMinChars: (index: number, total: number) => number,
+  allowDrop = false
+) {
+  const nextRecords = records
+    .map((record) => {
+      const content = getRecordContent(record);
+      return content ? setRecordContent(record, content) : null;
+    })
+    .filter((record): record is Record<string, unknown> => Boolean(record));
+  let totalChars = sumRecordContentLengths(nextRecords);
+
+  for (let index = nextRecords.length - 1; index >= 0 && totalChars > budget; index -= 1) {
+    const record = nextRecords[index]!;
+    const content = getRecordContent(record);
+    const minChars = Math.max(
+      0,
+      Math.min(content.length, getMinChars(index, nextRecords.length))
+    );
+
+    if (allowDrop && minChars === 0) {
+      totalChars -= content.length;
+      nextRecords.splice(index, 1);
+      continue;
+    }
+
+    if (content.length <= minChars) {
+      continue;
+    }
+
+    const overage = totalChars - budget;
+    const targetLength = Math.max(minChars, content.length - overage);
+    const trimmedContent = truncateText(content, targetLength);
+    totalChars -= content.length - trimmedContent.length;
+    nextRecords[index] = setRecordContent(record, trimmedContent);
+  }
+
+  return nextRecords;
+}
+
+function applyPreparePageCreditBudget(
+  records: Array<Record<string, unknown>>,
+  maxPrepareCredits: number | null,
+  firecrawlCreditsUsed: number
+) {
+  if (!maxPrepareCredits || records.length === 0) {
+    return records;
+  }
+
+  const crawlBudget = getPreparePageCrawlLinkBudget(maxPrepareCredits);
+  const embeddingCreditsBudget = Math.max(
+    1,
+    maxPrepareCredits - Math.min(crawlBudget, Math.max(0, Math.ceil(firecrawlCreditsUsed)))
+  );
+  const totalCharBudget = Math.max(
+    PREPARE_PAGE_MIN_EMBEDDING_CHAR_BUDGET,
+    embeddingCreditsBudget * PREPARE_PAGE_EMBEDDING_CHAR_BUDGET_PER_CREDIT
+  );
+
+  const primaryRecords = records.filter((record) => record.is_seed === true);
+  const childRecords = records
+    .filter((record) => record.is_seed !== true)
+    .map((record, index) => capChildRecordContent(record, index, totalCharBudget))
+    .filter((record): record is Record<string, unknown> => Boolean(record));
+  let nextPrimaryRecords = [...primaryRecords];
+  let nextChildRecords = [...childRecords];
+  let totalChars =
+    sumRecordContentLengths(nextPrimaryRecords) +
+    sumRecordContentLengths(nextChildRecords);
+
+  if (totalChars <= totalCharBudget) {
+    const childQueue = [...nextChildRecords];
+    return records.flatMap((record) => {
+      if (record.is_seed === true) {
+        return [nextPrimaryRecords.shift() ?? record];
+      }
+
+      const nextRecord = childQueue.shift();
+      return nextRecord ? [nextRecord] : [];
+    });
+  }
+
+  if (nextChildRecords.length > 0) {
+    const childBudget = Math.max(
+      0,
+      totalCharBudget - sumRecordContentLengths(nextPrimaryRecords)
+    );
+    nextChildRecords = shrinkRecordsToBudget(
+      nextChildRecords,
+      childBudget,
+      (index) => (index === 0 ? 220 : index === 1 ? 160 : 0),
+      true
+    );
+    totalChars =
+      sumRecordContentLengths(nextPrimaryRecords) +
+      sumRecordContentLengths(nextChildRecords);
+  }
+
+  if (totalChars > totalCharBudget && nextPrimaryRecords.length > 0) {
+    const primaryBudget = Math.max(
+      0,
+      totalCharBudget - sumRecordContentLengths(nextChildRecords)
+    );
+    nextPrimaryRecords = shrinkRecordsToBudget(
+      nextPrimaryRecords,
+      primaryBudget,
+      (index, total) => (index === 0 ? 1_200 : total > 1 ? 700 : 320)
+    );
+    totalChars =
+      sumRecordContentLengths(nextPrimaryRecords) +
+      sumRecordContentLengths(nextChildRecords);
+  }
+
+  if (totalChars > totalCharBudget && nextChildRecords.length > 0) {
+    const childBudget = Math.max(
+      0,
+      totalCharBudget - sumRecordContentLengths(nextPrimaryRecords)
+    );
+    nextChildRecords = shrinkRecordsToBudget(
+      nextChildRecords,
+      childBudget,
+      () => 0,
+      true
+    );
+    totalChars =
+      sumRecordContentLengths(nextPrimaryRecords) +
+      sumRecordContentLengths(nextChildRecords);
+  }
+
+  if (totalChars > totalCharBudget && nextPrimaryRecords.length > 0) {
+    const primaryBudget = Math.max(
+      1,
+      totalCharBudget - sumRecordContentLengths(nextChildRecords)
+    );
+    nextPrimaryRecords = shrinkRecordsToBudget(
+      nextPrimaryRecords,
+      primaryBudget,
+      (index) => (index === 0 ? 256 : 64)
+    );
+  }
+
+  const primaryQueue = [...nextPrimaryRecords];
+  const childQueue = [...nextChildRecords];
+
+  return records.flatMap((record) => {
+    if (record.is_seed === true) {
+      return [primaryQueue.shift() ?? record];
+    }
+
+    const nextRecord = childQueue.shift();
+    return nextRecord ? [nextRecord] : [];
+  });
+}
+
 function normalizeCrawlError(
   entry: Record<string, unknown> | string,
   fallbackMessage: string
@@ -1257,6 +1485,9 @@ export async function crawlUrlsForPlainTextEmbeddings(
 ): Promise<UrlPlainTextCrawlResult> {
   const client = getFirecrawlClient();
   const normalizedUrls = normalizeUrlList(urls);
+  const maxPrepareCredits =
+    normalizePreparePageCreditCap(options?.maxPrepareCredits) ??
+    DEFAULT_PREPARE_PAGE_MAX_CREDITS;
   const crawlLevels = Math.max(
     1,
     Math.min(
@@ -1266,10 +1497,14 @@ export async function crawlUrlsForPlainTextEmbeddings(
         : env.integrations.firecrawl.crawlLevels
     )
   );
-  const maxLinks =
+  const requestedMaxLinks =
     Number.isInteger(options?.maxLinks) && Number(options?.maxLinks) > 0
       ? Math.max(1, Number(options?.maxLinks))
       : env.integrations.firecrawl.maxLinks;
+  const maxLinks = Math.min(
+    requestedMaxLinks,
+    getPreparePageCrawlLinkBudget(maxPrepareCredits)
+  );
 
   if (normalizedUrls.length > MAX_URL_SEEDS_PER_REQUEST) {
     throw createStatusError(
@@ -1382,7 +1617,10 @@ export async function crawlUrlsForPlainTextEmbeddings(
     let recordBuildResult = buildUrlPlainTextRecords(seedUrl, crawledDocuments);
 
     if (!recordBuildResult.hasPrimaryRecord) {
-      const primaryDocument = await scrapePrimaryDocument(client, seedUrl);
+      const canRetryPrimaryScrape = firecrawlCreditsUsed < maxLinks;
+      const primaryDocument = canRetryPrimaryScrape
+        ? await scrapePrimaryDocument(client, seedUrl)
+        : null;
 
       if (primaryDocument) {
         firecrawlCreditsUsed += getFirecrawlCreditsUsedFromDocument(
@@ -1446,11 +1684,16 @@ export async function crawlUrlsForPlainTextEmbeddings(
   }
 
   return {
-    records,
+    records: applyPreparePageCreditBudget(
+      records,
+      maxPrepareCredits,
+      firecrawlCreditsUsed
+    ),
     inputUrlCount: normalizedUrls.length,
     processedUrlCount,
     crawlLevels,
     maxLinks,
+    maxPrepareCredits,
     firecrawlCreditsUsed,
     firecrawlJobId,
     firecrawlJobIds,

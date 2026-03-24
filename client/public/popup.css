@@ -381,6 +381,10 @@ select option {
 .notice-banner {
   position: relative;
   z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   padding: 6px 9px;
   border-radius: 11px;
   border: 1px solid rgba(103, 227, 141, 0.18);
@@ -392,6 +396,31 @@ select option {
   font-weight: 600;
   line-height: 1.36;
   color: rgba(236, 255, 242, 0.94);
+}
+
+.notice-banner-message {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+.notice-banner-link {
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  line-height: 1.2;
+  color: rgba(152, 255, 180, 0.96);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.notice-banner-link:hover:not(:disabled),
+.notice-banner-link:focus-visible {
+  transform: none;
+  color: rgba(205, 255, 219, 0.98);
 }
 
 .top-credit-banner-message {
@@ -976,6 +1005,14 @@ select option {
   background:
     linear-gradient(180deg, rgba(10, 19, 32, 0.84), rgba(7, 13, 24, 0.82)),
     rgba(8, 16, 28, 0.74);
+}
+
+.field-hint {
+  display: block;
+  margin: 0;
+  font-size: 0.7rem;
+  line-height: 1.45;
+  color: rgba(183, 205, 223, 0.74);
 }
 
 .field-select {

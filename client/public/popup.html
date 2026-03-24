@@ -99,6 +99,22 @@
           </p>
         </section>
 
+        <label class="field">
+          <span>Max credits per Prepare page</span>
+          <input
+            id="prepare-max-credits-input"
+            type="number"
+            min="1"
+            max="100"
+            step="1"
+            value="20"
+            inputmode="numeric"
+          />
+          <small class="field-hint">
+            Default 20. Child-link crawl text is compressed first to stay under this cap.
+          </small>
+        </label>
+
         <div class="dialog-actions">
           <button
             id="registration-submit-button"
@@ -176,7 +192,17 @@
         </div>
       </section>
 
-      <section id="notification-banner" class="notice-banner" aria-live="polite" hidden></section>
+      <section id="notification-banner" class="notice-banner" aria-live="polite" hidden>
+        <span id="notification-message" class="notice-banner-message"></span>
+        <button
+          id="notification-action"
+          class="notice-banner-link"
+          type="button"
+          hidden
+        >
+          Recharge credits
+        </button>
+      </section>
 
       <section class="hero-surface">
         <div class="hero-stage">

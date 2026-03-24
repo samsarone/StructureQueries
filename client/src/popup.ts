@@ -7,12 +7,16 @@ const SERVER_HTTP_ORIGIN = __STRUCTUREDQUERIES_SERVER_HTTP_ORIGIN__;
 const SERVER_WS_URL = __STRUCTUREDQUERIES_SERVER_WS_URL__;
 const ANALYZED_PAGES_STORAGE_KEY = "structuredqueries.analyzedPages";
 const REGISTRATION_STORAGE_KEY = "structuredqueries.registration";
+const PREPARE_PAGE_SETTINGS_STORAGE_KEY = "structuredqueries.preparePageSettings";
 const LEGACY_ANALYZED_PAGES_STORAGE_KEY = "telepathy.analyzedPages";
 const LEGACY_REGISTRATION_STORAGE_KEY = "telepathy.registration";
 const STARTER_CREDITS = 50;
 const LOW_CREDIT_WARNING_THRESHOLD = 100;
 const CONVERSATION_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
 const NOTIFICATION_DURATION_MS = 6_000;
+const DEFAULT_PREPARE_PAGE_MAX_CREDITS = 20;
+const MIN_PREPARE_PAGE_MAX_CREDITS = 1;
+const MAX_PREPARE_PAGE_MAX_CREDITS = 100;
 const creditCountFormatter = new Intl.NumberFormat();
 
 interface ExtensionSessionPayload {
@@ -56,6 +60,10 @@ interface RegistrationStatePayload {
   preferredVoiceName?: string;
 }
 
+interface PreparePageSettingsPayload {
+  maxPrepareCredits?: number;
+}
+
 interface BrowserSessionPayload {
   ok: boolean;
   assistantSessionId?: string | null;
@@ -90,6 +98,9 @@ interface AnalyzePayload {
   analysis?: {
     templateId?: string;
     source?: string;
+    raw?: {
+      creditsRemaining?: number | null;
+    };
   };
 }
 
@@ -116,6 +127,7 @@ interface RuntimeMessage {
 }
 
 type LogRole = "system" | "user" | "assistant";
+type NotificationAction = "recharge";
 type WebSocketPhase =
   | "idle"
   | "connected"
@@ -155,11 +167,13 @@ interface AppState {
   voicePreviewState: "idle" | "loading" | "playing";
   voicePreviewVoiceId?: string;
   notificationMessage?: string;
+  notificationAction?: NotificationAction;
   pendingAssistantText?: string;
   pendingAssistantLanguage?: string;
   conversationActive: boolean;
   assistantSpeaking: boolean;
   recording: boolean;
+  maxPrepareCredits: number;
 }
 
 const accountButton = document.querySelector<HTMLButtonElement>("#account-button");
@@ -202,6 +216,8 @@ const settingsCreditsRemainingNode =
   document.querySelector<HTMLElement>("#settings-credits-remaining");
 const settingsCreditsCaptionNode =
   document.querySelector<HTMLElement>("#settings-credits-caption");
+const prepareMaxCreditsInput =
+  document.querySelector<HTMLInputElement>("#prepare-max-credits-input");
 const samsarLoginButton =
   document.querySelector<HTMLButtonElement>("#samsar-login-button");
 const analysisStatusNode =
@@ -229,6 +245,10 @@ const creditWarningDismissButton =
   document.querySelector<HTMLButtonElement>("#credit-warning-dismiss-button");
 const notificationNode =
   document.querySelector<HTMLElement>("#notification-banner");
+const notificationMessageNode =
+  document.querySelector<HTMLElement>("#notification-message");
+const notificationActionButton =
+  document.querySelector<HTMLButtonElement>("#notification-action");
 const voiceToggleButton =
   document.querySelector<HTMLButtonElement>("#voice-toggle-button");
 const voiceToggleButtonLabel =
@@ -265,10 +285,12 @@ const state: AppState = {
   voicePreviewState: "idle",
   voicePreviewVoiceId: undefined,
   notificationMessage: undefined,
+  notificationAction: undefined,
   conversationActive: false,
   pendingAssistantLanguage: undefined,
   assistantSpeaking: false,
-  recording: false
+  recording: false,
+  maxPrepareCredits: DEFAULT_PREPARE_PAGE_MAX_CREDITS
 };
 
 let activeSocket: WebSocket | undefined;
@@ -280,6 +302,7 @@ let resumeConversationTimer: number | undefined;
 let conversationIdleTimer: number | undefined;
 let notificationTimer: number | undefined;
 let assistantAudioReceivedForTurn = false;
+let creditsRefreshPending = false;
 
 const BUTTON_ICONS = {
   mic: `
@@ -333,6 +356,31 @@ function normalizeUrl(rawUrl: string) {
 function readOptionalString(value: unknown) {
   const trimmed = typeof value === "string" ? value.trim() : undefined;
   return trimmed ? trimmed : undefined;
+}
+
+function normalizePreparePageCreditCap(value: unknown) {
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_PREPARE_PAGE_MAX_CREDITS;
+  }
+
+  return Math.max(
+    MIN_PREPARE_PAGE_MAX_CREDITS,
+    Math.min(MAX_PREPARE_PAGE_MAX_CREDITS, Math.floor(parsed))
+  );
+}
+
+function getErrorCode(error: unknown) {
+  return (
+    error &&
+    typeof error === "object" &&
+    "code" in error &&
+    typeof error.code === "string" &&
+    error.code.trim()
+      ? error.code.trim()
+      : undefined
+  );
 }
 
 function isPrivateHostname(hostname: string) {
@@ -411,6 +459,12 @@ function syncCreditIssueStateWithBalance() {
 
   if (creditsRemaining !== null && creditsRemaining > 0) {
     state.creditIssueMessage = undefined;
+
+    if (state.notificationAction === "recharge") {
+      clearNotificationTimer();
+      state.notificationMessage = undefined;
+      state.notificationAction = undefined;
+    }
   }
 }
 
@@ -518,20 +572,23 @@ function clearNotificationTimer() {
 function hideNotification() {
   clearNotificationTimer();
 
-  if (!state.notificationMessage) {
+  if (!state.notificationMessage && !state.notificationAction) {
     return;
   }
 
   state.notificationMessage = undefined;
+  state.notificationAction = undefined;
   render();
 }
 
 function showNotification(
   message: string,
-  durationMs = NOTIFICATION_DURATION_MS
+  durationMs = NOTIFICATION_DURATION_MS,
+  action?: NotificationAction
 ) {
   clearNotificationTimer();
   state.notificationMessage = message;
+  state.notificationAction = action;
   render();
 
   if (durationMs <= 0) {
@@ -546,6 +603,7 @@ function showNotification(
     }
 
     state.notificationMessage = undefined;
+    state.notificationAction = undefined;
     render();
   }, durationMs);
 }
@@ -743,6 +801,14 @@ function setText(node: HTMLElement | null, value: string) {
   if (node) {
     node.textContent = value;
   }
+}
+
+function syncPreparePageCreditCapInput() {
+  if (!prepareMaxCreditsInput) {
+    return;
+  }
+
+  prepareMaxCreditsInput.value = String(state.maxPrepareCredits);
 }
 
 function setIcon(
@@ -1313,7 +1379,7 @@ function render() {
   setText(settingsCreditsCaptionNode, settingsCreditsCaption);
   setText(voiceWarningNode, state.voiceWarning ?? "");
   setText(creditWarningMessageNode, creditBannerMessage);
-  setText(notificationNode, state.notificationMessage ?? "");
+  setText(notificationMessageNode, state.notificationMessage ?? "");
 
   if (voiceWarningNode) {
     voiceWarningNode.hidden = !state.voiceWarning;
@@ -1326,6 +1392,18 @@ function render() {
 
   if (notificationNode) {
     notificationNode.hidden = !state.notificationMessage;
+  }
+
+  if (notificationActionButton) {
+    notificationActionButton.hidden = !state.notificationAction;
+    notificationActionButton.disabled =
+      state.notificationAction === "recharge" && state.loginLinkSubmitting;
+    notificationActionButton.textContent =
+      state.notificationAction === "recharge"
+        ? state.loginLinkSubmitting
+          ? "Opening..."
+          : "Recharge credits"
+        : "";
   }
 
   document.body.dataset.loading = state.isInitializing ? "true" : "false";
@@ -1564,6 +1642,13 @@ function showInsufficientCreditsState(message?: string | null) {
   const issueMessage = formatInsufficientCreditsMessage(message);
   const shouldAppendLog = state.creditIssueMessage !== issueMessage;
 
+  creditsRefreshPending = false;
+  if (state.currentUser) {
+    state.currentUser = {
+      ...state.currentUser,
+      generationCredits: 0
+    };
+  }
   state.creditIssueMessage = issueMessage;
   state.creditBannerDismissed = false;
   void stopPageRecordingCapture();
@@ -1571,15 +1656,16 @@ function showInsufficientCreditsState(message?: string | null) {
     phase: "error",
     detail: "Recharge required"
   });
-  state.accountEditorOpen = true;
-  syncRegistrationForm();
+  showNotification(issueMessage, 0, "recharge");
   render();
 
   if (shouldAppendLog) {
     appendLog("system", issueMessage);
   }
 
-  openAccountEditor();
+  void saveCurrentRegistrationState().catch((error) => {
+    console.error("Failed to persist depleted credit balance", error);
+  });
 }
 
 async function fetchPageContext() {
@@ -1702,6 +1788,30 @@ async function getRegistrationState(browserSessionId: string) {
   return payload;
 }
 
+async function loadPreparePageSettings() {
+  const stored = await chrome.storage.local.get(PREPARE_PAGE_SETTINGS_STORAGE_KEY);
+  const payload = stored[PREPARE_PAGE_SETTINGS_STORAGE_KEY];
+
+  if (!payload || typeof payload !== "object") {
+    state.maxPrepareCredits = DEFAULT_PREPARE_PAGE_MAX_CREDITS;
+    syncPreparePageCreditCapInput();
+    return;
+  }
+
+  state.maxPrepareCredits = normalizePreparePageCreditCap(
+    (payload as PreparePageSettingsPayload).maxPrepareCredits
+  );
+  syncPreparePageCreditCapInput();
+}
+
+async function savePreparePageSettings() {
+  await chrome.storage.local.set({
+    [PREPARE_PAGE_SETTINGS_STORAGE_KEY]: {
+      maxPrepareCredits: state.maxPrepareCredits
+    } satisfies PreparePageSettingsPayload
+  });
+}
+
 async function saveRegistrationState(
   browserSessionId: string,
   registration: Omit<RegistrationStatePayload, "browserSessionId">
@@ -1715,6 +1825,21 @@ async function saveRegistrationState(
 }
 
 async function savePreferredVoicePreference() {
+  if (!state.browserSessionId) {
+    return;
+  }
+
+  await saveRegistrationState(state.browserSessionId, {
+    assistantSessionId: state.assistantSessionId,
+    externalUser: state.currentUser,
+    externalUserApiKey: state.externalUserApiKey,
+    preferredLanguage: getSelectedLanguage(),
+    preferredVoiceId: state.preferredVoiceId,
+    preferredVoiceName: state.preferredVoiceName
+  });
+}
+
+async function saveCurrentRegistrationState() {
   if (!state.browserSessionId) {
     return;
   }
@@ -1759,6 +1884,20 @@ async function loadRegistrationState() {
   );
   syncCreditIssueStateWithBalance();
   syncRegistrationForm();
+}
+
+function updatePreparePageCreditCapFromInput() {
+  const nextValue = normalizePreparePageCreditCap(
+    prepareMaxCreditsInput?.value ?? state.maxPrepareCredits
+  );
+
+  state.maxPrepareCredits = nextValue;
+  syncPreparePageCreditCapInput();
+  render();
+
+  void savePreparePageSettings().catch((error) => {
+    console.error("Failed to persist prepare page settings", error);
+  });
 }
 
 function applyBrowserSessionPayload(payload: BrowserSessionPayload) {
@@ -1810,15 +1949,20 @@ async function syncBrowserSession() {
 
   applyBrowserSessionPayload(payload);
 
-  await saveRegistrationState(state.browserSessionId, {
-    assistantSessionId: state.assistantSessionId,
-    externalUser: state.currentUser,
-    externalUserApiKey: state.externalUserApiKey,
-    preferredLanguage: getSelectedLanguage(),
-    preferredVoiceId: state.preferredVoiceId,
-    preferredVoiceName: state.preferredVoiceName
-  });
+  await saveCurrentRegistrationState();
   render();
+}
+
+async function refreshCreditsAfterRequest() {
+  if (
+    !state.serverOnline ||
+    state.registrationRequired ||
+    !state.browserSessionId
+  ) {
+    return;
+  }
+
+  await syncBrowserSession();
 }
 
 async function persistBrowserProfilePreferences() {
@@ -2061,6 +2205,7 @@ function closeWebSocketSession(input?: {
   activeSocket = undefined;
   activeSocketPromise = undefined;
   assistantAudioReceivedForTurn = false;
+  creditsRefreshPending = false;
   state.conversationActive = false;
   state.recording = false;
   state.assistantSpeaking = false;
@@ -2363,6 +2508,13 @@ function handleSocketMessage(event: MessageEvent<string>) {
     }
 
     if (phase === "idle") {
+      if (creditsRefreshPending) {
+        creditsRefreshPending = false;
+        void refreshCreditsAfterRequest().catch((error) => {
+          console.error("Failed to refresh credits after voice turn", error);
+        });
+      }
+
       if (state.pendingAssistantText) {
         const localSpeechText = state.pendingAssistantText;
         const localSpeechLanguage = state.pendingAssistantLanguage;
@@ -2634,6 +2786,7 @@ async function submitRecordedAudioBase64(
   state.recording = false;
   state.websocketPhase = "transcribing";
   state.websocketDetail = "Processing audio...";
+  creditsRefreshPending = true;
   render();
 
   sendSocketMessage({
@@ -2752,6 +2905,8 @@ async function analyzeCurrentPage() {
     return;
   }
 
+  updatePreparePageCreditCapFromInput();
+
   const analyzeUrlError = getAnalyzeUrlError(state.currentPage.url);
 
   if (state.registrationRequired) {
@@ -2785,16 +2940,27 @@ async function analyzeCurrentPage() {
         url: state.currentPage.url,
         title: state.currentPage.title,
         preferredLanguage: getSelectedLanguage(),
-        preferredVoiceId: getSelectedVoiceId()
+        preferredVoiceId: getSelectedVoiceId(),
+        maxPrepareCredits: state.maxPrepareCredits
       })
     });
 
     if (payload.ok) {
+      const creditsRemaining = Number(payload.analysis?.raw?.creditsRemaining);
+
       state.analysisReady = true;
       state.currentTemplateId =
         typeof payload.analysis?.templateId === "string"
           ? payload.analysis.templateId
           : undefined;
+      if (state.currentUser && Number.isFinite(creditsRemaining)) {
+        state.currentUser = {
+          ...state.currentUser,
+          generationCredits: Math.max(0, Math.floor(creditsRemaining))
+        };
+        syncCreditIssueStateWithBalance();
+        await saveCurrentRegistrationState();
+      }
       await markPageAnalyzed(state.currentPage.url, {
         analyzed: true,
         templateId: state.currentTemplateId
@@ -2803,14 +2969,18 @@ async function analyzeCurrentPage() {
         "system",
         "Page ready for QA."
       );
+      if (!Number.isFinite(creditsRemaining)) {
+        await refreshCreditsAfterRequest();
+      }
       await ensureWebSocketSession();
     }
   } catch (error) {
     console.error("Failed to analyze document", error);
     const message =
       error instanceof Error ? error.message : "Failed to analyze document.";
+    const code = getErrorCode(error);
 
-    if (isInsufficientCreditsMessage(message)) {
+    if (code === "insufficient_credits" || isInsufficientCreditsMessage(message)) {
       showInsufficientCreditsState(message);
     } else {
       appendLog("system", message);
@@ -2834,6 +3004,7 @@ async function refreshAll() {
         ? extensionSession.tabId
         : state.hostTabId;
 
+    await loadPreparePageSettings();
     await loadRegistrationState();
     await refreshServerStatus();
     await refreshVoices();
@@ -2977,6 +3148,12 @@ creditWarningButton?.addEventListener("click", () => {
   void openSamsarClientLogin();
 });
 
+notificationActionButton?.addEventListener("click", () => {
+  if (state.notificationAction === "recharge") {
+    void openSamsarClientLogin();
+  }
+});
+
 creditWarningDismissButton?.addEventListener("pointerdown", dismissCreditBanner);
 creditWarningDismissButton?.addEventListener("click", dismissCreditBanner);
 
@@ -3032,6 +3209,14 @@ languageSelect?.addEventListener("change", () => {
   void persistBrowserProfilePreferences().catch((error) => {
     console.error("Failed to update browser session", error);
   });
+});
+
+prepareMaxCreditsInput?.addEventListener("change", () => {
+  updatePreparePageCreditCapFromInput();
+});
+
+prepareMaxCreditsInput?.addEventListener("blur", () => {
+  updatePreparePageCreditCapFromInput();
 });
 
 window.addEventListener("pagehide", () => {

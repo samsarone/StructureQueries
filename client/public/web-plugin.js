@@ -5,9 +5,13 @@
   const BROWSER_SESSION_STORAGE_KEY = "structuredqueries.web.browserSessionId";
   const REGISTRATION_STORAGE_KEY = "structuredqueries.web.registration";
   const PAGE_STATE_STORAGE_KEY = "structuredqueries.web.pageState";
+  const PREPARE_PAGE_SETTINGS_STORAGE_KEY = "structuredqueries.web.preparePageSettings";
   const LOW_CREDIT_WARNING_THRESHOLD = 100;
   const CONVERSATION_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
   const NOTIFICATION_DURATION_MS = 6_000;
+  const DEFAULT_PREPARE_PAGE_MAX_CREDITS = 20;
+  const MIN_PREPARE_PAGE_MAX_CREDITS = 1;
+  const MAX_PREPARE_PAGE_MAX_CREDITS = 100;
   const MIN_SPEECH_DURATION_MS = 360;
   const SILENCE_STOP_DURATION_MS = 520;
   const MIN_SIGNAL_RMS = 0.02;
@@ -107,6 +111,7 @@
     advancedDisplayName: document.querySelector("#advanced-display-name"),
     advancedEmail: document.querySelector("#advanced-email"),
     advancedUsername: document.querySelector("#advanced-username"),
+    prepareMaxCreditsInput: document.querySelector("#prepare-max-credits-input"),
     settingsCreditsRemaining: document.querySelector("#settings-credits-remaining"),
     settingsCreditsCaption: document.querySelector("#settings-credits-caption"),
     voiceSelect: document.querySelector("#voice-select"),
@@ -162,7 +167,8 @@
     creditBannerDismissed: false,
     noticeMessage: null,
     settingsSaving: false,
-    pendingAction: null
+    pendingAction: null,
+    maxPrepareCredits: DEFAULT_PREPARE_PAGE_MAX_CREDITS
   };
 
   let activeSocket;
@@ -194,6 +200,19 @@
 
   function readOptionalString(value) {
     return typeof value === "string" && value.trim() ? value.trim() : undefined;
+  }
+
+  function normalizePreparePageCreditCap(value) {
+    const parsed = Number(value);
+
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return DEFAULT_PREPARE_PAGE_MAX_CREDITS;
+    }
+
+    return Math.max(
+      MIN_PREPARE_PAGE_MAX_CREDITS,
+      Math.min(MAX_PREPARE_PAGE_MAX_CREDITS, Math.floor(parsed))
+    );
   }
 
   function safeStorageGet(key) {
@@ -776,6 +795,54 @@
     if (refs.advancedUsername && (force || !refs.advancedUsername.value.trim())) {
       refs.advancedUsername.value = nextUsername;
     }
+  }
+
+  function syncPreparePageCreditCapInput() {
+    if (!refs.prepareMaxCreditsInput) {
+      return;
+    }
+
+    refs.prepareMaxCreditsInput.value = String(state.maxPrepareCredits);
+  }
+
+  function savePreparePageSettings() {
+    safeStorageSet(
+      PREPARE_PAGE_SETTINGS_STORAGE_KEY,
+      JSON.stringify({
+        maxPrepareCredits: state.maxPrepareCredits
+      })
+    );
+  }
+
+  function loadPreparePageSettings() {
+    const stored = safeStorageGet(PREPARE_PAGE_SETTINGS_STORAGE_KEY);
+
+    if (!stored) {
+      state.maxPrepareCredits = DEFAULT_PREPARE_PAGE_MAX_CREDITS;
+      syncPreparePageCreditCapInput();
+      return;
+    }
+
+    try {
+      const payload = JSON.parse(stored);
+      state.maxPrepareCredits = normalizePreparePageCreditCap(
+        payload?.maxPrepareCredits
+      );
+    } catch {
+      state.maxPrepareCredits = DEFAULT_PREPARE_PAGE_MAX_CREDITS;
+      safeStorageRemove(PREPARE_PAGE_SETTINGS_STORAGE_KEY);
+    }
+
+    syncPreparePageCreditCapInput();
+  }
+
+  function updatePreparePageCreditCapFromInput() {
+    state.maxPrepareCredits = normalizePreparePageCreditCap(
+      refs.prepareMaxCreditsInput?.value ?? state.maxPrepareCredits
+    );
+    syncPreparePageCreditCapInput();
+    savePreparePageSettings();
+    render();
   }
 
   function saveRegistrationState() {
@@ -1417,6 +1484,7 @@
 
   async function analyzeCurrentPage() {
     setCurrentPageFromInput();
+    updatePreparePageCreditCapFromInput();
 
     const analyzeUrlError = getAnalyzeUrlError(state.currentPage?.url);
     if (analyzeUrlError) {
@@ -1446,7 +1514,8 @@
           url: state.currentPage.url,
           title: state.currentPage.title,
           preferredLanguage: getSelectedLanguage(),
-          preferredVoiceId: getSelectedVoiceId()
+          preferredVoiceId: getSelectedVoiceId(),
+          maxPrepareCredits: state.maxPrepareCredits
         })
       });
 
@@ -2988,6 +3057,14 @@
     });
   });
 
+  refs.prepareMaxCreditsInput?.addEventListener("change", () => {
+    updatePreparePageCreditCapFromInput();
+  });
+
+  refs.prepareMaxCreditsInput?.addEventListener("blur", () => {
+    updatePreparePageCreditCapFromInput();
+  });
+
   window.addEventListener("focus", () => {
     void refreshAuthSession().catch((error) => {
       console.error("Failed to refresh auth session", error);
@@ -3019,6 +3096,7 @@
 
   async function boot() {
     state.browserSessionId = getOrCreateBrowserSessionId();
+    loadPreparePageSettings();
     loadRegistrationState();
     loadPageState();
     populateProfileInputs(true);

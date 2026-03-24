@@ -34,6 +34,16 @@ function readOptionalString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+function normalizePreparePageCreditCap(value: unknown) {
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+
+  return Math.max(1, Math.min(100, Math.floor(parsed)));
+}
+
 function summarizeEmbeddingRecords(records: Array<Record<string, unknown>>) {
   return records.map((record) => ({
     id: readOptionalString(record.id) ?? null,
@@ -181,6 +191,9 @@ webpagesRouter.post("/analyze", async (request, response) => {
       : typeof request.body?.external_user_api_key === "string"
         ? request.body.external_user_api_key.trim()
         : "";
+  const maxPrepareCredits = normalizePreparePageCreditCap(
+    request.body?.maxPrepareCredits ?? request.body?.max_prepare_credits
+  );
 
   if (!url) {
     response.status(400).json({
@@ -228,13 +241,16 @@ webpagesRouter.post("/analyze", async (request, response) => {
   }
 
   try {
-    const crawlResult = await crawlUrlsForPlainTextEmbeddings([url]);
+    const crawlResult = await crawlUrlsForPlainTextEmbeddings([url], {
+      maxPrepareCredits: maxPrepareCredits ?? undefined
+    });
     const crawlSummary = {
       url,
       inputUrlCount: crawlResult.inputUrlCount,
       processedUrlCount: crawlResult.processedUrlCount,
       crawlLevels: crawlResult.crawlLevels,
       maxLinks: crawlResult.maxLinks,
+      maxPrepareCredits: crawlResult.maxPrepareCredits,
       firecrawlCreditsUsed: crawlResult.firecrawlCreditsUsed,
       firecrawlJobId: crawlResult.firecrawlJobId,
       firecrawlJobIds: crawlResult.firecrawlJobIds,
@@ -295,6 +311,7 @@ webpagesRouter.post("/analyze", async (request, response) => {
           firecrawl_credits_used: crawlResult.firecrawlCreditsUsed,
           crawl_levels: crawlResult.crawlLevels,
           max_links: crawlResult.maxLinks,
+          max_prepare_credits: crawlResult.maxPrepareCredits,
           firecrawl_job_id: crawlResult.firecrawlJobId,
           ...(crawlResult.firecrawlJobIds.length > 1
             ? {

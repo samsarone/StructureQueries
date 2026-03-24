@@ -302,6 +302,22 @@
             </p>
           </section>
 
+          <label class="field prepare-credit-field">
+            <span>Max credits per Prepare page</span>
+            <input
+              id="prepare-max-credits-input"
+              type="number"
+              min="1"
+              max="100"
+              step="1"
+              value="20"
+              inputmode="numeric"
+            />
+            <small class="field-hint">
+              Default 20. Child-link crawl text is compressed first to stay under this cap.
+            </small>
+          </label>
+
           <div class="advanced-grid">
             <label class="field field-select advanced-language-field">
               <span>Language</span>
