@@ -552,7 +552,19 @@ async function synthesizeAssistantAudio(
     input.voiceId ?? env.integrations.elevenLabs.defaultVoiceId;
   const resolvedLanguage = normalizeLanguage(input.language);
 
-  if (!resolvedVoiceId || !elevenLabsAdapter.isConfigured()) {
+  if (!elevenLabsAdapter.isConfigured()) {
+    logTtsFailure("skipped_unconfigured", new Error("ElevenLabs is not configured."), {
+      browserSessionId: input.browserSessionId,
+      requestedVoiceId: input.voiceId ?? null
+    });
+    return null;
+  }
+
+  if (!resolvedVoiceId) {
+    logTtsFailure("skipped_no_voice", new Error("No ElevenLabs voice ID was available."), {
+      browserSessionId: input.browserSessionId,
+      requestedVoiceId: input.voiceId ?? null
+    });
     return null;
   }
 
@@ -608,7 +620,25 @@ async function synthesizeAssistantAudio(
   };
 
   try {
-    return await synthesize(pronunciationDictionaryLocators);
+    const response = await synthesize(pronunciationDictionaryLocators);
+
+    if (!response.audioBase64) {
+      logTtsFailure("empty_audio_primary", new Error("ElevenLabs returned an empty audio payload."), {
+        browserSessionId: input.browserSessionId,
+        hasDictionary: Boolean(pronunciationDictionaryLocators?.length),
+        request: summarizeTtsRequest({
+          languageCode: resolvedLanguage,
+          locators: pronunciationDictionaryLocators,
+          text: preparedSpeech.speechText,
+          voiceId: resolvedVoiceId
+        }),
+        technicalTerms: preparedSpeech.technicalTerms,
+        voiceId: resolvedVoiceId
+      });
+      return null;
+    }
+
+    return response;
   } catch (error) {
     logTtsFailure("synthesize_primary", error, {
       browserSessionId: input.browserSessionId,
@@ -625,7 +655,24 @@ async function synthesizeAssistantAudio(
 
     if (pronunciationDictionaryLocators?.length) {
       try {
-        return await synthesize(undefined);
+        const fallbackResponse = await synthesize(undefined);
+
+        if (!fallbackResponse.audioBase64) {
+          logTtsFailure("empty_audio_fallback_plain", new Error("ElevenLabs returned an empty audio payload."), {
+            browserSessionId: input.browserSessionId,
+            request: summarizeTtsRequest({
+              languageCode: resolvedLanguage,
+              locators: undefined,
+              text: preparedSpeech.speechText,
+              voiceId: resolvedVoiceId
+            }),
+            technicalTerms: preparedSpeech.technicalTerms,
+            voiceId: resolvedVoiceId
+          });
+          return null;
+        }
+
+        return fallbackResponse;
       } catch (retryError) {
         logTtsFailure("synthesize_fallback_plain", retryError, {
           browserSessionId: input.browserSessionId,

@@ -1914,14 +1914,20 @@
     }
 
     if (payload.type === "assistant_audio") {
+      const audioBase64 = typeof payload.audioBase64 === "string" ? payload.audioBase64 : "";
+      const mimeType = typeof payload.mimeType === "string" ? payload.mimeType : "audio/mpeg";
+
+      if (!audioBase64) {
+        console.warn("Assistant audio event did not include audio data.");
+        return;
+      }
+
       const fallbackText = readOptionalString(state.pendingAssistantText);
       const fallbackLanguage =
         readOptionalString(payload.language) ?? state.pendingAssistantLanguage;
       state.pendingAssistantText = null;
       state.pendingAssistantLanguage = null;
       assistantAudioReceivedForTurn = true;
-      const audioBase64 = typeof payload.audioBase64 === "string" ? payload.audioBase64 : "";
-      const mimeType = typeof payload.mimeType === "string" ? payload.mimeType : "audio/mpeg";
 
       if (audioBase64 && state.conversationActive) {
         void playAssistantAudio(audioBase64, mimeType)
