@@ -189,23 +189,29 @@ function renderLandingPage(serviceName: string) {
         max-width: 40rem;
         text-align: left;
         min-height: 100%;
-        display: flex;
-        flex-direction: column;
-        justify-content: space-between;
-        gap: clamp(24px, 5vh, 64px);
-        padding-block: clamp(10px, 2.8vh, 26px);
+        display: grid;
+        grid-template-rows: minmax(0, 1fr) auto;
+        align-items: stretch;
+        gap: clamp(30px, 6vh, 84px);
+        padding-block: clamp(18px, 4vh, 42px);
+      }
+
+      .hero-copy-stack {
+        display: grid;
+        align-content: center;
+        gap: clamp(22px, 4vh, 40px);
       }
 
       .hero-title {
         margin: 0;
-        max-width: 18.8ch;
+        max-width: 19.2ch;
         margin-left: 0;
         margin-right: 0;
         display: grid;
-        gap: 0.06em;
+        gap: 0.08em;
         justify-items: start;
         font-size: clamp(2.15rem, 4.2vw, 3.7rem);
-        line-height: 1.02;
+        line-height: 1.04;
         letter-spacing: -0.06em;
         text-wrap: balance;
       }
@@ -237,11 +243,12 @@ function renderLandingPage(serviceName: string) {
         top: 0;
         left: 0;
         width: 0;
+        padding-right: 0.04em;
         overflow: hidden;
         white-space: nowrap;
         font-size: 0.74em;
         opacity: 0;
-        border-right: 0.05em solid rgba(123, 226, 255, 0.78);
+        border-right: 0.04em solid rgba(123, 226, 255, 0.72);
         animation: hero-type-cycle 20s infinite;
         animation-timing-function: steps(24, end);
         animation-fill-mode: both;
@@ -307,9 +314,10 @@ function renderLandingPage(serviceName: string) {
       }
 
       .hero-description {
-        max-width: 31rem;
+        max-width: 32rem;
         margin: 0;
-        line-height: 1.78;
+        font-size: 1rem;
+        line-height: 1.82;
       }
 
       .cta-row {
@@ -317,6 +325,7 @@ function renderLandingPage(serviceName: string) {
         flex-wrap: wrap;
         gap: 12px;
         margin-top: 0;
+        padding-top: clamp(4px, 1.4vh, 14px);
         justify-content: flex-start;
       }
 
@@ -741,6 +750,10 @@ function renderLandingPage(serviceName: string) {
           padding-block: 0;
         }
 
+        .hero-copy-stack {
+          gap: 18px;
+        }
+
         .hero-title {
           margin-left: auto;
           margin-right: auto;
@@ -753,6 +766,7 @@ function renderLandingPage(serviceName: string) {
         }
 
         .cta-row {
+          padding-top: 0;
           justify-content: center;
         }
 
@@ -843,27 +857,29 @@ function renderLandingPage(serviceName: string) {
       <section class="section" id="top">
         <div class="hero-grid">
           <div class="hero-copy">
-            <h1 class="hero-title">
-              <span class="hero-title-line">
-                <span class="highlight">Interact with</span>
-              </span>
-              <span
-                class="hero-title-rotator"
-                aria-label="Articles, research papers, blog posts, technical documentation"
-              >
-                <span class="hero-title-phrase" style="--phrase-width: 9ch;">Articles</span>
-                <span class="hero-title-phrase" style="--phrase-width: 16ch;">Research papers</span>
-                <span class="hero-title-phrase" style="--phrase-width: 12ch;">Blog posts</span>
-                <span class="hero-title-phrase" style="--phrase-width: 23ch;">Technical documentation</span>
-              </span>
-              <span class="hero-title-line hero-title-line-support">
-                with voice-enabled page analysis and follow-up Q&amp;A.
-              </span>
-            </h1>
-            <p class="hero-description">
-              Structure Queries prepares the page, surfaces the key structure, and lets you ask
-              follow-up questions by voice without losing the source context.
-            </p>
+            <div class="hero-copy-stack">
+              <h1 class="hero-title">
+                <span class="hero-title-line">
+                  <span class="highlight">Interact with</span>
+                </span>
+                <span
+                  class="hero-title-rotator"
+                  aria-label="Articles, research papers, blog posts, technical documentation"
+                >
+                  <span class="hero-title-phrase" style="--phrase-width: 250px;">Articles</span>
+                  <span class="hero-title-phrase" style="--phrase-width: 460px;">Research papers</span>
+                  <span class="hero-title-phrase" style="--phrase-width: 340px;">Blog posts</span>
+                  <span class="hero-title-phrase" style="--phrase-width: 620px;">Technical documentation</span>
+                </span>
+                <span class="hero-title-line hero-title-line-support">
+                  with voice-enabled page analysis and follow-up Q&amp;A.
+                </span>
+              </h1>
+              <p class="hero-description">
+                Structure Queries prepares the page, surfaces the key structure, and lets you ask
+                follow-up questions by voice without losing the source context.
+              </p>
+            </div>
 
             <div class="cta-row">
               <a
@@ -941,6 +957,32 @@ function renderLandingPage(serviceName: string) {
       </section>
 
     </main>
+    <script>
+      (() => {
+        const syncHeroPhraseWidths = () => {
+          const phrases = document.querySelectorAll(".hero-title-phrase");
+          for (const phrase of phrases) {
+            if (!(phrase instanceof HTMLElement)) {
+              continue;
+            }
+
+            phrase.style.setProperty("--phrase-width", phrase.scrollWidth + "px");
+          }
+        };
+
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", syncHeroPhraseWidths, { once: true });
+        } else {
+          syncHeroPhraseWidths();
+        }
+
+        if (document.fonts?.ready) {
+          document.fonts.ready.then(syncHeroPhraseWidths);
+        }
+
+        window.addEventListener("resize", syncHeroPhraseWidths);
+      })();
+    </script>
   </body>
 </html>`;
 }
