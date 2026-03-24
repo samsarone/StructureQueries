@@ -184,6 +184,8 @@ const accountUsernameNode =
   document.querySelector<HTMLElement>("#account-username");
 const accountUserIdNode =
   document.querySelector<HTMLElement>("#account-user-id");
+const overlayCloseButtons =
+  document.querySelectorAll<HTMLButtonElement>("[data-overlay-close-button]");
 const headerCreditsNode = document.querySelector<HTMLElement>("#header-credits");
 const analysisPillNode = document.querySelector<HTMLElement>("#analysis-pill");
 const pageTitleNode = document.querySelector<HTMLElement>("#page-title");
@@ -3201,6 +3203,12 @@ voiceSelect?.addEventListener("change", () => {
 
   void persistBrowserProfilePreferences().catch((error) => {
     console.error("Failed to update preferred speaker", error);
+  });
+});
+
+overlayCloseButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    void requestOverlayClose();
   });
 });
 

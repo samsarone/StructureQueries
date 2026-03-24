@@ -959,6 +959,13 @@ select option {
   gap: 12px;
 }
 
+.dialog-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
 .dialog-wordmark {
   width: min(100%, 232px);
   height: auto;
@@ -1128,6 +1135,10 @@ body[data-loading="true"] .overlay-shell > :not(.loading-shell) {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.loading-overlay-close-button {
+  flex-shrink: 0;
 }
 
 .loading-surface {

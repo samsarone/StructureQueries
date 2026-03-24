@@ -23,15 +23,26 @@
               <h2 id="registration-title">Register Structure Queries</h2>
             </div>
           </div>
-          <button
-            id="registration-close-button"
-            class="secondary-button dialog-back-button"
-            type="button"
-            aria-label="Back to main view"
-          >
-            <span aria-hidden="true">←</span>
-            <span>Back</span>
-          </button>
+          <div class="dialog-header-actions">
+            <button
+              id="registration-close-button"
+              class="secondary-button dialog-back-button"
+              type="button"
+              aria-label="Back to main view"
+            >
+              <span aria-hidden="true">←</span>
+              <span>Back</span>
+            </button>
+            <button
+              id="registration-overlay-close-button"
+              class="icon-button dialog-close-button"
+              type="button"
+              aria-label="Close plugin"
+              data-overlay-close-button
+            >
+              <span aria-hidden="true">×</span>
+            </button>
+          </div>
         </div>
 
         <img
@@ -162,6 +173,15 @@
             aria-label="Open account settings"
           >
             <span aria-hidden="true">⚙</span>
+          </button>
+          <button
+            id="overlay-close-button"
+            class="icon-button"
+            type="button"
+            aria-label="Close plugin"
+            data-overlay-close-button
+          >
+            <span aria-hidden="true">×</span>
           </button>
         </div>
       </header>
@@ -335,7 +355,15 @@
           <div class="loading-topbar-actions">
             <span class="skeleton skeleton-page-label"></span>
             <span class="skeleton skeleton-pill"></span>
-            <span class="skeleton skeleton-icon"></span>
+            <button
+              id="loading-overlay-close-button"
+              class="icon-button loading-overlay-close-button"
+              type="button"
+              aria-label="Close plugin"
+              data-overlay-close-button
+            >
+              <span aria-hidden="true">×</span>
+            </button>
           </div>
         </div>
 
