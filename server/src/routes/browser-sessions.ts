@@ -11,6 +11,12 @@ import {
   getSamsarErrorMessage,
   getSamsarErrorStatus
 } from "../lib/samsar-errors.js";
+import {
+  createSamsarUserAssistantSession,
+  createSamsarUserLoginToken,
+  fetchSamsarUserSession,
+  setSamsarUserAssistantSystemPrompt
+} from "../lib/samsar-user-auth.js";
 
 export const browserSessionsRouter = Router();
 const STARTER_CREDITS = 50;
@@ -42,7 +48,27 @@ function readOptionalExternalUser(
 ): Record<string, unknown> | undefined {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
-    : undefined;
+        : undefined;
+}
+
+function readAuthToken(body: Record<string, unknown>) {
+  return (
+    readOptionalString(body.authToken) ??
+    readOptionalString(body.samsarAuthToken) ??
+    readOptionalString(body.samsar_auth_token)
+  );
+}
+
+function createBrowserInstallationMetadata(
+  session: ReturnType<typeof createSessionPayload>
+) {
+  return {
+    browser_session_id: session.browserSessionId,
+    extension_id: session.extensionId,
+    preferred_language: session.preferredLanguage,
+    preferred_voice_id: session.preferredVoiceId,
+    user_agent: session.userAgent
+  };
 }
 
 function createExternalUserIdentity(
@@ -276,6 +302,114 @@ async function upsertExternalUserProfile(
   };
 }
 
+async function upsertAuthenticatedUserProfile(
+  body: Record<string, unknown>,
+  options?: {
+    createAssistantSession?: boolean;
+  }
+) {
+  const session = createSessionPayload(body);
+  const authToken = readAuthToken(body);
+  const externalUserIdentity = createExternalUserIdentity(body, session);
+
+  if (!session.browserSessionId) {
+    throw new Error("browserSessionId is required");
+  }
+
+  if (!authToken) {
+    throw new Error("authToken is required");
+  }
+
+  const browserInstallation = createBrowserInstallationMetadata(session);
+  const credentials = {
+    authToken,
+    externalUser: externalUserIdentity
+  };
+  const sessionResult = await fetchSamsarUserSession(
+    {
+      browserInstallation,
+      displayName: readOptionalString(body.displayName),
+      email: readOptionalString(body.email),
+      username: readOptionalString(body.username)
+    },
+    credentials
+  );
+  const externalUserApiKey =
+    readOptionalString(sessionResult.data.external_api_key) ?? null;
+  const scopedCredentials = {
+    ...credentials,
+    externalUserApiKey: externalUserApiKey ?? undefined
+  };
+  let externalUser = summarizeStructureQueriesExternalUser(
+    (sessionResult.data.external_user ?? sessionResult.data.externalUser) as
+      | Record<string, unknown>
+      | null
+      | undefined
+  );
+
+  if (!externalUser) {
+    externalUser = summarizeStructureQueriesExternalUser(
+      (readOptionalExternalUser(body.externalUser) ??
+        externalUserIdentity) as Record<string, unknown>
+    );
+  }
+
+  externalUser = normalizeExternalUserCredits(
+    externalUser,
+    {
+      creditsRemaining: sessionResult.creditsRemaining,
+      data: sessionResult.data
+    },
+    {
+      browserSessionId: session.browserSessionId,
+      source: options?.createAssistantSession === false ? "profile" : "register"
+    }
+  );
+
+  await setSamsarUserAssistantSystemPrompt(
+    {
+      system_prompt: buildStructureQueriesAssistantSystemPrompt()
+    },
+    scopedCredentials
+  );
+
+  let assistantSessionId =
+    readOptionalString(body.assistantSessionId) ?? null;
+
+  if (!assistantSessionId && options?.createAssistantSession !== false) {
+    const assistantSession = await createSamsarUserAssistantSession(
+      {
+        session_name: `Structure Queries voice assistant ${session.browserSessionId.slice(-8)}`,
+        metadata: {
+          ...browserInstallation,
+          user_type: "chrome_extension"
+        }
+      },
+      scopedCredentials
+    );
+
+    assistantSessionId =
+      readOptionalString(assistantSession.data.session_id) ??
+      readOptionalString(assistantSession.data.request_id) ??
+      null;
+  }
+
+  return {
+    ok: true,
+    session,
+    authToken,
+    externalUserApiKey:
+      externalUserApiKey,
+    assistantSessionId,
+    externalUser,
+    creditsRemaining:
+      externalUser?.generationCredits ?? sessionResult.creditsRemaining ?? null,
+    registrationRequired: !(authToken && assistantSessionId),
+    starterCreditsGranted: null,
+    warnings: []
+  };
+}
+
 browserSessionsRouter.post("/", async (request, response) => {
   const body =
     request.body && typeof request.body === "object"
@@ -292,11 +426,14 @@ browserSessionsRouter.post("/", async (request, response) => {
   }
 
   const externalUserApiKey = readOptionalString(body.externalUserApiKey);
+  const authToken = readAuthToken(body);
   const assistantSessionId = readOptionalString(body.assistantSessionId);
+  const canReachSamsar = Boolean(authToken) || samsarAdapter.isConfigured();
   const canRefreshExternalUser =
-    samsarAdapter.isConfigured() &&
+    canReachSamsar &&
     Boolean(
       assistantSessionId ||
+        authToken ||
         externalUserApiKey ||
         readOptionalExternalUser(body.externalUser)
     );
@@ -309,6 +446,24 @@ browserSessionsRouter.post("/", async (request, response) => {
 
   if (canRefreshExternalUser) {
     try {
+      if (authToken) {
+        const payload = await upsertAuthenticatedUserProfile(
+          {
+            ...body,
+            browserSessionId: session.browserSessionId,
+            extensionId: session.extensionId,
+            preferredLanguage: session.preferredLanguage,
+            preferredVoiceId: session.preferredVoiceId,
+            userAgent: session.userAgent
+          },
+          {
+            createAssistantSession: false
+          }
+        );
+        response.json(payload);
+        return;
+      }
+
       const externalUserIdentity = createExternalUserIdentity(body, session);
       const refreshedSession = await samsarAdapter.createExternalUserSession(
         externalUserIdentity
@@ -356,11 +511,12 @@ browserSessionsRouter.post("/", async (request, response) => {
   response.json({
     ok: true,
     session,
+    authToken: authToken ?? null,
     externalUserApiKey: externalUserApiKey ?? null,
     assistantSessionId: assistantSessionId ?? null,
     externalUser,
     creditsRemaining: externalUser?.generationCredits ?? null,
-    registrationRequired: !(externalUserApiKey && assistantSessionId),
+    registrationRequired: !((externalUserApiKey || authToken) && assistantSessionId),
     warnings: []
   });
 });
@@ -383,7 +539,7 @@ browserSessionsRouter.post("/register", async (request, response) => {
     return;
   }
 
-  if (!samsarAdapter.isConfigured()) {
+  if (!readAuthToken(body) && !samsarAdapter.isConfigured()) {
     response.status(503).json({
       ok: false,
       error: "SAMSAR_API_KEY is not configured."
@@ -392,16 +548,27 @@ browserSessionsRouter.post("/register", async (request, response) => {
   }
 
   try {
-    const payload = await upsertExternalUserProfile({
-      ...body,
-      browserSessionId: session.browserSessionId,
-      extensionId: session.extensionId,
-      preferredLanguage: session.preferredLanguage,
-      preferredVoiceId: session.preferredVoiceId,
-      userAgent: session.userAgent
-    }, {
-      grantStarterCredits: readOptionalBoolean(body.grantStarterCredits) ?? true
-    });
+    const payload = readAuthToken(body)
+      ? await upsertAuthenticatedUserProfile(
+          {
+            ...body,
+            browserSessionId: session.browserSessionId,
+            extensionId: session.extensionId,
+            preferredLanguage: session.preferredLanguage,
+            preferredVoiceId: session.preferredVoiceId,
+            userAgent: session.userAgent
+          }
+        )
+      : await upsertExternalUserProfile({
+          ...body,
+          browserSessionId: session.browserSessionId,
+          extensionId: session.extensionId,
+          preferredLanguage: session.preferredLanguage,
+          preferredVoiceId: session.preferredVoiceId,
+          userAgent: session.userAgent
+        }, {
+          grantStarterCredits: readOptionalBoolean(body.grantStarterCredits) ?? true
+        });
     response.json(payload);
   } catch (error) {
     console.error("Failed to register browser session with Samsar", {
@@ -437,7 +604,7 @@ browserSessionsRouter.post("/login-link", async (request, response) => {
     return;
   }
 
-  if (!samsarAdapter.isConfigured()) {
+  if (!readAuthToken(body) && !samsarAdapter.isConfigured()) {
     response.status(503).json({
       ok: false,
       error: "SAMSAR_API_KEY is not configured."
@@ -446,6 +613,30 @@ browserSessionsRouter.post("/login-link", async (request, response) => {
   }
 
   try {
+    const authToken = readAuthToken(body);
+    if (authToken) {
+      const loginToken = await createSamsarUserLoginToken(
+        {
+          redirect: "/account/billing"
+        },
+        {
+          authToken
+        }
+      );
+
+      response.json({
+        ok: true,
+        loginUrl: readOptionalString(loginToken.data.loginUrl) ?? null,
+        externalUser:
+          body.externalUser && typeof body.externalUser === "object"
+            ? summarizeStructureQueriesExternalUser(
+                body.externalUser as Record<string, unknown>
+              )
+            : null
+      });
+      return;
+    }
+
     const externalUserIdentity = createExternalUserIdentity(body, session);
     const loginToken = await samsarAdapter.createExternalUserLoginToken(
       externalUserIdentity,
@@ -498,7 +689,7 @@ browserSessionsRouter.post("/profile", async (request, response) => {
     return;
   }
 
-  if (!samsarAdapter.isConfigured()) {
+  if (!readAuthToken(body) && !samsarAdapter.isConfigured()) {
     response.status(503).json({
       ok: false,
       error: "SAMSAR_API_KEY is not configured."
@@ -507,19 +698,33 @@ browserSessionsRouter.post("/profile", async (request, response) => {
   }
 
   try {
-    const payload = await upsertExternalUserProfile(
-      {
-        ...body,
-        browserSessionId: session.browserSessionId,
-        extensionId: session.extensionId,
-        preferredLanguage: session.preferredLanguage,
-        preferredVoiceId: session.preferredVoiceId,
-        userAgent: session.userAgent
-      },
-      {
-        createAssistantSession: false
-      }
-    );
+    const payload = readAuthToken(body)
+      ? await upsertAuthenticatedUserProfile(
+          {
+            ...body,
+            browserSessionId: session.browserSessionId,
+            extensionId: session.extensionId,
+            preferredLanguage: session.preferredLanguage,
+            preferredVoiceId: session.preferredVoiceId,
+            userAgent: session.userAgent
+          },
+          {
+            createAssistantSession: false
+          }
+        )
+      : await upsertExternalUserProfile(
+          {
+            ...body,
+            browserSessionId: session.browserSessionId,
+            extensionId: session.extensionId,
+            preferredLanguage: session.preferredLanguage,
+            preferredVoiceId: session.preferredVoiceId,
+            userAgent: session.userAgent
+          },
+          {
+            createAssistantSession: false
+          }
+        );
     response.json(payload);
   } catch (error) {
     console.error("Failed to update browser session profile with Samsar", {

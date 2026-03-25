@@ -1,5 +1,7 @@
 import { env } from "../config/env.js";
 import { samsarAdapter } from "../adapters/samsar.js";
+import { buildStructureQueriesExternalUser } from "./external-user.js";
+import { createSamsarUserAssistantCompletion } from "./samsar-user-auth.js";
 import {
   extractMessageText,
   getLastUserMessage,
@@ -9,6 +11,7 @@ import {
 } from "./chat-completions.js";
 
 interface GenerateGroundedAssistantReplyInput {
+  authToken?: string;
   externalUserApiKey?: string;
   browserSessionId?: string;
   conversationId?: string;
@@ -24,6 +27,10 @@ interface GenerateGroundedAssistantReplyInput {
   transcript?: string;
   user?: string;
 }
+
+type ExternalAssistantCompletionRequest = Parameters<
+  typeof samsarAdapter.createExternalAssistantCompletion
+>[0];
 
 function readStringValue(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
@@ -436,6 +443,9 @@ export async function generateGroundedAssistantReply(
       "externalUserApiKey",
       "external_user_api_key"
     ]);
+  const authToken =
+    readStringValue(input.authToken) ??
+    readStringAlias(metadata, ["authToken", "samsarAuthToken", "samsar_auth_token"]);
   const samsarSessionId =
     readStringValue(input.samsarSessionId) ??
     readStringAlias(metadata, [
@@ -463,9 +473,9 @@ export async function generateGroundedAssistantReply(
     );
   }
 
-  if (!externalUserApiKey) {
+  if (!externalUserApiKey && !authToken) {
     throw new GroundedAssistantError(
-      "No Samsar external-user API key was provided for this request.",
+      "No Samsar auth token or external-user API key was provided for this request.",
       401
     );
   }
@@ -583,49 +593,68 @@ export async function generateGroundedAssistantReply(
     env.integrations.samsar.imageToolEnabled &&
     wantsImageResponse(query, metadata);
 
-  const assistantResult = await samsarAdapter.createExternalAssistantCompletion(
-    {
-      session_id: samsarSessionId,
-      previous_response_id:
-        readStringValue(input.previousResponseId) ??
-        readStringValue(metadata.previousResponseId),
-      input: assistantMessages,
-      max_output_tokens: env.integrations.samsar.assistantMaxOutputTokens,
-      metadata: {
-        browserSessionId,
-        conversationId,
-        language,
-        pageTitle,
-        pageUrl,
-        templateId,
-        user:
-          readStringValue(input.user) ?? readStringValue(metadata.user) ?? "anonymous"
-      },
-      model: env.integrations.samsar.assistantModel ?? input.model,
-      reasoning_effort: env.integrations.samsar.assistantReasoningEffort,
-      tool_choice: imageResponseEnabled ? "auto" : "none",
-      tools: imageResponseEnabled
-        ? [
-            {
-              type: "image_generation",
-              format: "png",
-              quality: "high",
-              size: env.integrations.samsar.assistantImageSize
-            }
-          ]
-        : undefined,
+  const assistantRequest: ExternalAssistantCompletionRequest = {
+    session_id: samsarSessionId,
+    previous_response_id:
+      readStringValue(input.previousResponseId) ??
+      readStringValue(metadata.previousResponseId),
+    input: assistantMessages,
+    max_output_tokens: env.integrations.samsar.assistantMaxOutputTokens,
+    metadata: {
+      browserSessionId,
+      conversationId,
+      language,
+      pageTitle,
+      pageUrl,
+      templateId,
       user:
         readStringValue(input.user) ?? readStringValue(metadata.user) ?? "anonymous"
     },
-    null,
-    {
-      externalUserApiKey
-    }
-  );
+    model: env.integrations.samsar.assistantModel ?? input.model,
+    reasoning_effort: env.integrations.samsar.assistantReasoningEffort,
+    tool_choice: imageResponseEnabled ? "auto" : "none",
+    tools: imageResponseEnabled
+      ? [
+          {
+            type: "image_generation",
+            format: "png",
+            quality: "high",
+            size: env.integrations.samsar.assistantImageSize
+          }
+        ]
+      : undefined,
+    user:
+      readStringValue(input.user) ?? readStringValue(metadata.user) ?? "anonymous"
+  };
 
-  const images = collectAssistantImages(assistantResult.data);
+  const assistantResult = authToken
+    ? await createSamsarUserAssistantCompletion(assistantRequest, {
+        authToken,
+        externalUser: browserSessionId
+          ? buildStructureQueriesExternalUser({
+              browserSessionId,
+              preferredLanguage: language ?? undefined
+            })
+          : undefined
+      })
+    : await samsarAdapter.createExternalAssistantCompletion(
+        assistantRequest,
+        null,
+        {
+          externalUserApiKey
+        }
+      );
+
+  const assistantData =
+    readObjectValue(assistantResult.data) ??
+    ({} as Record<string, unknown>);
+  const images = collectAssistantImages(
+    assistantData as Parameters<typeof collectAssistantImages>[0]
+  );
   const text =
-    extractAssistantText(assistantResult.data)?.trim() ||
+    extractAssistantText(
+      assistantData as Parameters<typeof extractAssistantText>[0]
+    )?.trim() ||
     (images.length > 0
       ? "I generated an image response based on the indexed page context."
       : `I could not produce a grounded response for "${query}".`);
@@ -642,7 +671,7 @@ export async function generateGroundedAssistantReply(
   return {
     provider: "samsar",
     model:
-      assistantResult.data.model ??
+      readStringValue(assistantData.model) ??
       env.integrations.samsar.assistantModel ??
       "structuredqueries-samsar-rag",
     text,
@@ -655,9 +684,9 @@ export async function generateGroundedAssistantReply(
       chunks: retrievedChunks,
       similarityMatches
     },
-    usage: assistantResult.data.usage,
+    usage: readObjectValue(assistantData.usage),
     warnings,
-    responseId: assistantResult.data.id,
-    status: assistantResult.data.status
+    responseId: readStringValue(assistantData.id),
+    status: readStringValue(assistantData.status)
   };
 }

@@ -55,12 +55,26 @@
           Register this browser installation to continue.
         </p>
 
+        <div class="dialog-actions">
+          <button
+            id="samsar-auth-button"
+            class="primary-button"
+            type="button"
+          >
+            Continue with Samsar One
+          </button>
+          <p class="detail-line auth-helper-copy">
+            Use your existing Samsar One session and credits in this browser.
+          </p>
+        </div>
+
+        <p class="dialog-divider">Or continue with a client-only profile</p>
+
         <label class="field">
           <span>Display Name</span>
           <input
             id="registration-display-name"
             type="text"
-            placeholder="Optional"
             autocomplete="name"
           />
         </label>
@@ -69,7 +83,6 @@
           <input
             id="registration-email"
             type="email"
-            placeholder="Optional"
             autocomplete="email"
           />
         </label>
@@ -78,7 +91,6 @@
           <input
             id="registration-username"
             type="text"
-            placeholder="Optional"
             autocomplete="username"
           />
         </label>
@@ -109,22 +121,6 @@
             Starter credits appear here after registration.
           </p>
         </section>
-
-        <label class="field">
-          <span>Max credits per Prepare page</span>
-          <input
-            id="prepare-max-credits-input"
-            type="number"
-            min="1"
-            max="100"
-            step="1"
-            value="20"
-            inputmode="numeric"
-          />
-          <small class="field-hint">
-            Default 20. Child-link crawl text is compressed first to stay under this cap.
-          </small>
-        </label>
 
         <div class="dialog-actions">
           <button

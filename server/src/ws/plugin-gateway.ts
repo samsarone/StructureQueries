@@ -20,6 +20,7 @@ import {
 interface SessionInitMessage {
   type: "session_init";
   assistantSessionId?: string;
+  authToken?: string;
   browserSessionId: string;
   extensionId?: string;
   externalUserApiKey?: string;
@@ -64,6 +65,7 @@ type ClientMessage =
 
 interface SocketState {
   assistantSessionId?: string;
+  authToken?: string;
   browserSessionId?: string;
   conversationId?: string;
   extensionId?: string;
@@ -729,7 +731,10 @@ async function initializeConversation(
   state: SocketState,
   payload: SessionInitMessage
 ) {
-  if (!payload.externalUserApiKey || !payload.assistantSessionId) {
+  if (
+    (!payload.externalUserApiKey && !payload.authToken) ||
+    !payload.assistantSessionId
+  ) {
     sendStatus(
       socket,
       "error",
@@ -738,12 +743,13 @@ async function initializeConversation(
     sendMessage(socket, {
       type: "error",
       message:
-        "Structure Queries registration is incomplete. Missing externalUserApiKey or assistantSessionId."
+        "Structure Queries registration is incomplete. Missing authToken or externalUserApiKey, or assistantSessionId."
     });
     return;
   }
 
   state.assistantSessionId = payload.assistantSessionId;
+  state.authToken = readOptionalString(payload.authToken);
   state.browserSessionId = payload.browserSessionId;
   state.conversationId = payload.assistantSessionId;
   state.extensionId = payload.extensionId;
@@ -789,7 +795,7 @@ async function handleSubmitAudio(
   if (
     !state.browserSessionId ||
     !state.pageUrl ||
-    !state.externalUserApiKey ||
+    (!state.externalUserApiKey && !state.authToken) ||
     !state.assistantSessionId
   ) {
     sendStatus(socket, "error", "Send session_init before submit_audio.");
@@ -835,6 +841,7 @@ async function handleSubmitAudio(
     });
     await chargeExternalElevenLabsTranscriptionUsage({
       assistantSessionId: state.assistantSessionId,
+      authToken: state.authToken,
       browserSessionId: state.browserSessionId,
       durationMs: transcription.durationMs ?? payload.durationMs,
       externalUserApiKey: state.externalUserApiKey,
@@ -898,6 +905,7 @@ async function handleSubmitAudio(
 
   try {
     assistantReply = await generateGroundedAssistantReply({
+      authToken: state.authToken,
       externalUserApiKey: state.externalUserApiKey,
       browserSessionId: state.browserSessionId,
       conversationId: state.conversationId,
@@ -988,6 +996,7 @@ async function handleSubmitAudio(
         try {
           await chargeExternalElevenLabsSynthesisUsage({
             assistantSessionId: state.assistantSessionId,
+            authToken: state.authToken,
             browserSessionId: state.browserSessionId,
             charactersUsed: synthesizedAudio.characterCount ?? undefined,
             externalUserApiKey: state.externalUserApiKey,

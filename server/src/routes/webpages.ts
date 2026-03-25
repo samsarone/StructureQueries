@@ -10,6 +10,8 @@ import {
   chargeExternalFirecrawlUsage,
   isExternalUtilityBillingEnabled
 } from "../lib/external-usage-billing.js";
+import { buildStructureQueriesExternalUser } from "../lib/external-user.js";
+import { generateSamsarUserEmbeddingsFromPlainText } from "../lib/samsar-user-auth.js";
 import {
   createPreparePageRequestId,
   getPreparePageRequest,
@@ -308,6 +310,22 @@ webpagesRouter.post("/analyze", async (request, response) => {
       : typeof request.body?.external_user_api_key === "string"
         ? request.body.external_user_api_key.trim()
         : "";
+  const authToken =
+    typeof request.body?.authToken === "string"
+      ? request.body.authToken.trim()
+      : typeof request.body?.samsarAuthToken === "string"
+        ? request.body.samsarAuthToken.trim()
+        : typeof request.body?.samsar_auth_token === "string"
+          ? request.body.samsar_auth_token.trim()
+          : "";
+  const preferredLanguage =
+    typeof request.body?.preferredLanguage === "string"
+      ? request.body.preferredLanguage.trim()
+      : "";
+  const preferredVoiceId =
+    typeof request.body?.preferredVoiceId === "string"
+      ? request.body.preferredVoiceId.trim()
+      : "";
   const maxPrepareCredits = normalizePreparePageCreditCap(
     request.body?.maxPrepareCredits ?? request.body?.max_prepare_credits
   );
@@ -352,11 +370,11 @@ webpagesRouter.post("/analyze", async (request, response) => {
     return;
   }
 
-  if (isExternalUtilityBillingEnabled() && !externalUserApiKey) {
+  if (isExternalUtilityBillingEnabled() && !externalUserApiKey && !authToken) {
     response.status(401).json({
       ok: false,
       error:
-        "No Samsar external-user API key was provided for production utility billing."
+        "No Samsar auth token or external-user API key was provided for production utility billing."
     });
     return;
   }
@@ -397,6 +415,7 @@ webpagesRouter.post("/analyze", async (request, response) => {
     );
 
     await chargeExternalFirecrawlUsage({
+      authToken: authToken || undefined,
       browserSessionId: browserSessionId || undefined,
       externalUserApiKey: externalUserApiKey || undefined,
       firecrawlCreditsUsed: crawlResult.firecrawlCreditsUsed,
@@ -426,13 +445,37 @@ webpagesRouter.post("/analyze", async (request, response) => {
       completedAt: null
     });
 
-    const result = await samsarAdapter.generateEmbeddingsFromPlainText({
-      name: createEmbeddingName(title || undefined, url),
-      plain_text: crawlResult.records,
-      field_options: getUrlEmbeddingFieldOptions()
-    });
+    const result =
+      authToken || externalUserApiKey
+        ? await generateSamsarUserEmbeddingsFromPlainText(
+            {
+              name: createEmbeddingName(title || undefined, url),
+              plain_text: crawlResult.records,
+              field_options: getUrlEmbeddingFieldOptions()
+            },
+            {
+              authToken: authToken || undefined,
+              externalUserApiKey: externalUserApiKey || undefined,
+              externalUser: browserSessionId
+                ? buildStructureQueriesExternalUser({
+                    browserSessionId,
+                    preferredLanguage: preferredLanguage || undefined,
+                    preferredVoiceId: preferredVoiceId || undefined
+                  })
+                : undefined
+            }
+          )
+        : await samsarAdapter.generateEmbeddingsFromPlainText({
+            name: createEmbeddingName(title || undefined, url),
+            plain_text: crawlResult.records,
+            field_options: getUrlEmbeddingFieldOptions()
+          });
 
     const rawAnalysis = result.data as Record<string, unknown>;
+    const upstreamStatusCode =
+      "status" in result && typeof result.status === "number"
+        ? result.status
+        : undefined;
     const templateId = readOptionalString(result.data.template_id);
     const upstreamRequestId = readOptionalString(
       rawAnalysis.request_id
@@ -525,7 +568,7 @@ webpagesRouter.post("/analyze", async (request, response) => {
                 crawl_errors: crawlResult.crawlErrors
               }
             : {}),
-          statusCode: result.status,
+          statusCode: upstreamStatusCode,
           creditsCharged: result.creditsCharged,
           creditsRemaining: result.creditsRemaining
         }

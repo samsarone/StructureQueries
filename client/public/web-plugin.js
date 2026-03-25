@@ -720,6 +720,14 @@
     return `${amount} ${value === 1 ? "credit" : "credits"}`;
   }
 
+  function getActiveAuthToken() {
+    return state.externalUserApiKey ? null : state.authToken;
+  }
+
+  function hasActiveSamsarCredentials() {
+    return Boolean(state.externalUserApiKey || getActiveAuthToken());
+  }
+
   function isInsufficientCreditsMessage(message) {
     const normalized = readOptionalString(message);
     return Boolean(
@@ -854,6 +862,7 @@
       JSON.stringify({
         browserSessionId: state.browserSessionId,
         assistantSessionId: state.assistantSessionId,
+        authToken: state.authToken,
         externalUser: state.currentUser,
         externalUserApiKey: state.externalUserApiKey,
         preferredLanguage: getSelectedLanguage(),
@@ -876,6 +885,7 @@
       }
 
       state.assistantSessionId = readOptionalString(payload.assistantSessionId) ?? null;
+      state.authToken = readOptionalString(payload.authToken) ?? state.authToken;
       state.currentUser =
         payload.externalUser && typeof payload.externalUser === "object"
           ? payload.externalUser
@@ -887,7 +897,10 @@
       );
       state.preferredVoiceId = readOptionalString(payload.preferredVoiceId) ?? null;
       state.preferredVoiceName = readOptionalString(payload.preferredVoiceName) ?? null;
-      state.registrationRequired = !(state.externalUserApiKey && state.assistantSessionId);
+      state.registrationRequired = !(
+        (state.externalUserApiKey || state.authToken) &&
+        state.assistantSessionId
+      );
       syncCreditIssueStateWithBalance();
     } catch {
       safeStorageRemove(REGISTRATION_STORAGE_KEY);
@@ -994,6 +1007,9 @@
   function applyBrowserSessionPayload(payload) {
     state.assistantSessionId =
       readOptionalString(payload.assistantSessionId) ?? state.assistantSessionId;
+    state.authToken =
+      readOptionalString(payload.authToken) ??
+      (payload.authToken === null ? null : state.authToken);
     state.currentUser =
       payload.externalUser && typeof payload.externalUser === "object"
         ? payload.externalUser
@@ -1001,7 +1017,8 @@
           ? null
           : state.currentUser;
     state.externalUserApiKey =
-      readOptionalString(payload.externalUserApiKey) ?? state.externalUserApiKey;
+      readOptionalString(payload.externalUserApiKey) ??
+      (payload.externalUserApiKey === null ? null : state.externalUserApiKey);
     const payloadCreditsRemaining = Number(payload.creditsRemaining);
     if (state.currentUser && Number.isFinite(payloadCreditsRemaining)) {
       state.currentUser = {
@@ -1194,7 +1211,7 @@
 
       populateProfileInputs(true);
 
-      if (state.externalUserApiKey && state.assistantSessionId) {
+      if (hasActiveSamsarCredentials() && state.assistantSessionId) {
         await syncBrowserSession();
       }
     } catch (error) {
@@ -1215,7 +1232,7 @@
       throw new Error("Login is required before page analysis can start.");
     }
 
-    if (!force && state.externalUserApiKey && state.assistantSessionId && state.currentUser) {
+    if (!force && hasActiveSamsarCredentials() && state.assistantSessionId && state.currentUser) {
       return;
     }
 
@@ -1226,6 +1243,7 @@
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
+        authToken: getActiveAuthToken(),
         browserSessionId: state.browserSessionId,
         extensionId: EXTENSION_ID,
         userAgent: navigator.userAgent,
@@ -1242,7 +1260,7 @@
   }
 
   async function syncBrowserSession() {
-    if (!state.browserSessionId || !state.externalUserApiKey || !state.assistantSessionId) {
+    if (!state.browserSessionId || !hasActiveSamsarCredentials() || !state.assistantSessionId) {
       return;
     }
 
@@ -1253,6 +1271,7 @@
       },
       body: JSON.stringify({
         assistantSessionId: state.assistantSessionId,
+        authToken: getActiveAuthToken(),
         browserSessionId: state.browserSessionId,
         externalUser: state.currentUser,
         externalUserApiKey: state.externalUserApiKey,
@@ -1285,6 +1304,7 @@
         },
         body: JSON.stringify({
           assistantSessionId: state.assistantSessionId,
+          authToken: getActiveAuthToken(),
           browserSessionId: state.browserSessionId,
           externalUserApiKey: state.externalUserApiKey,
           extensionId: EXTENSION_ID,
@@ -1435,6 +1455,7 @@
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
+          authToken: getActiveAuthToken(),
           browserSessionId: state.browserSessionId,
           externalUser: state.currentUser,
           externalUserApiKey: state.externalUserApiKey,
@@ -1519,6 +1540,7 @@
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
+          authToken: getActiveAuthToken(),
           browserSessionId: state.browserSessionId,
           externalUserApiKey: state.externalUserApiKey,
           url: state.currentPage.url,
@@ -1946,7 +1968,7 @@
             return Promise.resolve();
           })
           .finally(() => {
-            if (state.externalUserApiKey && state.assistantSessionId) {
+            if (hasActiveSamsarCredentials() && state.assistantSessionId) {
               void syncBrowserSession().catch((error) => {
                 console.error("Failed to refresh credits after assistant turn", error);
               });
@@ -2010,7 +2032,7 @@
       throw new Error("A page URL is required before voice can start.");
     }
 
-    if (state.registrationRequired || !state.externalUserApiKey || !state.assistantSessionId) {
+    if (state.registrationRequired || !hasActiveSamsarCredentials() || !state.assistantSessionId) {
       throw new Error("Login and account setup are required before starting voice chat.");
     }
 
@@ -2051,6 +2073,7 @@
         sendSocketMessage({
           type: "session_init",
           assistantSessionId: state.assistantSessionId,
+          authToken: getActiveAuthToken(),
           browserSessionId: state.browserSessionId,
           extensionId: EXTENSION_ID,
           externalUserApiKey: state.externalUserApiKey,
@@ -3088,7 +3111,7 @@
       console.error("Failed to refresh auth session", error);
     });
 
-    if (state.externalUserApiKey && state.assistantSessionId) {
+    if (hasActiveSamsarCredentials() && state.assistantSessionId) {
       void syncBrowserSession().catch((error) => {
         console.error("Failed to refresh browser session", error);
       });

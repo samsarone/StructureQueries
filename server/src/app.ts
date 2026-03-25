@@ -26,6 +26,7 @@ const CHROME_WEB_STORE_PLACEHOLDER_URL = "https://chromewebstore.google.com/";
 const CLIENT_PUBLIC_DIR = fileURLToPath(
   new URL("../../client/public/", import.meta.url)
 );
+const PUBLIC_DIR = fileURLToPath(new URL("../../public/", import.meta.url));
 const STRUCTURED_QUERIES_MONOGRAM_DATA_URL = `data:image/svg+xml;base64,${Buffer.from(
   readFileSync(
     new URL("../../client/public/structured-queries-monogram.svg", import.meta.url)
@@ -42,6 +43,7 @@ function renderLandingPage(serviceName: string) {
       name="description"
       content="Deeply analyze complex web pages and blog posts, then ask grounded follow-up questions with a conversational bot."
     />
+    <link rel="icon" type="image/png" sizes="16x16" href="/icon-16.png" />
     <title>${serviceName}</title>
     <style>
       @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
@@ -1211,6 +1213,9 @@ export function createApp() {
   app.use(express.json());
   app.use("/landing-assets", express.static(CLIENT_PUBLIC_DIR));
 
+  app.get("/icon-16.png", (_request, response) => {
+    response.sendFile(join(PUBLIC_DIR, "icon-16.png"));
+  });
   app.get("/", (_request, response) => {
     response.type("html").send(renderLandingPage(env.serviceName));
   });

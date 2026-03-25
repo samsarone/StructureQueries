@@ -992,6 +992,21 @@ select option {
   line-height: 1.62;
 }
 
+.auth-helper-copy {
+  margin: 0;
+  text-align: center;
+  color: rgba(183, 205, 223, 0.74);
+}
+
+.dialog-divider {
+  margin: -2px 0 0;
+  text-align: center;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(183, 205, 223, 0.56);
+}
+
 .dialog-actions {
   display: grid;
   gap: 8px;

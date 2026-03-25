@@ -5,6 +5,7 @@ declare const __STRUCTUREDQUERIES_SERVER_WS_URL__: string;
 
 const SERVER_HTTP_ORIGIN = __STRUCTUREDQUERIES_SERVER_HTTP_ORIGIN__;
 const SERVER_WS_URL = __STRUCTUREDQUERIES_SERVER_WS_URL__;
+const SAMSAR_CLIENT_APP_ORIGIN = "https://app.samsar.one";
 const ANALYZED_PAGES_STORAGE_KEY = "structuredqueries.analyzedPages";
 const REGISTRATION_STORAGE_KEY = "structuredqueries.registration";
 const PREPARE_PAGE_SETTINGS_STORAGE_KEY = "structuredqueries.preparePageSettings";
@@ -54,6 +55,7 @@ interface StructureQueriesExternalUserPayload {
 interface RegistrationStatePayload {
   browserSessionId: string;
   assistantSessionId?: string;
+  authToken?: string;
   externalUser?: StructureQueriesExternalUserPayload | null;
   externalUserApiKey?: string;
   preferredLanguage?: string;
@@ -79,6 +81,7 @@ interface PreparePageRequestCacheEntry {
 interface BrowserSessionPayload {
   ok: boolean;
   assistantSessionId?: string | null;
+  authToken?: string | null;
   creditsRemaining?: number | null;
   externalUser?: StructureQueriesExternalUserPayload | null;
   externalUserApiKey?: string | null;
@@ -91,6 +94,15 @@ interface BrowserSessionLoginLinkPayload {
   ok: boolean;
   loginUrl?: string | null;
   externalUser?: StructureQueriesExternalUserPayload | null;
+}
+
+interface WebAuthSessionPayload {
+  _id?: string | null;
+  authToken?: string | null;
+  displayName?: string | null;
+  email?: string | null;
+  generationCredits?: number | null;
+  username?: string | null;
 }
 
 interface PageContext {
@@ -164,6 +176,7 @@ type WebSocketPhase =
 
 interface AppState {
   assistantSessionId?: string;
+  authToken?: string;
   browserSessionId?: string;
   extensionId?: string;
   hostTabId?: number;
@@ -173,6 +186,7 @@ interface AppState {
   externalUserApiKey?: string;
   registrationRequired: boolean;
   registrationSubmitting: boolean;
+  samsarAuthSubmitting: boolean;
   loginLinkSubmitting: boolean;
   accountEditorOpen: boolean;
   serverOnline: boolean;
@@ -247,6 +261,8 @@ const settingsCreditsCaptionNode =
   document.querySelector<HTMLElement>("#settings-credits-caption");
 const prepareMaxCreditsInput =
   document.querySelector<HTMLInputElement>("#prepare-max-credits-input");
+const samsarAuthButton =
+  document.querySelector<HTMLButtonElement>("#samsar-auth-button");
 const samsarLoginButton =
   document.querySelector<HTMLButtonElement>("#samsar-login-button");
 const analysisStatusNode =
@@ -295,6 +311,7 @@ const state: AppState = {
   currentUser: null,
   registrationRequired: true,
   registrationSubmitting: false,
+  samsarAuthSubmitting: false,
   loginLinkSubmitting: false,
   accountEditorOpen: false,
   serverOnline: false,
@@ -501,6 +518,14 @@ function getCreditsRemaining() {
 function formatCreditsLabel(value: number) {
   const amount = creditCountFormatter.format(value);
   return `${amount} ${value === 1 ? "credit" : "credits"}`;
+}
+
+function getActiveAuthToken() {
+  return state.externalUserApiKey ? undefined : state.authToken;
+}
+
+function hasActiveSamsarCredentials() {
+  return Boolean(state.externalUserApiKey || getActiveAuthToken());
 }
 
 function syncCreditIssueStateWithBalance() {
@@ -1232,7 +1257,7 @@ function render() {
       ? "Unavailable"
       : formatCreditsLabel(creditsRemaining);
   const settingsCreditsCaption = state.registrationRequired
-    ? "Granted once when this Chrome client finishes registration."
+    ? "Connect Samsar One to use your existing balance, or finish a client-only setup to receive starter credits."
     : creditIssueActive
       ? "Recharge in Samsar, then return here and refresh the session."
     : creditsRemaining === null
@@ -1409,18 +1434,18 @@ function render() {
   setText(analysisStatusNode, analysisDetail);
   setText(
     registrationEyebrowNode,
-    registrationMode === "register" ? "Register" : "Account"
+    registrationMode === "register" ? "Set up" : "Account"
   );
   setText(
     registrationTitleNode,
     registrationMode === "register"
-      ? "Register Structure Queries"
+      ? "Set up Structure Queries"
       : "Update Account"
   );
   setText(
     registrationSubtitleNode,
     registrationMode === "register"
-      ? "Set up this browser to continue."
+      ? "Use Samsar One for your existing account and credits, or keep a client-only profile in this browser."
       : "Update your session profile."
   );
   setText(
@@ -1431,10 +1456,12 @@ function render() {
         ? registrationMode === "register"
           ? "Setting up..."
           : "Saving..."
+      : state.samsarAuthSubmitting
+          ? "Connecting with Samsar One..."
       : state.loginLinkSubmitting
           ? "Opening Samsar..."
       : registrationMode === "register"
-          ? `All fields are optional. You will receive ${STARTER_CREDITS} starter credits.`
+          ? "Samsar One uses your existing account. Client-only setup stays local to this browser."
           : creditIssueActive
             ? state.creditIssueMessage ?? "Recharge credits to continue."
           : "Save changes."
@@ -1490,6 +1517,7 @@ function render() {
   if (registrationSubmitButton) {
     registrationSubmitButton.disabled =
       state.registrationSubmitting ||
+      state.samsarAuthSubmitting ||
       state.loginLinkSubmitting ||
       !state.serverOnline;
     registrationSubmitButton.textContent = state.registrationSubmitting
@@ -1497,8 +1525,19 @@ function render() {
         ? "Registering..."
         : "Saving..."
       : registrationMode === "register"
-        ? "Register"
+        ? "Use Client Profile"
         : "Save Changes";
+  }
+
+  if (samsarAuthButton) {
+    samsarAuthButton.disabled =
+      state.registrationSubmitting ||
+      state.samsarAuthSubmitting ||
+      state.loginLinkSubmitting ||
+      !state.serverOnline;
+    samsarAuthButton.textContent = state.samsarAuthSubmitting
+      ? "Connecting..."
+      : "Continue with Samsar One";
   }
 
   if (samsarLoginButton) {
@@ -1506,6 +1545,7 @@ function render() {
     samsarLoginButton.disabled =
       state.registrationRequired ||
       state.registrationSubmitting ||
+      state.samsarAuthSubmitting ||
       state.loginLinkSubmitting ||
       !state.serverOnline;
     samsarLoginButton.textContent = state.loginLinkSubmitting
@@ -1517,6 +1557,7 @@ function render() {
     creditWarningButton.disabled =
       state.registrationRequired ||
       state.registrationSubmitting ||
+      state.samsarAuthSubmitting ||
       state.loginLinkSubmitting ||
       !state.serverOnline;
     creditWarningButton.textContent = state.loginLinkSubmitting
@@ -1563,6 +1604,7 @@ function render() {
   if (voiceSelect) {
     voiceSelect.disabled =
       state.registrationSubmitting ||
+      state.samsarAuthSubmitting ||
       state.isInitializing;
   }
 
@@ -1571,24 +1613,31 @@ function render() {
   if (languageSelect) {
     languageSelect.disabled =
       state.registrationSubmitting ||
+      state.samsarAuthSubmitting ||
       state.registrationRequired ||
       state.isInitializing;
   }
 
   if (registrationDisplayNameNode) {
-    registrationDisplayNameNode.disabled = state.registrationSubmitting;
+    registrationDisplayNameNode.disabled =
+      state.registrationSubmitting || state.samsarAuthSubmitting;
   }
 
   if (registrationEmailNode) {
-    registrationEmailNode.disabled = state.registrationSubmitting;
+    registrationEmailNode.disabled =
+      state.registrationSubmitting || state.samsarAuthSubmitting;
   }
 
   if (registrationUsernameNode) {
-    registrationUsernameNode.disabled = state.registrationSubmitting;
+    registrationUsernameNode.disabled =
+      state.registrationSubmitting || state.samsarAuthSubmitting;
   }
 
   if (accountButton) {
-    accountButton.disabled = state.registrationSubmitting || state.isInitializing;
+    accountButton.disabled =
+      state.registrationSubmitting ||
+      state.samsarAuthSubmitting ||
+      state.isInitializing;
   }
 }
 
@@ -1944,6 +1993,7 @@ async function savePreferredVoicePreference() {
 
   await saveRegistrationState(state.browserSessionId, {
     assistantSessionId: state.assistantSessionId,
+    authToken: state.authToken,
     externalUser: state.currentUser,
     externalUserApiKey: state.externalUserApiKey,
     preferredLanguage: getSelectedLanguage(),
@@ -1959,6 +2009,7 @@ async function saveCurrentRegistrationState() {
 
   await saveRegistrationState(state.browserSessionId, {
     assistantSessionId: state.assistantSessionId,
+    authToken: state.authToken,
     externalUser: state.currentUser,
     externalUserApiKey: state.externalUserApiKey,
     preferredLanguage: getSelectedLanguage(),
@@ -1970,6 +2021,7 @@ async function saveCurrentRegistrationState() {
 async function loadRegistrationState() {
   if (!state.browserSessionId) {
     state.assistantSessionId = undefined;
+    state.authToken = undefined;
     state.currentUser = null;
     state.externalUserApiKey = undefined;
     state.preferredVoiceId = undefined;
@@ -1982,6 +2034,7 @@ async function loadRegistrationState() {
   const registration = await getRegistrationState(state.browserSessionId);
 
   state.assistantSessionId = registration?.assistantSessionId;
+  state.authToken = registration?.authToken;
   state.currentUser = registration?.externalUser ?? null;
   state.externalUserApiKey = registration?.externalUserApiKey;
   state.preferredVoiceId =
@@ -1993,7 +2046,8 @@ async function loadRegistrationState() {
       getPreferredLanguageFromUser(registration?.externalUser)
   );
   state.registrationRequired = !(
-    state.externalUserApiKey && state.assistantSessionId
+    (state.externalUserApiKey || state.authToken) &&
+    state.assistantSessionId
   );
   syncCreditIssueStateWithBalance();
   syncRegistrationForm();
@@ -2020,6 +2074,12 @@ function applyBrowserSessionPayload(payload: BrowserSessionPayload) {
       : payload.assistantSessionId === null
         ? undefined
         : state.assistantSessionId;
+  state.authToken =
+    typeof payload.authToken === "string"
+      ? payload.authToken
+      : payload.authToken === null
+        ? undefined
+        : state.authToken;
   state.currentUser =
     payload.externalUser === undefined
       ? state.currentUser
@@ -2057,6 +2117,7 @@ async function syncBrowserSession() {
     },
     body: JSON.stringify({
       assistantSessionId: state.assistantSessionId,
+      authToken: getActiveAuthToken(),
       browserSessionId: state.browserSessionId,
       externalUser: state.currentUser,
       externalUserApiKey: state.externalUserApiKey,
@@ -2093,7 +2154,7 @@ async function persistBrowserProfilePreferences() {
   if (
     state.registrationRequired ||
     !state.serverOnline ||
-    !state.externalUserApiKey ||
+    !hasActiveSamsarCredentials() ||
     !state.assistantSessionId
   ) {
     await syncBrowserSession();
@@ -2109,6 +2170,7 @@ async function persistBrowserProfilePreferences() {
       },
       body: JSON.stringify({
         assistantSessionId: state.assistantSessionId,
+        authToken: getActiveAuthToken(),
         browserSessionId: state.browserSessionId,
         externalUserApiKey: state.externalUserApiKey,
         extensionId: state.extensionId,
@@ -2126,6 +2188,7 @@ async function persistBrowserProfilePreferences() {
 
   await saveRegistrationState(state.browserSessionId, {
     assistantSessionId: state.assistantSessionId,
+    authToken: state.authToken,
     externalUser: state.currentUser,
     externalUserApiKey: state.externalUserApiKey,
     preferredLanguage: getSelectedLanguage(),
@@ -2156,6 +2219,7 @@ async function submitAccountProfile() {
       },
       body: JSON.stringify({
         assistantSessionId: state.assistantSessionId,
+        authToken: getActiveAuthToken(),
         browserSessionId: state.browserSessionId,
         externalUserApiKey: state.externalUserApiKey,
         extensionId: state.extensionId,
@@ -2174,6 +2238,7 @@ async function submitAccountProfile() {
     state.accountEditorOpen = false;
     await saveRegistrationState(state.browserSessionId, {
       assistantSessionId: state.assistantSessionId,
+      authToken: state.authToken,
       externalUser: state.currentUser,
       externalUserApiKey: state.externalUserApiKey,
       preferredLanguage: getSelectedLanguage(),
@@ -2205,6 +2270,150 @@ async function submitAccountProfile() {
   }
 }
 
+function buildSamsarOneExtensionAuthUrl() {
+  const redirectUri = chrome.identity.getRedirectURL("samsar-one");
+  const authUrl = new URL("/extension-auth", `${SAMSAR_CLIENT_APP_ORIGIN}/`);
+  authUrl.searchParams.set("redirect_uri", redirectUri);
+  authUrl.searchParams.set("source", "structurequeries_extension");
+  return authUrl.toString();
+}
+
+async function launchSamsarOneWebAuthFlow(url: string) {
+  return new Promise<string>((resolve, reject) => {
+    chrome.identity.launchWebAuthFlow(
+      {
+        interactive: true,
+        url
+      },
+      (responseUrl) => {
+        const runtimeError = chrome.runtime.lastError;
+
+        if (runtimeError) {
+          reject(new Error(runtimeError.message));
+          return;
+        }
+
+        if (!responseUrl) {
+          reject(new Error("Samsar One sign-in was cancelled."));
+          return;
+        }
+
+        resolve(responseUrl);
+      }
+    );
+  });
+}
+
+async function resolveSamsarOneSessionFromRedirect(
+  redirectUrl: string
+) {
+  const callbackUrl = new URL(redirectUrl);
+  const loginToken = readOptionalString(callbackUrl.searchParams.get("loginToken"));
+  const authToken = readOptionalString(callbackUrl.searchParams.get("authToken"));
+
+  if (loginToken) {
+    return fetchJson<WebAuthSessionPayload>(
+      `/api/web-auth/session?loginToken=${encodeURIComponent(loginToken)}`
+    );
+  }
+
+  if (authToken) {
+    return fetchJson<WebAuthSessionPayload>("/api/web-auth/session", {
+      headers: {
+        Authorization: `Bearer ${authToken}`
+      }
+    });
+  }
+
+  throw new Error("Samsar One did not return a login token.");
+}
+
+async function continueWithSamsarOne() {
+  if (!state.browserSessionId) {
+    return;
+  }
+
+  state.samsarAuthSubmitting = true;
+  render();
+
+  try {
+    const redirectUrl = await launchSamsarOneWebAuthFlow(
+      buildSamsarOneExtensionAuthUrl()
+    );
+    const sessionPayload = await resolveSamsarOneSessionFromRedirect(redirectUrl);
+    const resolvedAuthToken = readOptionalString(sessionPayload.authToken);
+
+    if (!resolvedAuthToken) {
+      throw new Error("Samsar One did not return an auth token.");
+    }
+
+    state.authToken = resolvedAuthToken;
+
+    const payload = await fetchJson<BrowserSessionPayload>(
+      "/api/browser-sessions/register",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          authToken: resolvedAuthToken,
+          browserSessionId: state.browserSessionId,
+          extensionId: state.extensionId,
+          userAgent: navigator.userAgent,
+          displayName:
+            readOptionalString(sessionPayload.displayName) ??
+            registrationDisplayNameNode?.value ??
+            "",
+          email:
+            readOptionalString(sessionPayload.email) ??
+            registrationEmailNode?.value ??
+            "",
+          username:
+            readOptionalString(sessionPayload.username) ??
+            registrationUsernameNode?.value ??
+            "",
+          preferredLanguage: getSelectedLanguage(),
+          preferredVoiceId: getSelectedVoiceId()
+        })
+      }
+    );
+
+    applyBrowserSessionPayload(payload);
+    state.preferredVoiceId = getSelectedVoiceId();
+    state.preferredVoiceName = getSelectedVoiceName();
+    state.accountEditorOpen = false;
+
+    await saveRegistrationState(state.browserSessionId, {
+      assistantSessionId: state.assistantSessionId,
+      authToken: state.authToken,
+      externalUser: state.currentUser,
+      externalUserApiKey: state.externalUserApiKey,
+      preferredLanguage: getSelectedLanguage(),
+      preferredVoiceId: state.preferredVoiceId,
+      preferredVoiceName: state.preferredVoiceName
+    });
+
+    showNotification("Connected with Samsar One.");
+    appendLog(
+      "system",
+      "Connected with Samsar One. This browser now uses your existing Samsar account and credits."
+    );
+    await refreshIndexStatus();
+  } catch (error) {
+    console.error("Failed to connect with Samsar One", error);
+    appendLog(
+      "system",
+      error instanceof Error
+        ? error.message
+        : "Failed to connect with Samsar One."
+    );
+  } finally {
+    state.samsarAuthSubmitting = false;
+    render();
+  }
+}
+
 async function openSamsarClientLogin() {
   if (!state.browserSessionId || state.registrationRequired) {
     return;
@@ -2219,12 +2428,13 @@ async function openSamsarClientLogin() {
       {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          browserSessionId: state.browserSessionId,
-          externalUser: state.currentUser,
-          externalUserApiKey: state.externalUserApiKey,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        authToken: getActiveAuthToken(),
+        browserSessionId: state.browserSessionId,
+        externalUser: state.currentUser,
+        externalUserApiKey: state.externalUserApiKey,
           extensionId: state.extensionId,
           preferredLanguage: getSelectedLanguage(),
           preferredVoiceId: getSelectedVoiceId(),
@@ -2239,6 +2449,7 @@ async function openSamsarClientLogin() {
 
     await saveRegistrationState(state.browserSessionId, {
       assistantSessionId: state.assistantSessionId,
+      authToken: state.authToken,
       externalUser: state.currentUser,
       externalUserApiKey: state.externalUserApiKey,
       preferredLanguage: getSelectedLanguage(),
@@ -3070,7 +3281,7 @@ async function ensureWebSocketSession() {
     throw new Error("Register this browser installation before starting voice chat.");
   }
 
-  if (!state.externalUserApiKey || !state.assistantSessionId) {
+  if (!hasActiveSamsarCredentials() || !state.assistantSessionId) {
     throw new Error("Registration is incomplete. Register this browser installation again.");
   }
 
@@ -3110,6 +3321,7 @@ async function ensureWebSocketSession() {
       sendSocketMessage({
         type: "session_init",
         assistantSessionId: state.assistantSessionId,
+        authToken: getActiveAuthToken(),
         browserSessionId: state.browserSessionId,
         extensionId: state.extensionId,
         externalUserApiKey: state.externalUserApiKey,
@@ -3330,6 +3542,7 @@ async function analyzeCurrentPage() {
       },
       signal: controller.signal,
       body: JSON.stringify({
+        authToken: getActiveAuthToken(),
         browserSessionId: state.browserSessionId,
         externalUserApiKey: state.externalUserApiKey,
         prepareRequestId: requestId,
@@ -3559,6 +3772,10 @@ registrationOverlayNode?.addEventListener("click", (event) => {
 
 samsarLoginButton?.addEventListener("click", () => {
   void openSamsarClientLogin();
+});
+
+samsarAuthButton?.addEventListener("click", () => {
+  void continueWithSamsarOne();
 });
 
 creditWarningButton?.addEventListener("click", () => {

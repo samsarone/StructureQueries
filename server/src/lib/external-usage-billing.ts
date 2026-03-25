@@ -1,5 +1,7 @@
 import { samsarAdapter } from "../adapters/samsar.js";
 import { env } from "../config/env.js";
+import { buildStructureQueriesExternalUser } from "./external-user.js";
+import { chargeSamsarUserUtilityUsage } from "./samsar-user-auth.js";
 
 const AUXILIARY_UTILITY_PRICING_MULTIPLIER = 1.25;
 
@@ -12,33 +14,63 @@ function normalizePositiveNumber(value: unknown) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
-function requireExternalUserApiKey(externalUserApiKey?: string) {
-  const normalized = readOptionalString(externalUserApiKey);
+function hasUserCredential(input?: {
+  authToken?: string;
+  externalUserApiKey?: string;
+}) {
+  return Boolean(
+    readOptionalString(input?.authToken) ??
+      readOptionalString(input?.externalUserApiKey)
+  );
+}
 
-  if (!normalized) {
+function buildSamsarUserCredentials(input?: {
+  authToken?: string;
+  browserSessionId?: string;
+  externalUserApiKey?: string;
+}) {
+  const authToken = readOptionalString(input?.authToken);
+  const externalUserApiKey = readOptionalString(input?.externalUserApiKey);
+  const browserSessionId = readOptionalString(input?.browserSessionId);
+
+  if (!authToken && !externalUserApiKey) {
     throw new Error(
-      "No Samsar external-user API key was provided for external utility billing."
+      "No Samsar auth token or external-user API key was provided for external utility billing."
     );
   }
 
-  return normalized;
+  return {
+    authToken: authToken ?? null,
+    externalUserApiKey: externalUserApiKey ?? null,
+    externalUser:
+      authToken && browserSessionId
+        ? buildStructureQueriesExternalUser({
+            browserSessionId
+          })
+        : null
+  };
 }
 
 async function chargeExternalUtilityUsage(
   payload: Record<string, unknown>,
-  externalUserApiKey?: string
+  credentials?: {
+    authToken?: string;
+    browserSessionId?: string;
+    externalUserApiKey?: string;
+  }
 ) {
   if (!isExternalUtilityBillingEnabled()) {
     return null;
   }
 
-  return samsarAdapter.chargeExternalUserUtilityUsage(
-    payload,
-    null,
-    {
-      externalUserApiKey: requireExternalUserApiKey(externalUserApiKey)
-    }
-  );
+  const userCredentials = buildSamsarUserCredentials(credentials);
+  if (userCredentials.authToken) {
+    return chargeSamsarUserUtilityUsage(payload, userCredentials);
+  }
+
+  return samsarAdapter.chargeExternalUserUtilityUsage(payload, null, {
+    externalUserApiKey: userCredentials.externalUserApiKey ?? undefined
+  });
 }
 
 export function isExternalUtilityBillingEnabled() {
@@ -49,6 +81,7 @@ export function isExternalUtilityBillingEnabled() {
 }
 
 export async function chargeExternalFirecrawlUsage(input: {
+  authToken?: string;
   browserSessionId?: string;
   externalUserApiKey?: string;
   firecrawlCreditsUsed: number;
@@ -62,6 +95,10 @@ export async function chargeExternalFirecrawlUsage(input: {
   const firecrawlCreditsUsed = normalizePositiveNumber(input.firecrawlCreditsUsed);
 
   if (firecrawlCreditsUsed <= 0) {
+    return null;
+  }
+
+  if (!hasUserCredential(input)) {
     return null;
   }
 
@@ -85,12 +122,17 @@ export async function chargeExternalFirecrawlUsage(input: {
         inputUrlCount: normalizePositiveNumber(input.inputUrlCount)
       }
     },
-    input.externalUserApiKey
+    {
+      authToken: input.authToken,
+      browserSessionId: input.browserSessionId,
+      externalUserApiKey: input.externalUserApiKey
+    }
   );
 }
 
 export async function chargeExternalElevenLabsTranscriptionUsage(input: {
   assistantSessionId?: string;
+  authToken?: string;
   browserSessionId?: string;
   durationMs?: number;
   externalUserApiKey?: string;
@@ -103,6 +145,10 @@ export async function chargeExternalElevenLabsTranscriptionUsage(input: {
   const durationMs = normalizePositiveNumber(input.durationMs);
 
   if (durationMs <= 0) {
+    return null;
+  }
+
+  if (!hasUserCredential(input)) {
     return null;
   }
 
@@ -124,12 +170,17 @@ export async function chargeExternalElevenLabsTranscriptionUsage(input: {
         pageUrl: readOptionalString(input.pageUrl)
       }
     },
-    input.externalUserApiKey
+    {
+      authToken: input.authToken,
+      browserSessionId: input.browserSessionId,
+      externalUserApiKey: input.externalUserApiKey
+    }
   );
 }
 
 export async function chargeExternalElevenLabsSynthesisUsage(input: {
   assistantSessionId?: string;
+  authToken?: string;
   browserSessionId?: string;
   charactersUsed?: number;
   externalUserApiKey?: string;
@@ -143,6 +194,10 @@ export async function chargeExternalElevenLabsSynthesisUsage(input: {
   const charactersUsed = normalizePositiveNumber(input.charactersUsed);
 
   if (charactersUsed <= 0 && !text) {
+    return null;
+  }
+
+  if (!hasUserCredential(input)) {
     return null;
   }
 
@@ -169,6 +224,10 @@ export async function chargeExternalElevenLabsSynthesisUsage(input: {
         voiceId: readOptionalString(input.voiceId)
       }
     },
-    input.externalUserApiKey
+    {
+      authToken: input.authToken,
+      browserSessionId: input.browserSessionId,
+      externalUserApiKey: input.externalUserApiKey
+    }
   );
 }

@@ -218,6 +218,9 @@ function buildGroundedReplyInput(request: Request) {
   const metadata = buildMetadata(bodyRecord);
 
   return {
+    authToken:
+      readStringAlias(bodyRecord, ["authToken", "samsarAuthToken", "samsar_auth_token"]) ??
+      readStringAlias(metadata, ["authToken", "samsarAuthToken", "samsar_auth_token"]),
     externalUserApiKey:
       readStringAlias(bodyRecord, [
         "externalUserApiKey",
