@@ -5,7 +5,6 @@ declare const __STRUCTUREDQUERIES_SERVER_WS_URL__: string;
 
 const SERVER_HTTP_ORIGIN = __STRUCTUREDQUERIES_SERVER_HTTP_ORIGIN__;
 const SERVER_WS_URL = __STRUCTUREDQUERIES_SERVER_WS_URL__;
-const SAMSAR_CLIENT_APP_ORIGIN = "https://app.samsar.one";
 const ANALYZED_PAGES_STORAGE_KEY = "structuredqueries.analyzedPages";
 const REGISTRATION_STORAGE_KEY = "structuredqueries.registration";
 const PREPARE_PAGE_SETTINGS_STORAGE_KEY = "structuredqueries.preparePageSettings";
@@ -255,6 +254,8 @@ const registrationEmailNode =
   document.querySelector<HTMLInputElement>("#registration-email");
 const registrationUsernameNode =
   document.querySelector<HTMLInputElement>("#registration-username");
+const authHelperCopyNode =
+  document.querySelector<HTMLElement>(".auth-helper-copy");
 const settingsCreditsRemainingNode =
   document.querySelector<HTMLElement>("#settings-credits-remaining");
 const settingsCreditsCaptionNode =
@@ -1461,7 +1462,7 @@ function render() {
       : state.loginLinkSubmitting
           ? "Opening Samsar..."
       : registrationMode === "register"
-          ? "Samsar One uses your existing account. Client-only setup stays local to this browser."
+          ? "Connect Samsar One to use your existing account and credits, or register a client-only profile here."
           : creditIssueActive
             ? state.creditIssueMessage ?? "Recharge credits to continue."
           : "Save changes."
@@ -1525,11 +1526,12 @@ function render() {
         ? "Registering..."
         : "Saving..."
       : registrationMode === "register"
-        ? "Use Client Profile"
+        ? "Register"
         : "Save Changes";
   }
 
   if (samsarAuthButton) {
+    samsarAuthButton.hidden = registrationMode !== "register";
     samsarAuthButton.disabled =
       state.registrationSubmitting ||
       state.samsarAuthSubmitting ||
@@ -1538,6 +1540,10 @@ function render() {
     samsarAuthButton.textContent = state.samsarAuthSubmitting
       ? "Connecting..."
       : "Continue with Samsar One";
+  }
+
+  if (authHelperCopyNode) {
+    authHelperCopyNode.hidden = registrationMode !== "register";
   }
 
   if (samsarLoginButton) {
@@ -2272,7 +2278,7 @@ async function submitAccountProfile() {
 
 function buildSamsarOneExtensionAuthUrl() {
   const redirectUri = chrome.identity.getRedirectURL("samsar-one");
-  const authUrl = new URL("/extension-auth", `${SAMSAR_CLIENT_APP_ORIGIN}/`);
+  const authUrl = new URL("/api/web-auth/extension", `${SERVER_HTTP_ORIGIN}/`);
   authUrl.searchParams.set("redirect_uri", redirectUri);
   authUrl.searchParams.set("source", "structurequeries_extension");
   return authUrl.toString();

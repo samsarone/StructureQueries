@@ -55,21 +55,6 @@
           Register this browser installation to continue.
         </p>
 
-        <div class="dialog-actions">
-          <button
-            id="samsar-auth-button"
-            class="primary-button"
-            type="button"
-          >
-            Continue with Samsar One
-          </button>
-          <p class="detail-line auth-helper-copy">
-            Use your existing Samsar One session and credits in this browser.
-          </p>
-        </div>
-
-        <p class="dialog-divider">Or continue with a client-only profile</p>
-
         <label class="field">
           <span>Display Name</span>
           <input
@@ -131,6 +116,13 @@
             Register
           </button>
           <button
+            id="samsar-auth-button"
+            class="secondary-button"
+            type="button"
+          >
+            Continue with Samsar One
+          </button>
+          <button
             id="samsar-login-button"
             class="secondary-button"
             type="button"
@@ -138,6 +130,10 @@
             Recharge Credits
           </button>
         </div>
+
+        <p class="detail-line auth-helper-copy">
+          Continue with Samsar One uses your existing Samsar session and credits in this browser.
+        </p>
 
         <p id="registration-status" class="registration-status">
           Register this browser installation.
