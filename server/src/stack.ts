@@ -1,28 +1,20 @@
 import { env } from "./config/env.js";
 import {
   elevenLabsAdapter,
-  mongoDbAdapter,
-  mongooseAdapter,
   samsarAdapter
 } from "./adapters/index.js";
 import {
   elevenLabsConnector,
-  mongoDbConnector,
-  mongooseConnector,
   samsarConnector
 } from "./connectors/index.js";
 
 export const backendConnectors = {
   elevenLabs: elevenLabsConnector,
-  mongodb: mongoDbConnector,
-  mongoose: mongooseConnector,
   samsar: samsarConnector
 } as const;
 
 export const backendAdapters = {
   elevenLabs: elevenLabsAdapter,
-  mongodb: mongoDbAdapter,
-  mongoose: mongooseAdapter,
   samsar: samsarAdapter
 } as const;
 
@@ -47,6 +39,25 @@ export function getStackManifest() {
       }
     },
     {
+      id: "firecrawl",
+      category: "web-crawl-and-ingest",
+      runtime: "sdk",
+      packageName: "@mendable/firecrawl-js",
+      configured: Boolean(env.integrations.firecrawl.apiKey),
+      env: {
+        required: ["FIRECRAWL_API_KEY"],
+        optional: [
+          "FIRECRAWL_API_URL",
+          "FIRECRAWL_CRAWL_LEVELS",
+          "FIRECRAWL_MAX_LINKS",
+          "FIRECRAWL_POLL_INTERVAL_SECONDS",
+          "FIRECRAWL_TIMEOUT_SECONDS"
+        ]
+      },
+      notes:
+        "Used directly by webpage analysis routes. It is not currently exposed through the connector/adapter registry."
+    },
+    {
       id: "samsar",
       category: "video-and-embeddings",
       runtime: "sdk",
@@ -58,34 +69,6 @@ export function getStackManifest() {
         required: ["SAMSAR_API_KEY"],
         optional: []
       }
-    },
-    {
-      id: "mongodb",
-      category: "database",
-      runtime: "sdk",
-      packageName: "mongodb",
-      connector: "mongoDbConnector",
-      adapter: "mongoDbAdapter",
-      configured: mongoDbConnector.isConfigured(),
-      env: {
-        required: [],
-        optional: []
-      },
-      notes: "Foundation connector only. The current proxy runtime does not use MongoDB."
-    },
-    {
-      id: "mongoose",
-      category: "odm",
-      runtime: "sdk",
-      packageName: "mongoose",
-      connector: "mongooseConnector",
-      adapter: "mongooseAdapter",
-      configured: mongooseConnector.isConfigured(),
-      env: {
-        required: [],
-        optional: []
-      },
-      notes: "Foundation connector only. The current proxy runtime does not use Mongoose."
     }
   ] as const;
 

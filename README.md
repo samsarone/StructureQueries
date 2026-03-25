@@ -83,8 +83,6 @@ The server workspace currently uses:
 - `cors` `^2.8.6`
 - `dotenv` `^17.3.1`
 - `express` `^5.2.1`
-- `mongodb` `^6.21.0`
-- `mongoose` `^8.23.0`
 - `samsar-js` `^0.48.12`
 - `ws` `^8.19.0`
 
@@ -100,6 +98,8 @@ Server development dependencies:
 ## Local development
 
 Copy `server/.env.example` to `server/.env` and fill in the integrations you want to use.
+
+Create a Samsar account at [app.samsar.one](https://app.samsar.one) and generate a `SAMSAR_API_KEY` before running the server locally.
 
 Minimum local server env:
 
@@ -118,6 +118,7 @@ DOTENV_CONFIG_PATH=
 ELEVENLABS_API_KEY=
 ELEVENLABS_DEFAULT_VOICE_ID=
 ELEVENLABS_DEFAULT_MODEL_ID=eleven_multilingual_v2
+
 SAMSAR_PUBLIC_API_BASE_URL=https://api.samsar.one
 APP_NAME=test
 CURRENT_ENV=development
@@ -127,11 +128,6 @@ FIRECRAWL_CRAWL_LEVELS=5
 FIRECRAWL_MAX_LINKS=10
 FIRECRAWL_POLL_INTERVAL_SECONDS=5
 FIRECRAWL_TIMEOUT_SECONDS=120
-
-MONGODB_URI=
-MONGODB_DATABASE=
-MONGODB_APP_NAME=
-MONGOOSE_AUTO_INDEX=
 ```
 
 Firecrawl local/self-hosted note:
@@ -164,18 +160,17 @@ Firecrawl local/self-hosted note:
 
 ## Backend stack
 
-The server workspace now includes typed connectors and adapters for:
+The current server runtime uses:
 
 - ElevenLabs via `@elevenlabs/elevenlabs-js`
 - Firecrawl via `@mendable/firecrawl-js`
 - Samsar via `samsar-js`
-- MongoDB via `mongodb`
-- Mongoose via `mongoose`
 
 Key backend entry points:
 
-- `server/src/connectors/`: raw client/connection factories
-- `server/src/adapters/`: higher-level wrappers to build new routes/services on top of
+- `server/src/connectors/`: raw client/connection factories for registry-backed providers
+- `server/src/adapters/`: higher-level wrappers built on top of those connectors
+- `server/src/lib/url-embedding-crawl.ts`: Firecrawl crawl, scrape, and ingestion flow
 - `server/src/stack.ts`: backend registry/manifest
 - `GET /api/stack`: runtime-visible stack manifest and configuration status
 - `POST /api/browser-sessions`: stateless browser-session sync
@@ -186,7 +181,5 @@ Key backend entry points:
 - `POST /v1/chat/completions`: OpenAI-compatible text completion surface over the same grounded backend flow
 
 The proxy is stateless. The extension stores the returned `externalUserApiKey`, `assistantSessionId`, and page `templateId` locally, while external-user identity and assistant session state live in Samsar.
-
-MongoDB and Mongoose remain available as foundation connectors, but the current proxy flow does not require any Mongo credentials or proxy-side persistence.
 
 Copy the values you need from `server/.env.example` into your local server env before using the provider adapters.
