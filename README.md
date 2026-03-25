@@ -1,5 +1,9 @@
 # Structure Queries
 
+<p align="center">
+  <img src="public/icon.png" alt="Structure Queries logo" width="120" />
+</p>
+
 Structure Queries is a voice-enabled page analysis app for dense web content such as research papers, articles, blog posts, and technical documentation.
 
 The current implementation combines:
@@ -19,7 +23,7 @@ The repo is a monorepo with:
 
 ### Main splash
 
-![Structure Queries main splash](assets/splash-1280x800.png)
+![Structure Queries main splash](public/splash-1280x800.png)
 
 ## Workflow visuals
 
@@ -27,25 +31,25 @@ The repo is a monorepo with:
 
 This view captures the end-to-end product flow from page preparation to voice reply.
 
-![Workflow 1](assets/workflow_1.png)
+![Workflow 1](public/workflow_1.png)
 
 ### Firecrawl + cleanup
 
 This is the latest minimal crawl-and-cleanup visual.
 
-![Workflow 2](assets/workflow_2_v3.png)
+![Workflow 2](public/workflow_2_v3.png)
 
 ### ElevenLabs transcription + TTS
 
 This is the latest minimal voice-loop visual.
 
-![Workflow 3](assets/workflow_3_v2.png)
+![Workflow 3](public/workflow_3_v2.png)
 
 ### Backend RAG chatbot
 
 This view captures the current backend embedding, retrieval, and assistant-completion flow.
 
-![Workflow 4](assets/workflow_4.png)
+![Workflow 4](public/workflow_4.png)
 
 ## Latest implementation
 
