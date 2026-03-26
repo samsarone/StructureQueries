@@ -22,7 +22,6 @@ import { webAuthRouter } from "./routes/web-auth.js";
 import { webpagesRouter } from "./routes/webpages.js";
 import { backendStack } from "./stack.js";
 
-const CHROME_WEB_STORE_PLACEHOLDER_URL = "https://chromewebstore.google.com/";
 const CLIENT_PUBLIC_DIR = fileURLToPath(
   new URL("../../client/public/", import.meta.url)
 );
@@ -33,7 +32,29 @@ const STRUCTURED_QUERIES_MONOGRAM_DATA_URL = `data:image/svg+xml;base64,${Buffer
   )
 ).toString("base64")}`;
 
-function renderLandingPage(serviceName: string) {
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (character) => {
+    switch (character) {
+      case "&":
+        return "&amp;";
+      case "<":
+        return "&lt;";
+      case ">":
+        return "&gt;";
+      case '"':
+        return "&quot;";
+      case "'":
+        return "&#39;";
+      default:
+        return character;
+    }
+  });
+}
+
+function renderLandingPage(serviceName: string, extensionDownloadUrl: string) {
+  const escapedServiceName = escapeHtml(serviceName);
+  const escapedExtensionDownloadUrl = escapeHtml(extensionDownloadUrl);
+
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -44,7 +65,7 @@ function renderLandingPage(serviceName: string) {
       content="Deeply analyze complex web pages and blog posts, then ask grounded follow-up questions with a conversational bot."
     />
     <link rel="icon" type="image/png" sizes="16x16" href="/icon-16.png" />
-    <title>${serviceName}</title>
+    <title>${escapedServiceName}</title>
     <style>
       @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
 
@@ -421,10 +442,13 @@ function renderLandingPage(serviceName: string) {
         display: inline-flex;
         align-items: center;
         justify-content: center;
+        appearance: none;
         min-height: 50px;
         padding: 0 22px;
         border-radius: 18px;
         border: 1px solid transparent;
+        cursor: pointer;
+        font-family: inherit;
         font-size: 0.92rem;
         font-weight: 700;
         text-decoration: none;
@@ -455,12 +479,43 @@ function renderLandingPage(serviceName: string) {
         width: 100%;
       }
 
-      .site-banner-action {
+      .site-banner-actions {
+        display: grid;
+        gap: 8px;
+        justify-items: end;
+        text-align: right;
+        flex-shrink: 0;
+      }
+
+      .site-banner-status {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
         min-height: 44px;
         padding: 0 18px;
-        flex-shrink: 0;
+        border: 1px solid rgba(148, 163, 184, 0.18);
         border-radius: 16px;
+        background: rgba(8, 18, 29, 0.56);
+        color: rgba(236, 243, 251, 0.96);
         font-size: 0.84rem;
+        font-weight: 700;
+      }
+
+      .site-banner-link {
+        padding: 0;
+        border: 0;
+        background: none;
+        color: rgba(151, 222, 255, 0.88);
+        font-size: 0.84rem;
+        font-weight: 600;
+        text-decoration: underline;
+        text-decoration-color: rgba(151, 222, 255, 0.38);
+        text-underline-offset: 0.24em;
+      }
+
+      .site-banner-link:hover {
+        color: rgba(236, 243, 251, 0.96);
+        text-decoration-color: rgba(236, 243, 251, 0.7);
       }
 
       .feature-row {
@@ -707,6 +762,126 @@ function renderLandingPage(serviceName: string) {
         font-size: 0.94rem;
       }
 
+      .instruction-modal {
+        width: min(720px, calc(100% - 24px));
+        margin: auto;
+        padding: 0;
+        border: 1px solid rgba(122, 177, 211, 0.18);
+        border-radius: 30px;
+        background: linear-gradient(180deg, rgba(8, 17, 29, 0.98), rgba(5, 10, 18, 0.99));
+        color: var(--sq-ink);
+        box-shadow: 0 36px 120px rgba(0, 0, 0, 0.44);
+      }
+
+      .instruction-modal::backdrop {
+        background: rgba(3, 7, 12, 0.72);
+        backdrop-filter: blur(8px);
+      }
+
+      .instruction-modal-shell {
+        display: grid;
+        gap: 24px;
+        padding: clamp(22px, 4vw, 30px);
+      }
+
+      .instruction-modal-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .instruction-modal-title {
+        margin-top: 10px;
+        font-size: clamp(1.6rem, 3vw, 2.1rem);
+        letter-spacing: -0.04em;
+      }
+
+      .instruction-modal-subtitle {
+        margin-top: 10px;
+        max-width: 38rem;
+        color: rgba(164, 203, 223, 0.88);
+        line-height: 1.6;
+      }
+
+      .instruction-modal-close {
+        min-width: 44px;
+        min-height: 44px;
+        padding: 0 14px;
+        border-radius: 14px;
+        flex-shrink: 0;
+      }
+
+      .instruction-list {
+        display: grid;
+        gap: 12px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .instruction-step {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 16px;
+        padding: 16px 18px;
+        border: 1px solid rgba(122, 177, 211, 0.14);
+        border-radius: 22px;
+        background: linear-gradient(180deg, rgba(10, 18, 29, 0.9), rgba(7, 13, 23, 0.94));
+      }
+
+      .instruction-step-index {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 48px;
+        height: 36px;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 999px;
+        color: rgba(151, 222, 255, 0.88);
+        font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+        font-size: 0.74rem;
+        letter-spacing: 0.16em;
+      }
+
+      .instruction-step-copy {
+        display: grid;
+        gap: 6px;
+      }
+
+      .instruction-step-copy strong {
+        font-size: 1rem;
+        letter-spacing: -0.02em;
+      }
+
+      .instruction-step-copy p {
+        color: rgba(164, 203, 223, 0.88);
+        line-height: 1.68;
+      }
+
+      .instruction-step-copy code {
+        font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+        font-size: 0.92em;
+        color: rgba(236, 243, 251, 0.96);
+      }
+
+      .instruction-step-copy a {
+        color: rgba(123, 226, 255, 0.94);
+        word-break: break-all;
+      }
+
+      .instruction-note {
+        color: rgba(155, 169, 186, 0.9);
+        font-size: 0.9rem;
+        line-height: 1.6;
+      }
+
+      .instruction-modal-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
       .placeholder-frame,
       .placeholder-chat,
       .placeholder-source {
@@ -919,7 +1094,22 @@ function renderLandingPage(serviceName: string) {
           font-size: 0.78rem;
         }
 
-        .site-banner-action {
+        .site-banner-actions {
+          width: 100%;
+          justify-items: start;
+          text-align: left;
+        }
+
+        .instruction-modal-header {
+          flex-direction: column;
+        }
+
+        .instruction-step {
+          grid-template-columns: 1fr;
+        }
+
+        .instruction-modal-close,
+        .instruction-modal-actions .button {
           width: 100%;
         }
 
@@ -997,14 +1187,18 @@ function renderLandingPage(serviceName: string) {
               </span>
             </div>
           </div>
-          <a
-            class="button button-primary site-banner-action"
-            href="${CHROME_WEB_STORE_PLACEHOLDER_URL}"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Install from WebStore
-          </a>
+          <div class="site-banner-actions">
+            <span class="site-banner-status">Coming soon on Chrome webstore</span>
+            <button
+              class="site-banner-link"
+              type="button"
+              data-open-install-modal
+              aria-haspopup="dialog"
+              aria-controls="extension-install-modal"
+            >
+              Dev hackathon instructions
+            </button>
+          </div>
         </header>
         <div class="hero-grid">
           <div class="hero-copy">
@@ -1033,14 +1227,15 @@ function renderLandingPage(serviceName: string) {
             </div>
 
             <div class="cta-row">
-              <a
+              <button
                 class="button button-primary"
-                href="${CHROME_WEB_STORE_PLACEHOLDER_URL}"
-                target="_blank"
-                rel="noreferrer"
+                type="button"
+                data-open-install-modal
+                aria-haspopup="dialog"
+                aria-controls="extension-install-modal"
               >
-                Install from WebStore
-              </a>
+                View dev install steps
+              </button>
               <a class="button button-secondary" href="#install">Try the web client</a>
             </div>
           </div>
@@ -1107,10 +1302,123 @@ function renderLandingPage(serviceName: string) {
         </div>
       </section>
 
+      <dialog
+        class="instruction-modal"
+        id="extension-install-modal"
+        aria-labelledby="extension-install-title"
+      >
+        <form method="dialog" class="instruction-modal-shell">
+          <div class="instruction-modal-header">
+            <div>
+              <p class="eyebrow">Chrome extension</p>
+              <h2 class="instruction-modal-title" id="extension-install-title">
+                Dev hackathon instructions
+              </h2>
+              <p class="instruction-modal-subtitle">
+                Install the current development build in Chrome with the stable public zip below.
+                Re-download it after a fresh deploy when you need the latest extension.
+              </p>
+            </div>
+            <button
+              class="button button-secondary instruction-modal-close"
+              type="submit"
+              value="close"
+            >
+              Close
+            </button>
+          </div>
+
+          <ol class="instruction-list">
+            <li class="instruction-step">
+              <span class="instruction-step-index">01</span>
+              <div class="instruction-step-copy">
+                <strong>Download the zipped extension build</strong>
+                <p>
+                  Open
+                  <a href="${escapedExtensionDownloadUrl}" target="_blank" rel="noreferrer">
+                    ${escapedExtensionDownloadUrl}
+                  </a>
+                  and download the latest zip file.
+                </p>
+              </div>
+            </li>
+            <li class="instruction-step">
+              <span class="instruction-step-index">02</span>
+              <div class="instruction-step-copy">
+                <strong>Extract the archive</strong>
+                <p>
+                  Unzip the downloaded file so the extension contents are available as a normal
+                  folder on your machine.
+                </p>
+              </div>
+            </li>
+            <li class="instruction-step">
+              <span class="instruction-step-index">03</span>
+              <div class="instruction-step-copy">
+                <strong>Open Chrome extensions</strong>
+                <p>
+                  Open Chrome and go to <code>chrome://extensions</code>.
+                </p>
+              </div>
+            </li>
+            <li class="instruction-step">
+              <span class="instruction-step-index">04</span>
+              <div class="instruction-step-copy">
+                <strong>Enable Developer mode</strong>
+                <p>
+                  Turn on <code>Developer mode</code> in the top-right corner of the extensions
+                  page.
+                </p>
+              </div>
+            </li>
+            <li class="instruction-step">
+              <span class="instruction-step-index">05</span>
+              <div class="instruction-step-copy">
+                <strong>Load the unpacked folder</strong>
+                <p>
+                  Click <code>Load unpacked</code>, then select the extracted folder from step 2.
+                </p>
+              </div>
+            </li>
+            <li class="instruction-step">
+              <span class="instruction-step-index">06</span>
+              <div class="instruction-step-copy">
+                <strong>Pin Structure Queries in Chrome</strong>
+                <p>
+                  Click the Extensions icon in Chrome, then pin Structure Queries to the toolbar so
+                  it stays visible while testing.
+                </p>
+              </div>
+            </li>
+          </ol>
+
+          <p class="instruction-note">
+            The zip is published to a fixed public S3 URL and overwritten on each production
+            deploy.
+          </p>
+
+          <div class="instruction-modal-actions">
+            <a
+              class="button button-primary"
+              href="${escapedExtensionDownloadUrl}"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Download zipped extension
+            </a>
+            <button class="button button-secondary" type="submit" value="close">
+              Close
+            </button>
+          </div>
+        </form>
+      </dialog>
+
     </main>
     <script>
       (() => {
         const webClientFrame = document.querySelector(".web-client-frame");
+        const installModal = document.querySelector("#extension-install-modal");
+        const installTriggers = document.querySelectorAll("[data-open-install-modal]");
 
         const syncHeroPhraseWidths = () => {
           const phrases = document.querySelectorAll(".hero-title-phrase");
@@ -1168,6 +1476,41 @@ function renderLandingPage(serviceName: string) {
 
         window.addEventListener("resize", syncHeroPhraseWidths);
 
+        const openInstallModal = () => {
+          if (!(installModal instanceof HTMLDialogElement)) {
+            return;
+          }
+
+          if (!installModal.open) {
+            installModal.showModal();
+          }
+        };
+
+        for (const trigger of installTriggers) {
+          if (!(trigger instanceof HTMLElement)) {
+            continue;
+          }
+
+          trigger.addEventListener("click", () => {
+            openInstallModal();
+          });
+        }
+
+        if (installModal instanceof HTMLDialogElement) {
+          installModal.addEventListener("click", (event) => {
+            const bounds = installModal.getBoundingClientRect();
+            const clickedBackdrop =
+              event.clientX < bounds.left ||
+              event.clientX > bounds.right ||
+              event.clientY < bounds.top ||
+              event.clientY > bounds.bottom;
+
+            if (clickedBackdrop) {
+              installModal.close();
+            }
+          });
+        }
+
         if (webClientFrame instanceof HTMLIFrameElement) {
           webClientFrame.addEventListener("load", () => {
             syncWebClientFrameFromDocument();
@@ -1217,7 +1560,9 @@ export function createApp() {
     response.sendFile(join(PUBLIC_DIR, "icon-16.png"));
   });
   app.get("/", (_request, response) => {
-    response.type("html").send(renderLandingPage(env.serviceName));
+    response
+      .type("html")
+      .send(renderLandingPage(env.serviceName, env.extensionDownloadUrl));
   });
   app.get("/web-client", (_request, response) => {
     response.sendFile(join(CLIENT_PUBLIC_DIR, "web-plugin.html"));

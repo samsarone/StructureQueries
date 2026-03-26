@@ -33,6 +33,8 @@ const DEFAULT_FIRECRAWL_CRAWL_LEVELS = 5;
 const DEFAULT_FIRECRAWL_MAX_LINKS = 10;
 const DEFAULT_FIRECRAWL_POLL_INTERVAL_SECONDS = 5;
 const DEFAULT_FIRECRAWL_TIMEOUT_SECONDS = 120;
+const DEFAULT_EXTENSION_DOWNLOAD_URL =
+  "https://samsar-resources.s3.amazonaws.com/structuredqueries/structured-queries-webstore.zip";
 
 function parsePort(value: string | undefined) {
   const parsed = Number(value ?? DEFAULT_PORT);
@@ -80,6 +82,9 @@ export const env = {
   serviceName: DEFAULT_SERVICE_NAME,
   port: parsePort(process.env.PORT),
   clientOrigin: "*",
+  extensionDownloadUrl:
+    readOptional(process.env.EXTENSION_DOWNLOAD_URL) ??
+    DEFAULT_EXTENSION_DOWNLOAD_URL,
   integrations: {
     elevenLabs: {
       apiKey: readOptional(process.env.ELEVENLABS_API_KEY),
