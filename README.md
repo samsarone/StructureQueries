@@ -203,16 +203,17 @@ You will need active provider accounts and API keys for the integrations you wan
 
 ## Local development
 
-Copy `server/.env.example` to `server/.env` and fill in the integrations you want to use.
+Copy `server/.env.example` to `server/.env` and fill in the required integrations.
 
 Create a Samsar account at [app.samsar.one](https://app.samsar.one) and generate a `SAMSAR_API_KEY` before running the server locally.
 
-Minimum local server env:
+Required local server env:
 
 ```bash
 PORT=3000
 SAMSAR_API_KEY=your_samsar_api_key
 FIRECRAWL_API_KEY=your_firecrawl_api_key
+ELEVENLABS_API_KEY=your_elevenlabs_api_key
 ```
 
 Optional server env already supported by the current code:
@@ -221,9 +222,7 @@ Optional server env already supported by the current code:
 NODE_ENV=development
 DOTENV_CONFIG_PATH=
 
-ELEVENLABS_API_KEY=
 ELEVENLABS_DEFAULT_VOICE_ID=
-ELEVENLABS_DEFAULT_MODEL_ID=eleven_multilingual_v2
 
 SAMSAR_PUBLIC_API_BASE_URL=https://api.samsar.one
 APP_NAME=test
@@ -235,6 +234,8 @@ FIRECRAWL_MAX_LINKS=10
 FIRECRAWL_POLL_INTERVAL_SECONDS=5
 FIRECRAWL_TIMEOUT_SECONDS=120
 ```
+
+`ELEVENLABS_DEFAULT_MODEL_ID` is not required for local setup. The server already defaults it to `eleven_multilingual_v2` unless you explicitly override it in code or env.
 
 Firecrawl local/self-hosted note:
 
