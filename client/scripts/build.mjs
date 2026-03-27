@@ -53,7 +53,7 @@ const buildConfig = {
   outdir: distDir,
   format: "iife",
   target: "chrome120",
-  sourcemap: true,
+  sourcemap: watchMode,
   logLevel: "info",
   define: {
     __STRUCTUREDQUERIES_SERVER_HTTP_ORIGIN__: JSON.stringify(serverHttpOrigin),
