@@ -1789,18 +1789,18 @@ function renderPrivacyPage(serviceName: string) {
       }
 
       main {
-        width: min(960px, calc(100% - 32px));
+        width: min(1080px, calc(100% - 32px));
         margin: 0 auto;
         padding: 24px 0 44px;
         display: grid;
-        gap: 14px;
+        gap: 16px;
       }
 
       .card {
         overflow: hidden;
         padding: clamp(22px, 3vw, 34px);
         border: 1px solid rgba(122, 177, 211, 0.16);
-        border-radius: 30px;
+        border-radius: 24px;
         background:
           radial-gradient(circle at top left, rgba(70, 191, 255, 0.16), transparent 28%),
           linear-gradient(180deg, rgba(8, 18, 31, 0.94), rgba(8, 16, 28, 0.96));
@@ -1866,14 +1866,15 @@ function renderPrivacyPage(serviceName: string) {
 
       h2 {
         font-size: 1.26rem;
-        line-height: 1.1;
+        line-height: 1.2;
+        margin-top: 8px;
       }
 
       p,
       li {
         color: rgba(164, 203, 223, 0.88);
-        font-size: 0.96rem;
-        line-height: 1.7;
+        font-size: 0.98rem;
+        line-height: 1.75;
       }
 
       .hero-copy {
@@ -1902,8 +1903,15 @@ function renderPrivacyPage(serviceName: string) {
         gap: 14px;
       }
 
+      .sections-grid {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
+      }
+
       ul {
-        margin: 12px 0 0;
+        margin: 14px 0 0;
         padding-left: 1.2rem;
       }
 
@@ -1912,9 +1920,16 @@ function renderPrivacyPage(serviceName: string) {
       }
 
       .footer {
-        padding: 2px 4px 0;
+        padding: 16px 6px 0;
+        border-top: 1px solid rgba(122, 177, 211, 0.14);
         color: rgba(164, 203, 223, 0.78);
         font-size: 0.88rem;
+      }
+
+      @media (max-width: 900px) {
+        .sections-grid {
+          grid-template-columns: 1fr;
+        }
       }
 
       @media (max-width: 720px) {
@@ -1959,84 +1974,87 @@ function renderPrivacyPage(serviceName: string) {
         </div>
       </section>
 
-      <section class="card">
-        <p class="eyebrow">Request Timing</p>
-        <h2>When network requests happen</h2>
-        <ul>
-          <li>The landing page does not load the embedded plugin UI until you explicitly click <code>Open web client</code>.</li>
-          <li>The Chrome extension does not create its local browser session id until you explicitly open the plugin UI.</li>
-          <li>After you open the UI, the client may call <code>/api/health</code>, restore an existing auth session, and check previously saved analysis status.</li>
-          <li>Voice list requests are deferred until setup or settings need them.</li>
-          <li>No voice websocket connection is opened until you explicitly start voice chat.</li>
-        </ul>
-      </section>
+      <div class="sections-grid">
+        <section class="card">
+          <p class="eyebrow">Request Timing</p>
+          <h2>When network requests happen</h2>
+          <ul>
+            <li>The landing page does not load the embedded plugin UI until you explicitly click <code>Open web client</code>.</li>
+            <li>The Chrome extension does not create its local browser session id until you explicitly open the plugin UI.</li>
+            <li>After you open the UI, the client may call <code>/api/health</code>, restore an existing auth session, and check previously saved analysis status.</li>
+            <li>Voice list requests are deferred until setup or settings need them.</li>
+            <li>No voice websocket connection is opened until you explicitly start voice chat.</li>
+          </ul>
+        </section>
 
-      <section class="card">
-        <p class="eyebrow">Extension Permissions</p>
-        <h2>What the Chrome extension can access</h2>
-        <ul>
-          <li><code>activeTab</code>: lets the extension work with the active HTTP or HTTPS tab after you invoke it.</li>
-          <li><code>scripting</code>: injects the overlay content script into the active page on demand.</li>
-          <li><code>storage</code>: stores local session state, selected settings, cached analysis state, and pending request state in the browser.</li>
-          <li><code>identity</code>: supports the optional <code>Continue with Samsar One</code> sign-in flow inside Chrome.</li>
-          <li><code>https://structurequeries.samsar.one/*</code>: the only backend host permission used for API and websocket traffic.</li>
-        </ul>
-      </section>
+        <section class="card">
+          <p class="eyebrow">Extension Permissions</p>
+          <h2>What the Chrome extension can access</h2>
+          <ul>
+            <li><code>activeTab</code>: lets the extension work with the active HTTP or HTTPS tab after you invoke it.</li>
+            <li><code>scripting</code>: injects the overlay content script into the active page on demand.</li>
+            <li><code>storage</code>: stores local session state, selected settings, cached analysis state, and pending request state in the browser.</li>
+            <li><code>identity</code>: supports the optional <code>Continue with Samsar One</code> sign-in flow inside Chrome.</li>
+            <li><code>https://structurequeries.samsar.one/*</code>: the only backend host permission used for API and websocket traffic.</li>
+          </ul>
+        </section>
 
-      <section class="card">
-        <p class="eyebrow">Data Sent</p>
-        <h2>What the app sends to the backend</h2>
-        <ul>
-          <li>Setup and account actions can send a locally generated browser session id and, if you enter them, your display name, email, username, selected language, and selected voice.</li>
-          <li>Authenticated actions can send a Samsar auth token or an external-user API key so the backend can provision sessions, bill usage, and open recharge links.</li>
-          <li>Page analysis sends the page URL, browser session id, billing credential, and the selected maximum prepare-credit cap.</li>
-          <li>Voice chat sends the browser session id, assistant session id, page URL, analysis template id, selected language, selected voice, and recorded audio only after you start voice.</li>
-          <li>The current implementation no longer sends page titles, extension ids, or browser user-agent strings from the plugin UI where they are not required for functionality.</li>
-        </ul>
-      </section>
+        <section class="card">
+          <p class="eyebrow">Data Sent</p>
+          <h2>What the app sends to the backend</h2>
+          <ul>
+            <li>Setup and account actions can send a locally generated browser session id and, if you enter them, your display name, email, username, selected language, and selected voice.</li>
+            <li>Authenticated actions can send a Samsar auth token or an external-user API key so the backend can provision sessions, bill usage, and open recharge links.</li>
+            <li>Page analysis sends the page URL, browser session id, billing credential, and the selected maximum prepare-credit cap.</li>
+            <li>Voice chat sends the browser session id, assistant session id, page URL, analysis template id, selected language, selected voice, and recorded audio only after you start voice.</li>
+            <li>The current implementation no longer sends page titles, extension ids, or browser user-agent strings from the plugin UI where they are not required for functionality.</li>
+          </ul>
+        </section>
 
-      <section class="card">
-        <p class="eyebrow">Local Storage</p>
-        <h2>What stays in your browser</h2>
-        <ul>
-          <li>The extension stores its state in <code>chrome.storage.local</code>, including the browser session id, registration state, selected language and voice, analyzed-page cache, prepare-page settings, and pending prepare requests.</li>
-          <li>The web client stores equivalent state in <code>localStorage</code>, including the auth token, browser session id, registration state, selected language and voice, page state, and prepare-page settings.</li>
-          <li>That local state stays in your browser until you sign out, clear site data, or remove the extension data.</li>
-        </ul>
-      </section>
+        <section class="card">
+          <p class="eyebrow">Local Storage</p>
+          <h2>What stays in your browser</h2>
+          <ul>
+            <li>The extension stores its state in <code>chrome.storage.local</code>, including the browser session id, registration state, selected language and voice, analyzed-page cache, prepare-page settings, and pending prepare requests.</li>
+            <li>The web client stores equivalent state in <code>localStorage</code>, including the auth token, browser session id, registration state, selected language and voice, page state, and prepare-page settings.</li>
+            <li>That local state stays in your browser until you sign out, clear site data, or remove the extension data.</li>
+          </ul>
+        </section>
 
-      <section class="card">
-        <p class="eyebrow">Processors</p>
-        <h2>Third-party services used by this template</h2>
-        <ul>
-          <li>Samsar handles user auth, session provisioning, billing-linked browser sessions, and grounded assistant retrieval.</li>
-          <li>Firecrawl is used during page preparation to crawl and extract public webpage content when configured.</li>
-          <li>ElevenLabs is used for voice listing, transcription, and speech synthesis when configured.</li>
-        </ul>
-      </section>
+        <section class="card">
+          <p class="eyebrow">Processors</p>
+          <h2>Third-party services used by this template</h2>
+          <ul>
+            <li>Samsar handles user auth, session provisioning, billing-linked browser sessions, and grounded assistant retrieval.</li>
+            <li>Firecrawl is used during page preparation to crawl and extract public webpage content when configured.</li>
+            <li>ElevenLabs is used for voice listing, transcription, and speech synthesis when configured.</li>
+          </ul>
+        </section>
 
-      <section class="card">
-        <p class="eyebrow">Deep Analysis Cache</p>
-        <h2>How prepared page embeddings are cached</h2>
-        <ul>
-          <li>When you prepare a page for deep analysis, the backend creates embeddings from the prepared document content and caches them server-side so the page does not need to be prepared again for each follow-up question.</li>
-          <li>By default, that server-side embeddings cache is kept for 1 hour.</li>
-          <li>If you change the caching time in settings, the cache can be kept longer, up to 1 day in the current implementation.</li>
-          <li>After the selected cache time expires, the cached embeddings are deleted and the page must be prepared again before further grounded analysis can continue.</li>
-        </ul>
-      </section>
+        <section class="card">
+          <p class="eyebrow">Deep Analysis Cache</p>
+          <h2>How prepared page embeddings are cached</h2>
+          <ul>
+            <li>When you prepare a page for deep analysis, the backend creates embeddings from the prepared document content and caches them server-side so the page does not need to be prepared again for each follow-up question.</li>
+            <li>By default, that server-side embeddings cache is kept for 1 hour.</li>
+            <li>If you change the caching time in settings, the cache can be kept longer, up to 1 day in the current implementation.</li>
+            <li>After the selected cache time expires, the cached embeddings are deleted and the page must be prepared again before further grounded analysis can continue.</li>
+          </ul>
+        </section>
 
-      <section class="card">
-        <p class="eyebrow">Retention</p>
-        <h2>Storage and retention notes</h2>
-        <ul>
-          <li>This template only defines the browser-side storage listed above. Server-side retention depends on how you configure and operate the backend and the third-party services it calls.</li>
-          <li>If you adapt this template for production, you should review your backend logs, billing records, and third-party retention settings and update this policy to match your deployment.</li>
-        </ul>
-      </section>
+        <section class="card">
+          <p class="eyebrow">Retention</p>
+          <h2>Storage and retention notes</h2>
+          <ul>
+            <li>This template only defines the browser-side storage listed above. Server-side retention depends on how you configure and operate the backend and the third-party services it calls.</li>
+            <li>This app uses third-party APIs internally and externally, and those providers may apply their own data retention policies to requests, responses, logs, or derived records handled by their systems.</li>
+            <li>If you adapt this template for production, you should review your backend logs, billing records, and third-party retention settings and update this policy to match your deployment.</li>
+          </ul>
+        </section>
+      </div>
 
       <p class="footer">
-        Questions about this policy should be answered by the operator of the deployed app, because the template can be customized beyond the defaults described here.
+        Support queries about this policy should be sent to <a href="mailto:support@samsar.one">support@samsar.one</a>.
       </p>
     </main>
   </body>

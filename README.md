@@ -7,6 +7,9 @@
 Structure Queries lets you interact with any web page via text or voice.
 It is built for dense web content such as research papers, articles, blog posts, and technical documentation.
 
+Using the app requires a Samsar account created at [app.samsar.one](https://app.samsar.one).
+Privacy Policy: [structurequeries.samsar.one/privacy](https://structurequeries.samsar.one/privacy)
+
 The current implementation combines:
 
 - Firecrawl for adaptive page crawling and extraction
