@@ -1,10 +1,79 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 
 import { env } from "../config/env.js";
 import { createSamsarUserLoginToken } from "../lib/samsar-user-auth.js";
 
 function readOptionalString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function resolveRequestProtocol(request: Request) {
+  return (
+    readOptionalString(request.get("x-forwarded-proto")?.split(",")[0]) ??
+    request.protocol ??
+    "http"
+  );
+}
+
+function getRequestOrigin(request: Request) {
+  const host =
+    readOptionalString(request.get("x-forwarded-host")?.split(",")[0]) ??
+    readOptionalString(request.get("host"));
+
+  if (!host) {
+    return null;
+  }
+
+  return `${resolveRequestProtocol(request)}://${host}`;
+}
+
+function getSharedCookieDomain(request: Request) {
+  const host =
+    readOptionalString(request.get("x-forwarded-host")?.split(",")[0]) ??
+    readOptionalString(request.get("host"));
+
+  if (!host) {
+    return undefined;
+  }
+
+  const hostname = host.split(":")[0].trim().toLowerCase();
+
+  return hostname === "samsar.one" || hostname.endsWith(".samsar.one")
+    ? ".samsar.one"
+    : undefined;
+}
+
+function setSharedAuthCookie(
+  request: Request,
+  response: Response,
+  authToken: string
+) {
+  const secureAttr =
+    resolveRequestProtocol(request) === "https" ? "; Secure" : "";
+  const domain = getSharedCookieDomain(request);
+  const domainAttr = domain ? `; Domain=${domain}` : "";
+
+  response.append(
+    "Set-Cookie",
+    `authToken=${encodeURIComponent(authToken)}; Path=/; Max-Age=${30 * 24 * 60 * 60}; SameSite=Lax${secureAttr}${domainAttr}`
+  );
+}
+
+function resolveSafeRedirectPath(
+  rawValue: unknown,
+  fallback = "/web-client"
+) {
+  const redirectPath = readOptionalString(rawValue);
+
+  if (
+    !redirectPath ||
+    !redirectPath.startsWith("/") ||
+    redirectPath.startsWith("//")
+  ) {
+    return fallback;
+  }
+
+  return redirectPath;
 }
 
 function getUpstreamBaseUrl() {
@@ -53,12 +122,7 @@ function resolveExtensionRedirectUri(rawValue: unknown) {
 }
 
 function sendExtensionBridgeError(
-  response: Parameters<Router["get"]>[1] extends (
-    request: infer _Request,
-    response: infer ResponseType
-  ) => infer _Return
-    ? ResponseType
-    : never,
+  response: Response,
   status: number,
   message: string
 ) {
@@ -88,13 +152,9 @@ function sendExtensionBridgeError(
 }
 
 async function relayUpstreamResponse(
-  upstreamResponse: Response,
-  response: Parameters<Router["get"]>[1] extends (
-    request: infer _Request,
-    response: infer ResponseType
-  ) => infer _Return
-    ? ResponseType
-    : never
+  upstreamResponse: globalThis.Response,
+  request: Request,
+  response: Response
 ) {
   const responseBody = await upstreamResponse.text();
   const contentType =
@@ -110,7 +170,19 @@ async function relayUpstreamResponse(
 
   if (contentType.includes("application/json")) {
     try {
-      response.send(JSON.parse(responseBody));
+      const parsedBody = JSON.parse(responseBody);
+
+      if (parsedBody && typeof parsedBody === "object" && !Array.isArray(parsedBody)) {
+        const authToken = readOptionalString(
+          (parsedBody as Record<string, unknown>).authToken
+        );
+
+        if (authToken) {
+          setSharedAuthCookie(request, response, authToken);
+        }
+      }
+
+      response.send(parsedBody);
       return;
     } catch {
       // Fall through and send the original body if the upstream content-type
@@ -124,12 +196,8 @@ async function relayUpstreamResponse(
 async function proxyJsonPost(
   pathname: string,
   body: unknown,
-  response: Parameters<Router["post"]>[1] extends (
-    request: infer _Request,
-    response: infer ResponseType
-  ) => infer _Return
-    ? ResponseType
-    : never
+  request: Request,
+  response: Response
 ) {
   try {
     const upstreamResponse = await fetch(createUpstreamUrl(pathname), {
@@ -141,7 +209,7 @@ async function proxyJsonPost(
       body: JSON.stringify(body ?? {})
     });
 
-    await relayUpstreamResponse(upstreamResponse, response);
+    await relayUpstreamResponse(upstreamResponse, request, response);
   } catch (error) {
     response.status(502).json({
       ok: false,
@@ -162,7 +230,8 @@ webAuthRouter.get("/session", async (request, response) => {
         ? request.query.authToken
         : undefined
     ) ??
-    readOptionalString(request.get("authorization")?.replace(/^Bearer\s+/i, ""));
+    readOptionalString(request.get("authorization")?.replace(/^Bearer\s+/i, "")) ??
+    readCookieValue(request.headers.cookie, "authToken");
   const loginToken =
     readOptionalString(
       typeof request.query.loginToken === "string"
@@ -197,7 +266,7 @@ webAuthRouter.get("/session", async (request, response) => {
       }
     });
 
-    await relayUpstreamResponse(upstreamResponse, response);
+    await relayUpstreamResponse(upstreamResponse, request, response);
   } catch (error) {
     response.status(502).json({
       ok: false,
@@ -206,6 +275,70 @@ webAuthRouter.get("/session", async (request, response) => {
           ? error.message
           : "Failed to verify the Samsar session."
     });
+  }
+});
+
+webAuthRouter.get("/google-login", async (request, response) => {
+  const origin = getRequestOrigin(request);
+
+  if (!origin) {
+    sendExtensionBridgeError(
+      response,
+      400,
+      "The public origin for this Samsar subdomain could not be determined."
+    );
+    return;
+  }
+
+  try {
+    const upstreamUrl = createUpstreamUrl("/users/google_login");
+    upstreamUrl.searchParams.set("origin", origin);
+    upstreamUrl.searchParams.set("cookieConsent", "accepted");
+    upstreamUrl.searchParams.set(
+      "redirect",
+      resolveSafeRedirectPath(request.query.redirect, "/web-client")
+    );
+
+    const upstreamResponse = await fetch(upstreamUrl, {
+      headers: {
+        Accept: "application/json"
+      }
+    });
+    const contentType = upstreamResponse.headers.get("content-type") ?? "";
+    const responseBody = contentType.includes("application/json")
+      ? await upstreamResponse.json()
+      : await upstreamResponse.text();
+
+    if (!upstreamResponse.ok) {
+      throw new Error(
+        responseBody &&
+          typeof responseBody === "object" &&
+          "error" in responseBody &&
+          typeof responseBody.error === "string" &&
+          responseBody.error.trim()
+          ? responseBody.error.trim()
+          : `Google login failed with ${upstreamResponse.status}.`
+      );
+    }
+
+    const loginUrl =
+      responseBody && typeof responseBody === "object"
+        ? readOptionalString((responseBody as Record<string, unknown>).loginUrl)
+        : undefined;
+
+    if (!loginUrl) {
+      throw new Error("Samsar did not return a Google login URL.");
+    }
+
+    response.redirect(302, loginUrl);
+  } catch (error) {
+    sendExtensionBridgeError(
+      response,
+      502,
+      error instanceof Error
+        ? error.message
+        : "Unable to start Google login for this Samsar subdomain."
+    );
   }
 });
 
@@ -275,9 +408,9 @@ webAuthRouter.get("/extension", async (request, response) => {
 });
 
 webAuthRouter.post("/login", async (request, response) => {
-  await proxyJsonPost("/users/login", request.body, response);
+  await proxyJsonPost("/users/login", request.body, request, response);
 });
 
 webAuthRouter.post("/register", async (request, response) => {
-  await proxyJsonPost("/users/register", request.body, response);
+  await proxyJsonPost("/users/register", request.body, request, response);
 });

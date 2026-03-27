@@ -1732,6 +1732,136 @@ function renderLandingPage(serviceName: string, extensionDownloadUrl: string) {
 </html>`;
 }
 
+function renderVerifyPage(serviceName: string) {
+  const escapedServiceName = escapeHtml(serviceName);
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/icon-16.png" />
+    <title>${escapedServiceName} Sign-in</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --sq-ink: #ecf3fb;
+        --sq-muted: #9ba9ba;
+        --sq-bg-start: #070b12;
+        --sq-bg-end: #050a11;
+        --sq-panel: rgba(8, 18, 31, 0.94);
+        --sq-border: rgba(122, 177, 211, 0.18);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        color: var(--sq-ink);
+        font-family: "Space Grotesk", "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at 12% 12%, rgba(57, 216, 129, 0.14), transparent 36%),
+          radial-gradient(circle at 84% 10%, rgba(70, 191, 255, 0.12), transparent 34%),
+          linear-gradient(165deg, var(--sq-bg-start) 0%, #0a121d 45%, var(--sq-bg-end) 100%);
+      }
+
+      .card {
+        width: min(100%, 30rem);
+        padding: 1.5rem 1.6rem;
+        border: 1px solid var(--sq-border);
+        border-radius: 1.5rem;
+        background: var(--sq-panel);
+        box-shadow: 0 24px 72px rgba(0, 0, 0, 0.28);
+      }
+
+      h1 {
+        margin: 0 0 0.45rem;
+        font-size: 1.1rem;
+      }
+
+      p {
+        margin: 0;
+        color: var(--sq-muted);
+        line-height: 1.55;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <h1>Completing your Samsar sign-in</h1>
+      <p>You will be redirected back to the Structure Queries web client automatically.</p>
+    </main>
+
+    <script>
+      (() => {
+        const params = new URLSearchParams(window.location.search);
+        const authToken = params.get("authToken");
+        const loginToken = params.get("loginToken");
+        const redirectParam = params.get("redirect");
+        const redirectTarget =
+          typeof redirectParam === "string" &&
+          redirectParam.startsWith("/") &&
+          !redirectParam.startsWith("//")
+            ? redirectParam
+            : "/web-client";
+        const nextUrl = new URL(redirectTarget, window.location.origin);
+
+        if (authToken) {
+          nextUrl.searchParams.set("authToken", authToken);
+        }
+
+        if (loginToken) {
+          nextUrl.searchParams.set("loginToken", loginToken);
+        }
+
+        const payload = {
+          authToken,
+          loginToken,
+          redirect: redirectTarget,
+          at: Date.now()
+        };
+
+        const finish = () => {
+          window.location.replace(nextUrl.toString());
+        };
+
+        try {
+          if (window.opener && window.opener !== window) {
+            try {
+              if ("BroadcastChannel" in window) {
+                const channel = new BroadcastChannel("structuredqueries.auth");
+                channel.postMessage(payload);
+                channel.close();
+              }
+            } catch {}
+
+            try {
+              window.localStorage.setItem(
+                "structuredqueries.auth-event",
+                JSON.stringify(payload)
+              );
+            } catch {}
+
+            window.close();
+            window.setTimeout(finish, 250);
+            return;
+          }
+        } catch {}
+
+        finish();
+      })();
+    </script>
+  </body>
+</html>`;
+}
+
 function renderPrivacyPage(serviceName: string) {
   const escapedServiceName = escapeHtml(serviceName);
 
@@ -2084,6 +2214,9 @@ export function createApp() {
   });
   app.get("/privacy", (_request, response) => {
     response.type("html").send(renderPrivacyPage(env.serviceName));
+  });
+  app.get("/verify", (_request, response) => {
+    response.type("html").send(renderVerifyPage(env.serviceName));
   });
   app.get("/web-client", (_request, response) => {
     response.sendFile(join(CLIENT_PUBLIC_DIR, "web-plugin.html"));

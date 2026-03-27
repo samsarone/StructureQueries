@@ -144,8 +144,16 @@ body.web-plugin-body {
   gap: 12px;
 }
 
-.web-auth-wordmark {
-  width: min(100%, 232px);
+.web-auth-brand {
+  display: grid;
+  gap: 4px;
+}
+
+.web-auth-brand-name {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
 }
 
 .web-auth-panel .dialog-back-button {
@@ -191,6 +199,76 @@ body.web-plugin-body {
   gap: 10px;
 }
 
+.google-auth-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 48px;
+  width: 100%;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(143, 223, 255, 0.18);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(236, 243, 251, 0.98), rgba(224, 234, 244, 0.94)),
+    #f4f8fc;
+  color: #08111b;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform 150ms ease,
+    box-shadow 150ms ease,
+    border-color 150ms ease;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.14);
+}
+
+.google-auth-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(70, 191, 255, 0.4);
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.18);
+}
+
+.google-auth-button:disabled {
+  opacity: 0.72;
+  cursor: wait;
+}
+
+.google-auth-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #1d4ed8;
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.auth-divider {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  color: rgba(183, 205, 223, 0.7);
+  font-size: 0.68rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.auth-divider span {
+  display: block;
+  height: 1px;
+  background: rgba(143, 223, 255, 0.16);
+}
+
+.auth-divider strong {
+  font: inherit;
+  font-weight: 700;
+}
+
 .auth-form[hidden] {
   display: none;
 }
@@ -217,6 +295,30 @@ body.web-plugin-body {
   font-size: 0.72rem;
   line-height: 1.45;
   color: rgba(183, 205, 223, 0.74);
+}
+
+.auth-inline-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.auth-secondary-link {
+  color: rgba(143, 223, 255, 0.82);
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.auth-secondary-link:hover {
+  text-decoration: underline;
+}
+
+.surface-status:empty,
+.registration-status:empty,
+.settings-credit-caption:empty,
+.detail-line:empty,
+.conversation-log:empty {
+  display: none;
 }
 
 .notice-banner[hidden],

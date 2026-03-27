@@ -95,20 +95,17 @@
         </div>
 
         <section class="page-summary web-auth-summary">
-          <p class="surface-label">Samsar account</p>
-          <h1 id="auth-title" class="page-title">Login to continue</h1>
-          <p id="auth-subtitle" class="surface-status">
-            Sign in to analyze pages, start voice Q&amp;A, and use your Samsar credits.
-          </p>
+          <p class="surface-label">Samsar One</p>
+          <h1 id="auth-title" class="page-title">Welcome back</h1>
+          <p id="auth-subtitle" class="surface-status"></p>
         </section>
 
         <div class="web-auth-panel">
           <div class="web-auth-panel-header">
-            <img
-              src="/landing-assets/structured-queries-wordmark.svg"
-              class="dialog-wordmark web-auth-wordmark"
-              alt="Structured Queries"
-            />
+            <div class="web-auth-brand">
+              <p class="eyebrow">Account</p>
+              <p class="web-auth-brand-name">Samsar sign-in</p>
+            </div>
             <button
               id="auth-close-button"
               class="secondary-button dialog-back-button"
@@ -142,6 +139,21 @@
           </div>
 
           <form id="login-form" class="auth-form">
+            <button
+              id="google-login-button"
+              class="google-auth-button"
+              type="button"
+            >
+              <span class="google-auth-icon" aria-hidden="true">G</span>
+              <span>Continue with Google</span>
+            </button>
+
+            <div class="auth-divider" aria-hidden="true">
+              <span></span>
+              <strong>or</strong>
+              <span></span>
+            </div>
+
             <label class="field">
               <span>Email</span>
               <input id="login-email" type="email" autocomplete="email" required />
@@ -160,28 +172,43 @@
                 Login
               </button>
             </div>
+            <div class="auth-inline-actions">
+              <a
+                class="auth-secondary-link"
+                href="https://app.samsar.one/forgot_password"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Forgot password?
+              </a>
+            </div>
           </form>
 
           <form id="register-form" class="auth-form" hidden>
-            <div class="auth-row">
-              <label class="field">
-                <span>Display Name</span>
-                <input
-                  id="register-display-name"
-                  type="text"
-                  autocomplete="name"
-                />
-              </label>
-              <label class="field">
-                <span>Username</span>
-                <input
-                  id="register-username"
-                  type="text"
-                  autocomplete="username"
-                  required
-                />
-              </label>
+            <button
+              id="google-register-button"
+              class="google-auth-button"
+              type="button"
+            >
+              <span class="google-auth-icon" aria-hidden="true">G</span>
+              <span>Sign up with Google</span>
+            </button>
+
+            <div class="auth-divider" aria-hidden="true">
+              <span></span>
+              <strong>or</strong>
+              <span></span>
             </div>
+
+            <label class="field">
+              <span>Username</span>
+              <input
+                id="register-username"
+                type="text"
+                autocomplete="username"
+                required
+              />
+            </label>
             <label class="field">
               <span>Email</span>
               <input id="register-email" type="email" autocomplete="email" required />
@@ -212,14 +239,12 @@
                 class="primary-button"
                 type="submit"
               >
-                Create account
+                Sign up
               </button>
             </div>
           </form>
 
-          <p id="auth-status" class="registration-status">
-            Use your existing Samsar account or create one here.
-          </p>
+          <p id="auth-status" class="registration-status"></p>
         </div>
       </section>
 
@@ -265,10 +290,8 @@
 
           <section class="page-summary" aria-live="polite">
             <p class="surface-label">Web Page</p>
-            <h1 id="page-title" class="page-title">Paste a public URL to begin</h1>
-            <p id="surface-status" class="surface-status">
-              Sign in, analyze a page, then start voice.
-            </p>
+            <h1 id="page-title" class="page-title">Enter URL</h1>
+            <p id="surface-status" class="surface-status"></p>
           </section>
 
           <div id="button-row" class="button-row">
@@ -302,7 +325,6 @@
         <details id="advanced-drawer" class="drawer advanced-drawer">
           <summary>
             <span>Advanced options</span>
-            <span class="drawer-hint">language, speaker, account</span>
           </summary>
 
           <div class="drawer-body">
@@ -312,9 +334,6 @@
                 <span id="settings-credits-remaining" class="settings-credit-value">
                   Checking...
                 </span>
-              </p>
-              <p id="settings-credits-caption" class="settings-credit-caption">
-                Your available credits appear here.
               </p>
             </section>
 
@@ -329,9 +348,6 @@
                 value="20"
                 inputmode="numeric"
               />
-              <small class="field-hint">
-                Default 20. Child-link crawl text is compressed first to stay under this cap.
-              </small>
             </label>
 
             <label class="field field-select prepare-credit-field">
@@ -351,9 +367,6 @@
                 <option value="3600">1 hour</option>
                 <option value="86400">1 day</option>
               </select>
-              <small class="field-hint">
-                Prepared pages stay cached on the server so you can come back without preparing again.
-              </small>
             </label>
 
             <div class="advanced-grid">
@@ -418,23 +431,19 @@
                 Recharge Credits
               </button>
               <button id="auth-open-button" class="primary-button" type="button">
-                Login / Register
+                Sign in
               </button>
               <button id="logout-button" class="danger-button" type="button">
                 Log out
               </button>
             </div>
 
-            <p id="advanced-status" class="registration-status">
-              Language, speaker, and account preferences live here.
-            </p>
           </div>
         </details>
 
         <details id="session-drawer" class="drawer">
           <summary>
-            <span>Session details</span>
-            <span class="drawer-hint">status and transcript</span>
+            <span>Details</span>
           </summary>
 
           <div class="drawer-body">
@@ -442,9 +451,6 @@
               <article class="meta-card">
                 <p class="status-label">User</p>
                 <p id="account-name" class="status-value">Guest</p>
-                <p id="account-hint" class="detail-line">
-                  Sign in to start.
-                </p>
               </article>
               <article class="meta-card">
                 <p class="status-label">Email</p>
@@ -469,10 +475,6 @@
             </div>
 
             <div id="conversation-log" class="conversation-log">
-              <article class="log-item log-item-system">
-                <p class="log-role">System</p>
-                <p class="log-text">Sign in, paste a public URL, analyze it, then ask by voice.</p>
-              </article>
             </div>
           </div>
         </details>

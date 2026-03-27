@@ -2,6 +2,8 @@
   const SERVER_HTTP_ORIGIN = window.location.origin;
   const SERVER_WS_URL = `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}/ws/plugin`;
   const AUTH_TOKEN_KEY = "authToken";
+  const AUTH_EVENT_CHANNEL_NAME = "structuredqueries.auth";
+  const AUTH_EVENT_STORAGE_KEY = "structuredqueries.auth-event";
   const BROWSER_SESSION_STORAGE_KEY = "structuredqueries.web.browserSessionId";
   const REGISTRATION_STORAGE_KEY = "structuredqueries.web.registration";
   const PAGE_STATE_STORAGE_KEY = "structuredqueries.web.pageState";
@@ -81,11 +83,12 @@
     authModeLoginButton: document.querySelector("#auth-mode-login"),
     authModeRegisterButton: document.querySelector("#auth-mode-register"),
     loginForm: document.querySelector("#login-form"),
+    googleLoginButton: document.querySelector("#google-login-button"),
     loginEmail: document.querySelector("#login-email"),
     loginPassword: document.querySelector("#login-password"),
     loginSubmitButton: document.querySelector("#login-submit-button"),
     registerForm: document.querySelector("#register-form"),
-    registerDisplayName: document.querySelector("#register-display-name"),
+    googleRegisterButton: document.querySelector("#google-register-button"),
     registerEmail: document.querySelector("#register-email"),
     registerUsername: document.querySelector("#register-username"),
     registerPassword: document.querySelector("#register-password"),
@@ -207,6 +210,7 @@
   let embedHeightObserver;
   let voicesLoaded = false;
   let voicesLoadPromise;
+  let authEventChannel;
 
   function readOptionalString(value) {
     return typeof value === "string" && value.trim() ? value.trim() : undefined;
@@ -396,6 +400,19 @@
   }
 
   function getStoredAuthToken() {
+    const cookieToken = getCookie(AUTH_TOKEN_KEY);
+    if (cookieToken) {
+      safeStorageSet(AUTH_TOKEN_KEY, cookieToken);
+
+      try {
+        window.sessionStorage.setItem(AUTH_TOKEN_KEY, cookieToken);
+      } catch {
+        // Ignore sessionStorage write failures.
+      }
+
+      return cookieToken;
+    }
+
     const localToken = safeStorageGet(AUTH_TOKEN_KEY);
     if (localToken) {
       return localToken;
@@ -409,12 +426,6 @@
       }
     } catch {
       // Ignore sessionStorage read failures.
-    }
-
-    const cookieToken = getCookie(AUTH_TOKEN_KEY);
-    if (cookieToken) {
-      safeStorageSet(AUTH_TOKEN_KEY, cookieToken);
-      return cookieToken;
     }
 
     return null;
@@ -506,43 +517,49 @@
     }
   }
 
-  async function restoreAuthSessionFromLocation() {
-    const payload = readAuthParamsFromLocation();
-    if (!payload) {
+  function applyAuthSessionPayload(payload, fallbackAuthToken) {
+    const resolvedAuthToken =
+      readOptionalString(payload?.authToken) ?? readOptionalString(fallbackAuthToken);
+
+    if (resolvedAuthToken) {
+      persistAuthToken(resolvedAuthToken);
+    }
+
+    state.authToken = resolvedAuthToken ?? state.authToken;
+    state.authUser = payload;
+    populateProfileInputs(true);
+    render();
+  }
+
+  async function fetchAuthSessionWithToken(authToken) {
+    return fetchJson("/api/web-auth/session", {
+      headers: {
+        Authorization: `Bearer ${authToken}`
+      }
+    });
+  }
+
+  async function fetchAuthSessionFromCookie() {
+    return fetchJson("/api/web-auth/session");
+  }
+
+  async function restoreAuthSessionFromPayload(payload) {
+    if (!payload?.authToken && !payload?.loginToken) {
       return false;
     }
 
-    clearAuthParamsFromLocation(payload);
-
     try {
-      let sessionPayload;
+      const sessionPayload = payload.loginToken
+        ? await fetchJson(
+            `/api/web-auth/session?loginToken=${encodeURIComponent(payload.loginToken)}`
+          )
+        : await fetchAuthSessionWithToken(payload.authToken);
 
-      if (payload.loginToken) {
-        sessionPayload = await fetchJson(
-          `/api/web-auth/session?loginToken=${encodeURIComponent(payload.loginToken)}`
-        );
-      } else if (payload.authToken) {
-        persistAuthToken(payload.authToken);
-        sessionPayload = await fetchJson("/api/web-auth/session", {
-          headers: {
-            Authorization: `Bearer ${payload.authToken}`
-          }
-        });
-      } else {
-        return false;
-      }
-
-      const resolvedAuthToken = readOptionalString(sessionPayload.authToken);
-      if (resolvedAuthToken) {
-        persistAuthToken(resolvedAuthToken);
-      }
-
-      state.authUser = sessionPayload;
-      populateProfileInputs(true);
+      applyAuthSessionPayload(sessionPayload, payload.authToken);
       showNotice("Signed in on this Samsar subdomain.");
       return true;
     } catch (error) {
-      console.error("Failed to restore auth session from location", error);
+      console.error("Failed to restore auth session from payload", error);
       appendLog(
         "system",
         error instanceof Error
@@ -551,6 +568,16 @@
       );
       return false;
     }
+  }
+
+  async function restoreAuthSessionFromLocation() {
+    const payload = readAuthParamsFromLocation();
+    if (!payload) {
+      return false;
+    }
+
+    clearAuthParamsFromLocation(payload);
+    return restoreAuthSessionFromPayload(payload);
   }
 
   function getOrCreateBrowserSessionId() {
@@ -572,12 +599,7 @@
       return;
     }
 
-    refs.conversationLog.innerHTML = `
-      <article class="log-item log-item-system">
-        <p class="log-role">System</p>
-        <p class="log-text">Sign in, paste a public URL, analyze it, then ask by voice.</p>
-      </article>
-    `;
+    refs.conversationLog.innerHTML = "";
   }
 
   function appendLog(role, message) {
@@ -1295,11 +1317,64 @@
     render();
   }
 
-  async function refreshAuthSession() {
+  function buildGoogleAuthUrl() {
+    return `/api/web-auth/google-login?redirect=${encodeURIComponent("/web-client")}`;
+  }
+
+  function openGoogleAuthWindow() {
+    const googleAuthUrl = buildGoogleAuthUrl();
+    const embedded = Boolean(window.parent && window.parent !== window);
+
+    if (!embedded) {
+      window.location.assign(googleAuthUrl);
+      return;
+    }
+
+    const popup = window.open(
+      googleAuthUrl,
+      "structuredqueries-samsar-auth",
+      "popup=yes,width=540,height=720"
+    );
+
+    if (popup) {
+      popup.focus?.();
+      showNotice("Complete Google sign-in in the popup. This page will update automatically.");
+      return;
+    }
+
+    if (window.top && window.top !== window) {
+      window.top.location.assign(googleAuthUrl);
+      return;
+    }
+
+    window.location.assign(googleAuthUrl);
+  }
+
+  function handleGoogleAuth(mode) {
+    try {
+      openGoogleAuthWindow();
+      if (refs.authStatus) {
+        refs.authStatus.textContent =
+          mode === "register"
+            ? "Continue the Google sign-up flow to create your Samsar account."
+          : "Continue the Google sign-in flow to use your Samsar account here.";
+      }
+    } catch (error) {
+      if (refs.authStatus) {
+        refs.authStatus.textContent =
+          error instanceof Error
+            ? error.message
+            : "Unable to start Google login right now.";
+      }
+    }
+  }
+
+  async function refreshAuthSession(options) {
     const authToken = getStoredAuthToken();
+    const cookieToken = getCookie(AUTH_TOKEN_KEY);
     state.authToken = authToken;
 
-    if (!authToken) {
+    if (!authToken && !cookieToken) {
       state.authUser = null;
       clearRegistrationState();
       populateProfileInputs(true);
@@ -1307,24 +1382,32 @@
       return;
     }
 
+    let lastError;
+
     try {
-      const payload = await fetchJson("/api/web-auth/session", {
-        headers: {
-          Authorization: `Bearer ${authToken}`
-        }
-      });
-
-      state.authUser = payload;
-      const resolvedAuthToken = readOptionalString(payload.authToken);
-      if (resolvedAuthToken && resolvedAuthToken !== authToken) {
-        persistAuthToken(resolvedAuthToken);
+      if (authToken) {
+        const payload = await fetchAuthSessionWithToken(authToken);
+        applyAuthSessionPayload(payload, authToken);
+        return;
       }
-
-      populateProfileInputs(true);
     } catch (error) {
-      console.error("Failed to refresh auth session", error);
-      clearAuthData();
-      clearRegistrationState();
+      lastError = error;
+    }
+
+    try {
+      const payload = await fetchAuthSessionFromCookie();
+      applyAuthSessionPayload(payload, cookieToken);
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+
+    console.error("Failed to refresh auth session", lastError);
+    clearAuthData();
+    clearRegistrationState();
+    populateProfileInputs(true);
+
+    if (!options?.silent) {
       appendLog(
         "system",
         "Your Samsar session could not be restored here. Sign in again to continue."
@@ -1454,9 +1537,7 @@
         throw new Error("Samsar login did not return an auth token.");
       }
 
-      persistAuthToken(authToken);
-      state.authUser = payload;
-      populateProfileInputs(true);
+      applyAuthSessionPayload(payload, authToken);
       state.authOverlayOpen = false;
       state.authMode = "login";
       render();
@@ -1494,7 +1575,6 @@
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          displayName: refs.registerDisplayName?.value ?? "",
           email: refs.registerEmail?.value ?? "",
           username: refs.registerUsername?.value ?? "",
           password,
@@ -1507,9 +1587,7 @@
         throw new Error("Samsar registration did not return an auth token.");
       }
 
-      persistAuthToken(authToken);
-      state.authUser = payload;
-      populateProfileInputs(true);
+      applyAuthSessionPayload(payload, authToken);
       state.authOverlayOpen = false;
       state.authMode = "login";
       render();
@@ -2766,27 +2844,27 @@
 
   function getSurfaceStatusText() {
     if (!state.serverOnline) {
-      return "The server is currently unavailable.";
+      return "Offline";
     }
 
     if (state.isAnalyzing) {
-      return "Preparing the page structure for follow-up Q&A.";
+      return "Preparing page";
     }
 
     if (state.recording) {
-      return "Listening for your question.";
+      return "Listening";
     }
 
     if (state.assistantSpeaking) {
-      return "Replying in the selected voice.";
+      return "Speaking";
     }
 
     if (state.conversationActive) {
-      return state.websocketDetail || "Voice is live.";
+      return state.websocketDetail || "Voice live";
     }
 
     if (state.analysisReady) {
-      return "The page is ready. Start voice when you're ready to ask.";
+      return "Ready";
     }
 
     if (state.pageCacheExpired) {
@@ -2794,10 +2872,10 @@
     }
 
     if (state.currentPage?.url) {
-      return "Analyze this page to prepare the conversation.";
+      return "Prepare page";
     }
 
-    return "Paste a public URL, then analyze it.";
+    return "";
   }
 
   function getAnalyzeButtonLabel() {
@@ -2832,14 +2910,14 @@
 
   function getAccountHintText() {
     if (!state.authUser) {
-      return "Sign in to analyze pages and start voice Q&A.";
+      return "";
     }
 
     if (state.registrationRequired) {
-      return "Session will be provisioned automatically when you start.";
+      return "";
     }
 
-    return state.websocketDetail || "Ready to analyze and ask follow-up questions.";
+    return state.websocketDetail || "";
   }
 
   function getCreditBannerMessage() {
@@ -2894,7 +2972,7 @@
     }
 
     if (refs.pageTitle) {
-      refs.pageTitle.textContent = state.currentPage?.title || "Paste a public URL to begin";
+      refs.pageTitle.textContent = state.currentPage?.title || "Enter URL";
     }
 
     if (refs.surfaceStatus) {
@@ -2948,9 +3026,7 @@
     }
 
     if (refs.settingsCreditsCaption) {
-      refs.settingsCreditsCaption.textContent = state.authUser
-        ? "Use recharge if you need more credits for analysis or voice."
-        : "Sign in to sync your Samsar credits here.";
+      refs.settingsCreditsCaption.textContent = "";
     }
 
     if (refs.cachingTtlSelect) {
@@ -3007,11 +3083,7 @@
     }
 
     if (refs.advancedStatus) {
-      refs.advancedStatus.textContent = state.authUser
-        ? state.registrationRequired
-          ? "Your Samsar account is signed in. The live session will be provisioned when you start."
-          : "Signed in and ready. Save advanced settings here whenever you change them."
-        : "Sign in to analyze pages, start voice Q&A, and use your Samsar credits.";
+      refs.advancedStatus.textContent = "";
     }
 
     if (refs.accountName) {
@@ -3071,21 +3143,15 @@
 
     if (refs.authTitle) {
       refs.authTitle.textContent =
-        state.authMode === "login" ? "Login to continue" : "Create an account";
+        state.authMode === "login" ? "Welcome back" : "Create your Samsar account";
     }
 
     if (refs.authSubtitle) {
-      refs.authSubtitle.textContent =
-        state.authMode === "login"
-          ? "Sign in to analyze pages, start voice Q&A, and use your Samsar credits."
-          : "Create a Samsar account here and it will carry across samsar.one subdomains.";
+      refs.authSubtitle.textContent = "";
     }
 
     if (refs.authStatus && !state.authSubmitting) {
-      refs.authStatus.textContent =
-        state.authMode === "login"
-          ? "Use your existing Samsar account or create one here."
-          : "Create your account and continue with the same web workflow.";
+      refs.authStatus.textContent = "";
     }
 
     if (refs.loginForm) {
@@ -3116,6 +3182,14 @@
       refs.authCloseButton.disabled = state.authSubmitting;
     }
 
+    if (refs.googleLoginButton) {
+      refs.googleLoginButton.disabled = state.authSubmitting;
+    }
+
+    if (refs.googleRegisterButton) {
+      refs.googleRegisterButton.disabled = state.authSubmitting;
+    }
+
     if (refs.advancedButton) {
       refs.advancedButton.disabled = state.authOverlayOpen;
     }
@@ -3129,7 +3203,7 @@
       refs.registerSubmitButton.disabled = state.authSubmitting;
       refs.registerSubmitButton.textContent = state.authSubmitting
         ? "Creating account..."
-        : "Create account";
+        : "Sign up";
     }
 
     scheduleEmbeddedHeightSync();
@@ -3153,8 +3227,16 @@
     void handleLoginSubmit(event);
   });
 
+  refs.googleLoginButton?.addEventListener("click", () => {
+    handleGoogleAuth("login");
+  });
+
   refs.registerForm?.addEventListener("submit", (event) => {
     void handleRegisterSubmit(event);
+  });
+
+  refs.googleRegisterButton?.addEventListener("click", () => {
+    handleGoogleAuth("register");
   });
 
   refs.advancedButton?.addEventListener("click", () => {
@@ -3279,16 +3361,61 @@
     updateCachingTtlFromInput();
   });
 
-  window.addEventListener("focus", () => {
-    if (
-      state.creditIssueMessage &&
-      hasActiveSamsarCredentials() &&
-      state.assistantSessionId
-    ) {
-      void syncBrowserSession().catch((error) => {
-        console.error("Failed to refresh browser session", error);
+  if ("BroadcastChannel" in window) {
+    try {
+      authEventChannel = new BroadcastChannel(AUTH_EVENT_CHANNEL_NAME);
+      authEventChannel.addEventListener("message", (event) => {
+        void restoreAuthSessionFromPayload(event.data);
+      });
+    } catch {
+      authEventChannel = undefined;
+    }
+  }
+
+  window.addEventListener("storage", (event) => {
+    if (event.key === AUTH_EVENT_STORAGE_KEY) {
+      if (!event.newValue) {
+        void refreshAuthSession({
+          silent: true
+        });
+        return;
+      }
+
+      try {
+        const payload = JSON.parse(event.newValue);
+        void restoreAuthSessionFromPayload(payload);
+        return;
+      } catch {
+        // Fall through to a passive refresh when the event payload is invalid.
+      }
+    }
+
+    if (event.key === AUTH_TOKEN_KEY || event.key === AUTH_EVENT_STORAGE_KEY) {
+      void refreshAuthSession({
+        silent: true
       });
     }
+  });
+
+  window.addEventListener("focus", () => {
+    const refreshPromise =
+      getCookie(AUTH_TOKEN_KEY) || state.authUser || state.authToken
+        ? refreshAuthSession({
+            silent: true
+          })
+        : Promise.resolve();
+
+    void refreshPromise.then(() => {
+      if (
+        state.creditIssueMessage &&
+        hasActiveSamsarCredentials() &&
+        state.assistantSessionId
+      ) {
+        void syncBrowserSession().catch((error) => {
+          console.error("Failed to refresh browser session", error);
+        });
+      }
+    });
   });
 
   window.addEventListener("pagehide", () => {
