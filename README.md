@@ -191,6 +191,16 @@ Server development dependencies:
 - `tsx` `^4.21.0`
 - `typescript` `^5.9.3`
 
+## Paid APIs
+
+This project currently relies on three paid third-party APIs for its core features:
+
+- Firecrawl via `@mendable/firecrawl-js`: [firecrawl.dev](https://firecrawl.dev)
+- Samsar via `samsar-js`: [app.samsar.one](https://app.samsar.one)
+- ElevenLabs via `@elevenlabs/elevenlabs-js`: [elevenlabs.io/app/home](https://elevenlabs.io/app/home)
+
+You will need active provider accounts and API keys for the integrations you want to run locally.
+
 ## Local development
 
 Copy `server/.env.example` to `server/.env` and fill in the integrations you want to use.

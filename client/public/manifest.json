@@ -46,7 +46,8 @@
         "structured-queries-wordmark.svg"
       ],
       "matches": [
-        "<all_urls>"
+        "http://*/*",
+        "https://*/*"
       ]
     }
   ]

@@ -723,6 +723,40 @@ function renderLandingPage(serviceName: string, extensionDownloadUrl: string) {
         min-height: 0;
       }
 
+      .web-client-launcher {
+        display: grid;
+        gap: 18px;
+        align-content: center;
+        min-height: 520px;
+        padding: clamp(24px, 4vw, 36px);
+        border: 1px solid rgba(122, 177, 211, 0.16);
+        border-radius: 30px;
+        background:
+          radial-gradient(circle at 12% 16%, rgba(70, 191, 255, 0.12), transparent 26%),
+          linear-gradient(180deg, rgba(7, 13, 24, 0.96), rgba(5, 10, 18, 0.98));
+        box-shadow:
+          0 26px 80px rgba(0, 0, 0, 0.38),
+          0 0 0 1px rgba(122, 177, 211, 0.08) inset;
+      }
+
+      .web-client-launcher-copy {
+        display: grid;
+        gap: 10px;
+        max-width: 40rem;
+      }
+
+      .web-client-launcher-title {
+        font-size: clamp(1.8rem, 3vw, 2.4rem);
+        line-height: 1.04;
+        letter-spacing: -0.04em;
+      }
+
+      .web-client-launcher-note {
+        color: rgba(151, 222, 255, 0.8);
+        font-size: 0.88rem;
+        line-height: 1.6;
+      }
+
       .web-client-frame {
         display: block;
         width: 100%;
@@ -737,6 +771,28 @@ function renderLandingPage(serviceName: string, extensionDownloadUrl: string) {
           0 26px 80px rgba(0, 0, 0, 0.38),
           0 0 0 1px rgba(122, 177, 211, 0.08) inset;
         transition: height 180ms ease;
+      }
+
+      .web-client-frame[hidden] {
+        display: none;
+      }
+
+      .site-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 14px 6px 0;
+        color: rgba(164, 203, 223, 0.8);
+        font-size: 0.88rem;
+        line-height: 1.6;
+      }
+
+      .site-footer a {
+        color: rgba(151, 222, 255, 0.94);
+        text-decoration: underline;
+        text-decoration-color: rgba(151, 222, 255, 0.42);
+        text-underline-offset: 0.22em;
       }
 
       .step-list {
@@ -1115,6 +1171,11 @@ function renderLandingPage(serviceName: string, extensionDownloadUrl: string) {
           grid-template-columns: 1fr;
         }
 
+        .site-footer {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+
         .asset-card,
         .asset-card-wide {
           grid-column: span 12;
@@ -1339,11 +1400,37 @@ function renderLandingPage(serviceName: string, extensionDownloadUrl: string) {
       <section class="section" id="install">
         <div class="install-shell">
           <div class="interactive-shell">
+            <div class="web-client-launcher" data-web-client-launcher>
+              <div class="web-client-launcher-copy">
+                <p class="eyebrow">Explicit Open</p>
+                <h2 class="web-client-launcher-title">Open the web client when you want to use it</h2>
+                <p class="section-copy">
+                  This landing page keeps the plugin UI unloaded until you explicitly open it.
+                  That means the embedded client does not send app API requests from this page
+                  until you click below.
+                </p>
+                <p class="web-client-launcher-note">
+                  Opening the client loads the interactive UI at <code>/web-client</code> and starts
+                  normal health, auth, analysis, and voice requests only after that point.
+                </p>
+              </div>
+
+              <div class="instruction-modal-actions">
+                <button class="button button-primary" type="button" data-open-web-client>
+                  Open web client
+                </button>
+                <a class="button button-secondary" href="/web-client" target="_blank" rel="noreferrer">
+                  Open in new tab
+                </a>
+              </div>
+            </div>
+
             <iframe
               class="web-client-frame"
-              src="/web-client"
+              data-src="/web-client"
               title="Structured Queries web client"
               loading="lazy"
+              hidden
             ></iframe>
           </div>
 
@@ -1363,6 +1450,13 @@ function renderLandingPage(serviceName: string, extensionDownloadUrl: string) {
           </div>
         </div>
       </section>
+
+      <footer class="site-footer">
+        <span>
+          The embedded plugin UI stays unloaded until you explicitly open it from this page.
+        </span>
+        <a href="/privacy">Privacy policy</a>
+      </footer>
 
       <dialog
         class="instruction-modal"
@@ -1479,8 +1573,11 @@ function renderLandingPage(serviceName: string, extensionDownloadUrl: string) {
     <script>
       (() => {
         const webClientFrame = document.querySelector(".web-client-frame");
+        const webClientLauncher = document.querySelector("[data-web-client-launcher]");
+        const webClientOpenTriggers = document.querySelectorAll("[data-open-web-client]");
         const installModal = document.querySelector("#extension-install-modal");
         const installTriggers = document.querySelectorAll("[data-open-install-modal]");
+        let webClientOpened = false;
 
         const syncHeroPhraseWidths = () => {
           const phrases = document.querySelectorAll(".hero-title-phrase");
@@ -1526,6 +1623,26 @@ function renderLandingPage(serviceName: string, extensionDownloadUrl: string) {
           }
         };
 
+        const openWebClient = () => {
+          if (!(webClientFrame instanceof HTMLIFrameElement)) {
+            return;
+          }
+
+          if (!webClientOpened) {
+            const frameSource = webClientFrame.dataset.src;
+            if (frameSource) {
+              webClientFrame.src = frameSource;
+            }
+            webClientOpened = true;
+          }
+
+          webClientFrame.hidden = false;
+
+          if (webClientLauncher instanceof HTMLElement) {
+            webClientLauncher.hidden = true;
+          }
+        };
+
         if (document.readyState === "loading") {
           document.addEventListener("DOMContentLoaded", syncHeroPhraseWidths, { once: true });
         } else {
@@ -1555,6 +1672,16 @@ function renderLandingPage(serviceName: string, extensionDownloadUrl: string) {
 
           trigger.addEventListener("click", () => {
             openInstallModal();
+          });
+        }
+
+        for (const trigger of webClientOpenTriggers) {
+          if (!(trigger instanceof HTMLElement)) {
+            continue;
+          }
+
+          trigger.addEventListener("click", () => {
+            openWebClient();
           });
         }
 
@@ -1605,6 +1732,306 @@ function renderLandingPage(serviceName: string, extensionDownloadUrl: string) {
 </html>`;
 }
 
+function renderPrivacyPage(serviceName: string) {
+  const escapedServiceName = escapeHtml(serviceName);
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Privacy policy for the Structure Queries app template and plugin UI."
+    />
+    <link rel="icon" type="image/png" sizes="16x16" href="/icon-16.png" />
+    <title>${escapedServiceName} Privacy Policy</title>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
+
+      :root {
+        color-scheme: dark;
+        --sq-ink: #ecf3fb;
+        --sq-muted: #9ba9ba;
+        --sq-bg-start: #070b12;
+        --sq-bg-mid: #0a121d;
+        --sq-bg-end: #050a11;
+        --sq-accent: #39d881;
+        --sq-accent-cool: #46bfff;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        color: var(--sq-ink);
+        font-family: "Space Grotesk", "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at 10% 12%, rgba(57, 216, 129, 0.12), transparent 34%),
+          radial-gradient(circle at 86% 9%, rgba(70, 191, 255, 0.11), transparent 32%),
+          repeating-linear-gradient(90deg, rgba(236, 243, 251, 0.018) 0 1px, transparent 1px 52px),
+          linear-gradient(165deg, var(--sq-bg-start) 0%, var(--sq-bg-mid) 45%, var(--sq-bg-end) 100%);
+      }
+
+      a {
+        color: rgba(151, 222, 255, 0.94);
+        text-decoration: underline;
+        text-decoration-color: rgba(151, 222, 255, 0.42);
+        text-underline-offset: 0.22em;
+      }
+
+      code,
+      .eyebrow {
+        font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+      }
+
+      main {
+        width: min(960px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 24px 0 44px;
+        display: grid;
+        gap: 14px;
+      }
+
+      .card {
+        overflow: hidden;
+        padding: clamp(22px, 3vw, 34px);
+        border: 1px solid rgba(122, 177, 211, 0.16);
+        border-radius: 30px;
+        background:
+          radial-gradient(circle at top left, rgba(70, 191, 255, 0.16), transparent 28%),
+          linear-gradient(180deg, rgba(8, 18, 31, 0.94), rgba(8, 16, 28, 0.96));
+        box-shadow:
+          0 26px 80px rgba(0, 0, 0, 0.38),
+          0 0 0 1px rgba(122, 177, 211, 0.08) inset;
+      }
+
+      .hero {
+        display: grid;
+        gap: 18px;
+      }
+
+      .hero-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .hero-brand {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .hero-mark {
+        width: 52px;
+        height: 52px;
+        padding: 6px;
+        border-radius: 18px;
+        border: 1px solid rgba(143, 223, 255, 0.12);
+        background:
+          linear-gradient(180deg, rgba(13, 24, 41, 0.56), rgba(7, 13, 23, 0.48)),
+          rgba(7, 13, 23, 0.42);
+      }
+
+      .hero-mark img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+
+      .eyebrow {
+        color: rgba(151, 222, 255, 0.72);
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2 {
+        margin: 0;
+        letter-spacing: -0.04em;
+      }
+
+      h1 {
+        font-size: clamp(2rem, 4vw, 3rem);
+        line-height: 1.02;
+      }
+
+      h2 {
+        font-size: 1.26rem;
+        line-height: 1.1;
+      }
+
+      p,
+      li {
+        color: rgba(164, 203, 223, 0.88);
+        font-size: 0.96rem;
+        line-height: 1.7;
+      }
+
+      .hero-copy {
+        max-width: 46rem;
+        display: grid;
+        gap: 12px;
+      }
+
+      .meta {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        width: fit-content;
+        min-height: 42px;
+        padding: 0 16px;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 999px;
+        background: rgba(8, 18, 29, 0.56);
+        color: rgba(236, 243, 251, 0.96);
+        font-size: 0.86rem;
+        font-weight: 700;
+      }
+
+      .grid {
+        display: grid;
+        gap: 14px;
+      }
+
+      ul {
+        margin: 12px 0 0;
+        padding-left: 1.2rem;
+      }
+
+      li + li {
+        margin-top: 10px;
+      }
+
+      .footer {
+        padding: 2px 4px 0;
+        color: rgba(164, 203, 223, 0.78);
+        font-size: 0.88rem;
+      }
+
+      @media (max-width: 720px) {
+        main {
+          width: min(100%, calc(100% - 24px));
+          padding-top: 16px;
+        }
+
+        .hero-top {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="card hero">
+        <div class="hero-top">
+          <div class="hero-brand">
+            <span class="hero-mark">
+              <img
+                src="${STRUCTURED_QUERIES_MONOGRAM_DATA_URL}"
+                alt="Structure Queries monogram"
+              />
+            </span>
+            <div>
+              <p class="eyebrow">Privacy Policy</p>
+              <h1>${escapedServiceName}</h1>
+            </div>
+          </div>
+          <a href="/">Back to landing page</a>
+        </div>
+
+        <div class="hero-copy">
+          <p>
+            This policy describes what the Structure Queries app template and plugin UI
+            request, store, and send. It is written for the current implementation as of
+            March 27, 2026.
+          </p>
+          <div class="meta">Last updated: March 27, 2026</div>
+        </div>
+      </section>
+
+      <section class="card">
+        <p class="eyebrow">Request Timing</p>
+        <h2>When network requests happen</h2>
+        <ul>
+          <li>The landing page does not load the embedded plugin UI until you explicitly click <code>Open web client</code>.</li>
+          <li>The Chrome extension does not create its local browser session id until you explicitly open the plugin UI.</li>
+          <li>After you open the UI, the client may call <code>/api/health</code>, restore an existing auth session, and check previously saved analysis status.</li>
+          <li>Voice list requests are deferred until setup or settings need them.</li>
+          <li>No voice websocket connection is opened until you explicitly start voice chat.</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <p class="eyebrow">Extension Permissions</p>
+        <h2>What the Chrome extension can access</h2>
+        <ul>
+          <li><code>activeTab</code>: lets the extension work with the active HTTP or HTTPS tab after you invoke it.</li>
+          <li><code>scripting</code>: injects the overlay content script into the active page on demand.</li>
+          <li><code>storage</code>: stores local session state, selected settings, cached analysis state, and pending request state in the browser.</li>
+          <li><code>identity</code>: supports the optional <code>Continue with Samsar One</code> sign-in flow inside Chrome.</li>
+          <li><code>https://structurequeries.samsar.one/*</code>: the only backend host permission used for API and websocket traffic.</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <p class="eyebrow">Data Sent</p>
+        <h2>What the app sends to the backend</h2>
+        <ul>
+          <li>Setup and account actions can send a locally generated browser session id and, if you enter them, your display name, email, username, selected language, and selected voice.</li>
+          <li>Authenticated actions can send a Samsar auth token or an external-user API key so the backend can provision sessions, bill usage, and open recharge links.</li>
+          <li>Page analysis sends the page URL, browser session id, billing credential, and the selected maximum prepare-credit cap.</li>
+          <li>Voice chat sends the browser session id, assistant session id, page URL, analysis template id, selected language, selected voice, and recorded audio only after you start voice.</li>
+          <li>The current implementation no longer sends page titles, extension ids, or browser user-agent strings from the plugin UI where they are not required for functionality.</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <p class="eyebrow">Local Storage</p>
+        <h2>What stays in your browser</h2>
+        <ul>
+          <li>The extension stores its state in <code>chrome.storage.local</code>, including the browser session id, registration state, selected language and voice, analyzed-page cache, prepare-page settings, and pending prepare requests.</li>
+          <li>The web client stores equivalent state in <code>localStorage</code>, including the auth token, browser session id, registration state, selected language and voice, page state, and prepare-page settings.</li>
+          <li>That local state stays in your browser until you sign out, clear site data, or remove the extension data.</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <p class="eyebrow">Processors</p>
+        <h2>Third-party services used by this template</h2>
+        <ul>
+          <li>Samsar handles user auth, session provisioning, billing-linked browser sessions, and grounded assistant retrieval.</li>
+          <li>Firecrawl is used during page preparation to crawl and extract public webpage content when configured.</li>
+          <li>ElevenLabs is used for voice listing, transcription, and speech synthesis when configured.</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <p class="eyebrow">Retention</p>
+        <h2>Storage and retention notes</h2>
+        <ul>
+          <li>This template only defines the browser-side storage listed above. Server-side retention depends on how you configure and operate the backend and the third-party services it calls.</li>
+          <li>If you adapt this template for production, you should review your backend logs, billing records, and third-party retention settings and update this policy to match your deployment.</li>
+        </ul>
+      </section>
+
+      <p class="footer">
+        Questions about this policy should be answered by the operator of the deployed app, because the template can be customized beyond the defaults described here.
+      </p>
+    </main>
+  </body>
+</html>`;
+}
+
 export function createApp() {
   const app = express();
 
@@ -1625,6 +2052,9 @@ export function createApp() {
     response
       .type("html")
       .send(renderLandingPage(env.serviceName, env.extensionDownloadUrl));
+  });
+  app.get("/privacy", (_request, response) => {
+    response.type("html").send(renderPrivacyPage(env.serviceName));
   });
   app.get("/web-client", (_request, response) => {
     response.sendFile(join(CLIENT_PUBLIC_DIR, "web-plugin.html"));

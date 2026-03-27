@@ -84,7 +84,6 @@ async function toggleOverlayForTab(tab: chrome.tabs.Tab) {
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log("Structure Queries extension installed.");
-  void ensureBrowserSessionId();
 });
 
 chrome.action.onClicked.addListener((tab) => {
@@ -97,7 +96,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "PING_BACKGROUND") {
     sendResponse({
       ok: true,
-      extensionId: chrome.runtime.id,
       tabId: sender.tab?.id ?? null
     });
 
@@ -112,7 +110,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({
       ok: true,
       browserSessionId,
-      extensionId: chrome.runtime.id,
       tabId: sender.tab?.id ?? null
     });
   });

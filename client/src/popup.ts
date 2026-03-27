@@ -13,6 +13,7 @@ const LEGACY_ANALYZED_PAGES_STORAGE_KEY = "telepathy.analyzedPages";
 const LEGACY_REGISTRATION_STORAGE_KEY = "telepathy.registration";
 const STARTER_CREDITS = 50;
 const LOW_CREDIT_WARNING_THRESHOLD = 100;
+const MIN_VOICE_CONVERSATION_CREDITS = 10;
 const CONVERSATION_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
 const NOTIFICATION_DURATION_MS = 6_000;
 const DEFAULT_PREPARE_PAGE_MAX_CREDITS = 20;
@@ -23,7 +24,6 @@ const creditCountFormatter = new Intl.NumberFormat();
 interface ExtensionSessionPayload {
   ok: boolean;
   browserSessionId: string;
-  extensionId: string;
   tabId?: number | null;
 }
 
@@ -177,7 +177,6 @@ interface AppState {
   assistantSessionId?: string;
   authToken?: string;
   browserSessionId?: string;
-  extensionId?: string;
   hostTabId?: number;
   currentUser?: StructureQueriesExternalUserPayload | null;
   currentPage?: PageContext;
@@ -352,6 +351,9 @@ let notificationTimer: number | undefined;
 let prepareStatusPollTimer: number | undefined;
 let assistantAudioReceivedForTurn = false;
 let creditsRefreshPending = false;
+let creditsRefreshInFlight = false;
+let voicesLoaded = false;
+let voicesLoadPromise: Promise<void> | undefined;
 
 const BUTTON_ICONS = {
   mic: `
@@ -514,6 +516,53 @@ function getCreditsRemaining() {
   return typeof state.currentUser?.generationCredits === "number"
     ? Math.max(0, Math.floor(state.currentUser.generationCredits))
     : null;
+}
+
+function getVoiceConversationCreditRequirementMessage() {
+  const creditsRemaining = getCreditsRemaining();
+
+  if (
+    state.registrationRequired ||
+    creditsRemaining === null ||
+    creditsRemaining >= MIN_VOICE_CONVERSATION_CREDITS
+  ) {
+    return undefined;
+  }
+
+  return `Voice requires at least ${MIN_VOICE_CONVERSATION_CREDITS} credits. ${formatCreditsLabel(creditsRemaining)} left. Recharge in Samsar to continue.`;
+}
+
+async function enforceVoiceConversationCreditRequirement(input?: {
+  stopConversation?: boolean;
+}) {
+  const message = getVoiceConversationCreditRequirementMessage();
+
+  if (!message) {
+    return false;
+  }
+
+  state.creditBannerDismissed = false;
+
+  if (input?.stopConversation) {
+    creditsRefreshPending = false;
+    clearResumeConversationTimer();
+    clearConversationIdleTimer();
+
+    try {
+      await stopPageRecordingCapture();
+    } catch {
+      // Ignore capture shutdown failures and still close the voice session.
+    }
+
+    closeWebSocketSession({
+      phase: "error",
+      detail: "Recharge required"
+    });
+  }
+
+  showNotification(message, 0, "recharge");
+  render();
+  return true;
 }
 
 function formatCreditsLabel(value: number) {
@@ -1200,9 +1249,9 @@ function openAccountEditor() {
   syncRegistrationForm();
   render();
 
-  if (!state.registrationRequired && state.serverOnline) {
-    void syncBrowserSession().catch((error) => {
-      console.error("Failed to refresh account settings", error);
+  if (state.serverOnline) {
+    void ensureVoicesLoaded().catch((error) => {
+      console.error("Failed to load speakers for account settings", error);
     });
   }
 }
@@ -1230,6 +1279,9 @@ function render() {
     state.assistantSpeaking ||
     waitingForAssistant;
   const creditsRemaining = getCreditsRemaining();
+  const voiceCreditRequirementMessage =
+    getVoiceConversationCreditRequirementMessage();
+  const voiceCreditsBlocked = Boolean(voiceCreditRequirementMessage);
   const lowCreditsActive =
     !state.registrationRequired &&
     creditsRemaining !== null &&
@@ -1241,7 +1293,8 @@ function render() {
   }
 
   const showCreditBanner =
-    creditBannerAvailable && !state.creditBannerDismissed;
+    voiceCreditsBlocked ||
+    (creditBannerAvailable && !state.creditBannerDismissed);
   const accountName =
     readOptionalString(state.currentUser?.displayName) ??
     readOptionalString(state.currentUser?.username) ??
@@ -1370,11 +1423,14 @@ function render() {
     !state.analysisReady ||
     !state.currentPage?.url ||
     state.isAnalyzing ||
-    state.websocketState === "connecting";
+    state.websocketState === "connecting" ||
+    (!voiceBusy && voiceCreditsBlocked);
   const voiceButtonLabel = state.websocketState === "connecting"
     ? "Connecting..."
     : voiceBusy
       ? "Stop voice"
+      : voiceCreditsBlocked
+        ? `Need ${MIN_VOICE_CONVERSATION_CREDITS} credits`
       : state.analysisReady
         ? "Start voice"
         : "Voice after scan";
@@ -1389,6 +1445,8 @@ function render() {
       : creditsRemaining === 0
         ? "0 credits left."
         : `${creditCountFormatter.format(creditsRemaining)} credits left.`
+    : voiceCreditsBlocked
+      ? voiceCreditRequirementMessage ?? ""
     : lowCreditsActive && creditsRemaining !== null
       ? creditsRemaining === 0
         ? "0 credits left."
@@ -1480,6 +1538,11 @@ function render() {
   if (creditWarningNode) {
     creditWarningNode.hidden = !showCreditBanner;
     creditWarningNode.style.display = showCreditBanner ? "" : "none";
+  }
+
+  if (creditWarningDismissButton) {
+    creditWarningDismissButton.hidden = voiceCreditsBlocked;
+    creditWarningDismissButton.disabled = voiceCreditsBlocked;
   }
 
   if (notificationNode) {
@@ -1695,6 +1758,14 @@ async function getExtensionSession() {
   }) as Promise<ExtensionSessionPayload>;
 }
 
+function buildSessionCredentialPayload() {
+  return {
+    authToken: getActiveAuthToken(),
+    browserSessionId: state.browserSessionId,
+    externalUserApiKey: state.externalUserApiKey
+  };
+}
+
 async function requestPageContextFromTab(tabId: number) {
   return (await chrome.tabs.sendMessage(tabId, {
     type: "GET_PAGE_CONTEXT"
@@ -1762,6 +1833,7 @@ function showInsufficientCreditsState(message?: string | null) {
   const shouldAppendLog = state.creditIssueMessage !== issueMessage;
 
   creditsRefreshPending = false;
+  creditsRefreshInFlight = false;
   if (state.currentUser) {
     state.currentUser = {
       ...state.currentUser,
@@ -2123,14 +2195,7 @@ async function syncBrowserSession() {
     },
     body: JSON.stringify({
       assistantSessionId: state.assistantSessionId,
-      authToken: getActiveAuthToken(),
-      browserSessionId: state.browserSessionId,
-      externalUser: state.currentUser,
-      externalUserApiKey: state.externalUserApiKey,
-      extensionId: state.extensionId,
-      preferredLanguage: getSelectedLanguage(),
-      preferredVoiceId: getSelectedVoiceId(),
-      userAgent: navigator.userAgent
+      ...buildSessionCredentialPayload()
     })
   });
 
@@ -2176,11 +2241,7 @@ async function persistBrowserProfilePreferences() {
       },
       body: JSON.stringify({
         assistantSessionId: state.assistantSessionId,
-        authToken: getActiveAuthToken(),
-        browserSessionId: state.browserSessionId,
-        externalUserApiKey: state.externalUserApiKey,
-        extensionId: state.extensionId,
-        userAgent: navigator.userAgent,
+        ...buildSessionCredentialPayload(),
         displayName: state.currentUser?.displayName ?? "",
         email: state.currentUser?.email ?? "",
         username: state.currentUser?.username ?? "",
@@ -2225,11 +2286,7 @@ async function submitAccountProfile() {
       },
       body: JSON.stringify({
         assistantSessionId: state.assistantSessionId,
-        authToken: getActiveAuthToken(),
-        browserSessionId: state.browserSessionId,
-        externalUserApiKey: state.externalUserApiKey,
-        extensionId: state.extensionId,
-        userAgent: navigator.userAgent,
+        ...buildSessionCredentialPayload(),
         displayName: registrationDisplayNameNode?.value ?? "",
         email: registrationEmailNode?.value ?? "",
         username: registrationUsernameNode?.value ?? "",
@@ -2365,8 +2422,6 @@ async function continueWithSamsarOne() {
         body: JSON.stringify({
           authToken: resolvedAuthToken,
           browserSessionId: state.browserSessionId,
-          extensionId: state.extensionId,
-          userAgent: navigator.userAgent,
           displayName:
             readOptionalString(sessionPayload.displayName) ??
             registrationDisplayNameNode?.value ??
@@ -2434,17 +2489,10 @@ async function openSamsarClientLogin() {
       {
         method: "POST",
         headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        authToken: getActiveAuthToken(),
-        browserSessionId: state.browserSessionId,
-        externalUser: state.currentUser,
-        externalUserApiKey: state.externalUserApiKey,
-          extensionId: state.extensionId,
-          preferredLanguage: getSelectedLanguage(),
-          preferredVoiceId: getSelectedVoiceId(),
-          userAgent: navigator.userAgent
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          ...buildSessionCredentialPayload()
         })
       }
     );
@@ -2526,6 +2574,34 @@ async function refreshVoices() {
   renderVoiceOptions();
 }
 
+async function ensureVoicesLoaded(input?: { force?: boolean }) {
+  if (!state.serverOnline) {
+    voicesLoaded = false;
+    state.voices = [];
+    state.voiceWarning = undefined;
+    renderVoiceOptions();
+    return;
+  }
+
+  if (!input?.force && voicesLoaded) {
+    return;
+  }
+
+  if (!input?.force && voicesLoadPromise) {
+    return voicesLoadPromise;
+  }
+
+  voicesLoadPromise = refreshVoices()
+    .then(() => {
+      voicesLoaded = true;
+    })
+    .finally(() => {
+      voicesLoadPromise = undefined;
+    });
+
+  return voicesLoadPromise;
+}
+
 function closeWebSocketSession(input?: {
   phase?: WebSocketPhase;
   detail?: string;
@@ -2543,6 +2619,7 @@ function closeWebSocketSession(input?: {
   activeSocketPromise = undefined;
   assistantAudioReceivedForTurn = false;
   creditsRefreshPending = false;
+  creditsRefreshInFlight = false;
   state.conversationActive = false;
   state.recording = false;
   state.assistantSpeaking = false;
@@ -2936,6 +3013,14 @@ async function startConversationTurn() {
     throw new Error("Register this browser installation before starting voice chat.");
   }
 
+  if (
+    await enforceVoiceConversationCreditRequirement({
+      stopConversation: true
+    })
+  ) {
+    return;
+  }
+
   state.websocketPhase = "ready";
   state.websocketDetail = "Listening...";
   render();
@@ -2955,7 +3040,7 @@ async function startConversationTurn() {
 function scheduleConversationResume(delayMs = 250) {
   clearResumeConversationTimer();
 
-  if (!state.conversationActive) {
+  if (!state.conversationActive || creditsRefreshInFlight) {
     return;
   }
 
@@ -3098,8 +3183,20 @@ function handleSocketMessage(event: MessageEvent<string>) {
     if (phase === "idle") {
       if (creditsRefreshPending) {
         creditsRefreshPending = false;
+        creditsRefreshInFlight = true;
         void refreshCreditsAfterRequest().catch((error) => {
           console.error("Failed to refresh credits after voice turn", error);
+        }).finally(() => {
+          creditsRefreshInFlight = false;
+
+          if (
+            state.conversationActive &&
+            !state.recording &&
+            !state.assistantSpeaking &&
+            state.websocketPhase === "idle"
+          ) {
+            scheduleConversationResume();
+          }
         });
       }
 
@@ -3327,16 +3424,11 @@ async function ensureWebSocketSession() {
       sendSocketMessage({
         type: "session_init",
         assistantSessionId: state.assistantSessionId,
-        authToken: getActiveAuthToken(),
-        browserSessionId: state.browserSessionId,
-        extensionId: state.extensionId,
-        externalUserApiKey: state.externalUserApiKey,
+        ...buildSessionCredentialPayload(),
         pageUrl: state.currentPage?.url,
-        pageTitle: state.currentPage?.title,
         templateId: state.currentTemplateId,
         voiceId: getSelectedVoiceId(),
-        language: getSelectedLanguage(),
-        userAgent: navigator.userAgent
+        language: getSelectedLanguage()
       });
       resolve(socket);
     });
@@ -3464,6 +3556,10 @@ async function startRecording() {
     throw new Error("Register this browser installation before starting voice chat.");
   }
 
+  if (await enforceVoiceConversationCreditRequirement()) {
+    return;
+  }
+
   stopVoicePreviewPlayback();
   hideNotification();
   state.conversationActive = true;
@@ -3548,14 +3644,9 @@ async function analyzeCurrentPage() {
       },
       signal: controller.signal,
       body: JSON.stringify({
-        authToken: getActiveAuthToken(),
-        browserSessionId: state.browserSessionId,
-        externalUserApiKey: state.externalUserApiKey,
+        ...buildSessionCredentialPayload(),
         prepareRequestId: requestId,
         url: state.currentPage.url,
-        title: state.currentPage.title,
-        preferredLanguage: getSelectedLanguage(),
-        preferredVoiceId: getSelectedVoiceId(),
         maxPrepareCredits: state.maxPrepareCredits
       })
     });
@@ -3633,7 +3724,6 @@ async function refreshAll() {
     const extensionSession = await getExtensionSession();
 
     state.browserSessionId = extensionSession.browserSessionId;
-    state.extensionId = extensionSession.extensionId;
     state.hostTabId =
       typeof extensionSession.tabId === "number"
         ? extensionSession.tabId
@@ -3642,7 +3732,6 @@ async function refreshAll() {
     await loadPreparePageSettings();
     await loadRegistrationState();
     await refreshServerStatus();
-    await refreshVoices();
     state.currentPage = await fetchPageContext();
 
     if (previousPageUrl && previousPageUrl !== state.currentPage?.url) {
@@ -3655,8 +3744,8 @@ async function refreshAll() {
       state.currentTemplateId = undefined;
     }
 
-    if (state.serverOnline) {
-      await syncBrowserSession();
+    if (state.serverOnline && state.registrationRequired) {
+      await ensureVoicesLoaded();
     }
 
     await refreshIndexStatus();
@@ -3813,13 +3902,15 @@ voiceToggleButton?.addEventListener("click", () => {
 });
 
 voicePreviewButton?.addEventListener("click", () => {
-  void toggleVoicePreviewPlayback().catch((error) => {
-    console.error("Failed to play speaker preview", error);
-    appendLog(
-      "system",
-      error instanceof Error ? error.message : "Failed to play speaker preview."
-    );
-  });
+  void ensureVoicesLoaded()
+    .then(() => toggleVoicePreviewPlayback())
+    .catch((error) => {
+      console.error("Failed to play speaker preview", error);
+      appendLog(
+        "system",
+        error instanceof Error ? error.message : "Failed to play speaker preview."
+      );
+    });
 });
 
 voiceSelect?.addEventListener("change", () => {
@@ -3838,10 +3929,6 @@ voiceSelect?.addEventListener("change", () => {
       voiceId: getSelectedVoiceId()
     });
   }
-
-  void persistBrowserProfilePreferences().catch((error) => {
-    console.error("Failed to update preferred speaker", error);
-  });
 });
 
 overlayCloseButtons.forEach((button) => {
@@ -3852,8 +3939,8 @@ overlayCloseButtons.forEach((button) => {
 
 languageSelect?.addEventListener("change", () => {
   syncLanguagePreferenceToSocket();
-  void persistBrowserProfilePreferences().catch((error) => {
-    console.error("Failed to update browser session", error);
+  void saveCurrentRegistrationState().catch((error) => {
+    console.error("Failed to persist language preference", error);
   });
 });
 

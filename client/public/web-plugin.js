@@ -25,7 +25,6 @@
   const MIN_VOICE_BAND_SHARE = 0.6;
   const MAX_LOW_BAND_SHARE = 0.25;
   const MAX_HIGH_BAND_SHARE = 0.18;
-  const EXTENSION_ID = "structurequeries_web_client";
   const EMBED_HEIGHT_MESSAGE_TYPE = "structuredqueries:web-client-height";
   const creditCountFormatter = new Intl.NumberFormat();
 
@@ -198,9 +197,19 @@
   let assistantAudioReceivedForTurn = false;
   let embedHeightFrameId = 0;
   let embedHeightObserver;
+  let voicesLoaded = false;
+  let voicesLoadPromise;
 
   function readOptionalString(value) {
     return typeof value === "string" && value.trim() ? value.trim() : undefined;
+  }
+
+  function buildSessionCredentialPayload() {
+    return {
+      authToken: getActiveAuthToken(),
+      browserSessionId: state.browserSessionId,
+      externalUserApiKey: state.externalUserApiKey
+    };
   }
 
   function normalizePreparePageCreditCap(value) {
@@ -1151,6 +1160,7 @@
   async function refreshVoices() {
     if (!state.serverOnline) {
       state.voices = [];
+      state.voiceWarning = null;
       renderVoiceOptions();
       return;
     }
@@ -1165,6 +1175,34 @@
     }
 
     renderVoiceOptions();
+  }
+
+  async function ensureVoicesLoaded(input) {
+    if (!state.serverOnline) {
+      voicesLoaded = false;
+      state.voices = [];
+      state.voiceWarning = null;
+      renderVoiceOptions();
+      return;
+    }
+
+    if (!input?.force && voicesLoaded) {
+      return;
+    }
+
+    if (!input?.force && voicesLoadPromise) {
+      return voicesLoadPromise;
+    }
+
+    voicesLoadPromise = refreshVoices()
+      .then(() => {
+        voicesLoaded = true;
+      })
+      .finally(() => {
+        voicesLoadPromise = null;
+      });
+
+    return voicesLoadPromise;
   }
 
   function openAuthOverlay(mode, action) {
@@ -1210,10 +1248,6 @@
       }
 
       populateProfileInputs(true);
-
-      if (hasActiveSamsarCredentials() && state.assistantSessionId) {
-        await syncBrowserSession();
-      }
     } catch (error) {
       console.error("Failed to refresh auth session", error);
       clearAuthData();
@@ -1245,8 +1279,6 @@
       body: JSON.stringify({
         authToken: getActiveAuthToken(),
         browserSessionId: state.browserSessionId,
-        extensionId: EXTENSION_ID,
-        userAgent: navigator.userAgent,
         displayName: identity.displayName,
         email: identity.email,
         username: identity.username,
@@ -1271,14 +1303,7 @@
       },
       body: JSON.stringify({
         assistantSessionId: state.assistantSessionId,
-        authToken: getActiveAuthToken(),
-        browserSessionId: state.browserSessionId,
-        externalUser: state.currentUser,
-        externalUserApiKey: state.externalUserApiKey,
-        extensionId: EXTENSION_ID,
-        preferredLanguage: getSelectedLanguage(),
-        preferredVoiceId: getSelectedVoiceId(),
-        userAgent: navigator.userAgent
+        ...buildSessionCredentialPayload()
       })
     });
 
@@ -1304,11 +1329,7 @@
         },
         body: JSON.stringify({
           assistantSessionId: state.assistantSessionId,
-          authToken: getActiveAuthToken(),
-          browserSessionId: state.browserSessionId,
-          externalUserApiKey: state.externalUserApiKey,
-          extensionId: EXTENSION_ID,
-          userAgent: navigator.userAgent,
+          ...buildSessionCredentialPayload(),
           displayName: identity.displayName,
           email: identity.email,
           username: identity.username,
@@ -1455,14 +1476,7 @@
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          authToken: getActiveAuthToken(),
-          browserSessionId: state.browserSessionId,
-          externalUser: state.currentUser,
-          externalUserApiKey: state.externalUserApiKey,
-          extensionId: EXTENSION_ID,
-          preferredLanguage: getSelectedLanguage(),
-          preferredVoiceId: getSelectedVoiceId(),
-          userAgent: navigator.userAgent
+          ...buildSessionCredentialPayload()
         })
       });
 
@@ -1540,13 +1554,8 @@
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          authToken: getActiveAuthToken(),
-          browserSessionId: state.browserSessionId,
-          externalUserApiKey: state.externalUserApiKey,
+          ...buildSessionCredentialPayload(),
           url: state.currentPage.url,
-          title: state.currentPage.title,
-          preferredLanguage: getSelectedLanguage(),
-          preferredVoiceId: getSelectedVoiceId(),
           maxPrepareCredits: state.maxPrepareCredits
         })
       });
@@ -2073,16 +2082,11 @@
         sendSocketMessage({
           type: "session_init",
           assistantSessionId: state.assistantSessionId,
-          authToken: getActiveAuthToken(),
-          browserSessionId: state.browserSessionId,
-          extensionId: EXTENSION_ID,
-          externalUserApiKey: state.externalUserApiKey,
+          ...buildSessionCredentialPayload(),
           pageUrl: state.currentPage?.url,
-          pageTitle: state.currentPage?.title,
           templateId: state.currentTemplateId,
           voiceId: getSelectedVoiceId(),
-          language: getSelectedLanguage(),
-          userAgent: navigator.userAgent
+          language: getSelectedLanguage()
         });
         resolve(socket);
       });
@@ -2999,7 +3003,15 @@
       return;
     }
 
-    refs.advancedDrawer.open = !refs.advancedDrawer.open;
+    const nextOpen = !refs.advancedDrawer.open;
+    refs.advancedDrawer.open = nextOpen;
+
+    if (nextOpen) {
+      void ensureVoicesLoaded().catch((error) => {
+        console.error("Failed to load speakers", error);
+      });
+    }
+
     scheduleEmbeddedHeightSync();
   });
 
@@ -3036,12 +3048,14 @@
   });
 
   refs.voicePreviewButton?.addEventListener("click", () => {
-    void toggleVoicePreviewPlayback().catch((error) => {
-      appendLog(
-        "system",
-        error instanceof Error ? error.message : "Failed to play speaker preview."
-      );
-    });
+    void ensureVoicesLoaded()
+      .then(() => toggleVoicePreviewPlayback())
+      .catch((error) => {
+        appendLog(
+          "system",
+          error instanceof Error ? error.message : "Failed to play speaker preview."
+        );
+      });
   });
 
   refs.saveSettingsButton?.addEventListener("click", () => {
@@ -3089,13 +3103,9 @@
 
   refs.languageSelect?.addEventListener("change", () => {
     savePageState();
+    saveRegistrationState();
     syncLanguagePreferenceToSocket();
-    void syncBrowserSession().catch((error) => {
-      console.error("Failed to update browser session", error);
-    });
-    void refreshIndexStatus().finally(() => {
-      render();
-    });
+    render();
   });
 
   refs.prepareMaxCreditsInput?.addEventListener("change", () => {
@@ -3107,11 +3117,11 @@
   });
 
   window.addEventListener("focus", () => {
-    void refreshAuthSession().catch((error) => {
-      console.error("Failed to refresh auth session", error);
-    });
-
-    if (hasActiveSamsarCredentials() && state.assistantSessionId) {
+    if (
+      state.creditIssueMessage &&
+      hasActiveSamsarCredentials() &&
+      state.assistantSessionId
+    ) {
       void syncBrowserSession().catch((error) => {
         console.error("Failed to refresh browser session", error);
       });
@@ -3144,7 +3154,6 @@
     resetConversationLog();
     render();
     await refreshServerStatus();
-    await refreshVoices();
     await restoreAuthSessionFromLocation();
     await refreshAuthSession();
     await refreshIndexStatus();
