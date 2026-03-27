@@ -14,6 +14,8 @@ const LEGACY_REGISTRATION_STORAGE_KEY = "telepathy.registration";
 const STARTER_CREDITS = 50;
 const LOW_CREDIT_WARNING_THRESHOLD = 100;
 const MIN_VOICE_CONVERSATION_CREDITS = 10;
+const RECHARGE_CREDITS_THRESHOLD = MIN_VOICE_CONVERSATION_CREDITS;
+const RECHARGE_CREDITS_MESSAGE = "Recharge credits";
 const CONVERSATION_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
 const NOTIFICATION_DURATION_MS = 6_000;
 const DEFAULT_PREPARE_PAGE_MAX_CREDITS = 20;
@@ -638,7 +640,7 @@ function getVoiceConversationCreditRequirementMessage() {
     return undefined;
   }
 
-  return `Voice requires at least ${MIN_VOICE_CONVERSATION_CREDITS} credits. ${formatCreditsLabel(creditsRemaining)} left. Recharge in Samsar to continue.`;
+  return RECHARGE_CREDITS_MESSAGE;
 }
 
 async function enforceVoiceConversationCreditRequirement(input?: {
@@ -720,12 +722,12 @@ function formatInsufficientCreditsMessage(
   const normalized = readOptionalString(message);
 
   if (!normalized) {
-    return "Not enough credits are available for this request. Recharge credits in Samsar and then try again.";
+    return RECHARGE_CREDITS_MESSAGE;
   }
 
-  return /recharge/i.test(normalized)
-    ? normalized
-    : `${normalized} Recharge credits in Samsar and then try again.`;
+  return isInsufficientCreditsMessage(normalized)
+    ? RECHARGE_CREDITS_MESSAGE
+    : normalized;
 }
 
 function getPreferredVoiceIdFromUser(
@@ -1857,16 +1859,12 @@ function render() {
       : "Sending..."
     : "Send";
   const creditBannerMessage = creditIssueActive
-    ? creditsRemaining === null
-      ? "Recharge needed."
-      : creditsRemaining === 0
-        ? "0 credits left."
-        : `${creditCountFormatter.format(creditsRemaining)} credits left.`
+    ? RECHARGE_CREDITS_MESSAGE
     : showVoiceCreditRequirement
       ? voiceCreditRequirementMessage ?? ""
     : lowCreditsActive && creditsRemaining !== null
-      ? creditsRemaining === 0
-        ? "0 credits left."
+      ? creditsRemaining < RECHARGE_CREDITS_THRESHOLD
+        ? RECHARGE_CREDITS_MESSAGE
         : `${creditCountFormatter.format(creditsRemaining)} credits left.`
       : "";
 
@@ -2333,7 +2331,6 @@ async function stopPageRecordingCapture() {
 
 function showInsufficientCreditsState(message?: string | null) {
   const issueMessage = formatInsufficientCreditsMessage(message);
-  const shouldAppendLog = state.creditIssueMessage !== issueMessage;
 
   creditsRefreshPending = false;
   creditsRefreshInFlight = false;
@@ -2355,10 +2352,6 @@ function showInsufficientCreditsState(message?: string | null) {
   });
   showNotification(issueMessage, 0, "recharge");
   render();
-
-  if (shouldAppendLog) {
-    appendLog("system", issueMessage);
-  }
 
   void saveCurrentRegistrationState().catch((error) => {
     console.error("Failed to persist depleted credit balance", error);

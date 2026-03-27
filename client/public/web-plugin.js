@@ -9,6 +9,8 @@
   const PAGE_STATE_STORAGE_KEY = "structuredqueries.web.pageState";
   const PREPARE_PAGE_SETTINGS_STORAGE_KEY = "structuredqueries.web.preparePageSettings";
   const LOW_CREDIT_WARNING_THRESHOLD = 100;
+  const RECHARGE_CREDITS_THRESHOLD = 10;
+  const RECHARGE_CREDITS_MESSAGE = "Recharge credits";
   const CONVERSATION_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
   const NOTIFICATION_DURATION_MS = 6_000;
   const DEFAULT_PREPARE_PAGE_MAX_CREDITS = 20;
@@ -791,12 +793,12 @@
     const normalized = readOptionalString(message);
 
     if (!normalized) {
-      return "Not enough credits are available for this request. Recharge credits in Samsar and then try again.";
+      return RECHARGE_CREDITS_MESSAGE;
     }
 
-    return /recharge/i.test(normalized)
-      ? normalized
-      : `${normalized} Recharge credits in Samsar and then try again.`;
+    return isInsufficientCreditsMessage(normalized)
+      ? RECHARGE_CREDITS_MESSAGE
+      : normalized;
   }
 
   function syncCreditIssueStateWithBalance() {
@@ -1815,7 +1817,6 @@
     state.creditIssueMessage = issueMessage;
     state.creditBannerDismissed = false;
     refs.advancedDrawer.open = true;
-    appendLog("system", issueMessage);
     void stopConversationMode({
       detail: "Recharge required"
     });
@@ -2926,6 +2927,14 @@
     }
 
     const creditsRemaining = getCreditsRemaining();
+    if (
+      creditsRemaining !== null &&
+      creditsRemaining < RECHARGE_CREDITS_THRESHOLD &&
+      state.authUser
+    ) {
+      return RECHARGE_CREDITS_MESSAGE;
+    }
+
     if (
       creditsRemaining !== null &&
       creditsRemaining <= LOW_CREDIT_WARNING_THRESHOLD &&
