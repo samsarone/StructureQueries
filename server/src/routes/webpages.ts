@@ -445,31 +445,35 @@ webpagesRouter.post("/analyze", async (request, response) => {
       completedAt: null
     });
 
-    const result =
-      authToken || externalUserApiKey
-        ? await generateSamsarUserEmbeddingsFromPlainText(
+    const embeddingPayload = {
+      name: createEmbeddingName(title || undefined, url),
+      plain_text: crawlResult.records,
+      field_options: getUrlEmbeddingFieldOptions()
+    };
+    const externalUser = browserSessionId
+      ? buildStructureQueriesExternalUser({
+          browserSessionId,
+          preferredLanguage: preferredLanguage || undefined,
+          preferredVoiceId: preferredVoiceId || undefined
+        })
+      : undefined;
+    const result = authToken
+      ? await generateSamsarUserEmbeddingsFromPlainText(
+          embeddingPayload,
+          {
+            authToken,
+            externalUser
+          }
+        )
+      : externalUserApiKey
+        ? await samsarAdapter.generateExternalEmbeddingsFromPlainText(
+            embeddingPayload,
+            externalUser,
             {
-              name: createEmbeddingName(title || undefined, url),
-              plain_text: crawlResult.records,
-              field_options: getUrlEmbeddingFieldOptions()
-            },
-            {
-              authToken: authToken || undefined,
-              externalUserApiKey: externalUserApiKey || undefined,
-              externalUser: browserSessionId
-                ? buildStructureQueriesExternalUser({
-                    browserSessionId,
-                    preferredLanguage: preferredLanguage || undefined,
-                    preferredVoiceId: preferredVoiceId || undefined
-                  })
-                : undefined
+              externalUserApiKey
             }
           )
-        : await samsarAdapter.generateEmbeddingsFromPlainText({
-            name: createEmbeddingName(title || undefined, url),
-            plain_text: crawlResult.records,
-            field_options: getUrlEmbeddingFieldOptions()
-          });
+        : await samsarAdapter.generateEmbeddingsFromPlainText(embeddingPayload);
 
     const rawAnalysis = result.data as Record<string, unknown>;
     const upstreamStatusCode =

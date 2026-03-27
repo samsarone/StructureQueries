@@ -18,6 +18,9 @@ type SamsarCreateEmbeddingFromUrlInput = Parameters<
 type SamsarGenerateEmbeddingsFromPlainTextInput = Parameters<
   ReturnType<typeof getSamsarClient>["generateEmbeddingsFromPlainText"]
 >[0];
+type SamsarGenerateExternalEmbeddingsFromPlainTextInput = Parameters<
+  ReturnType<typeof getSamsarClient>["generateExternalEmbeddingsFromPlainText"]
+>[0];
 type SamsarCreateAssistantCompletionInput = Parameters<
   ReturnType<typeof getSamsarClient>["createAssistantCompletion"]
 >[0];
@@ -83,6 +86,18 @@ export async function generateSamsarEmbeddingsFromPlainText(
   input: SamsarGenerateEmbeddingsFromPlainTextInput
 ) {
   return getSamsarClient().generateEmbeddingsFromPlainText(input);
+}
+
+export async function generateSamsarExternalEmbeddingsFromPlainText(
+  input: SamsarGenerateExternalEmbeddingsFromPlainTextInput,
+  externalUser?: SamsarExternalUserIdentity | null,
+  options?: SamsarRequestOptions
+) {
+  return getSamsarClient().generateExternalEmbeddingsFromPlainText(
+    input,
+    externalUser,
+    options
+  );
 }
 
 export async function createSamsarAssistantCompletion(
@@ -206,6 +221,8 @@ export const samsarAdapter = {
   createVideoFromImageList: createSamsarVideoFromImageList,
   createVideoFromText: createSamsarVideoFromText,
   createEmbeddingFromUrl: createSamsarEmbeddingFromUrl,
+  generateExternalEmbeddingsFromPlainText:
+    generateSamsarExternalEmbeddingsFromPlainText,
   generateEmbeddingsFromPlainText: generateSamsarEmbeddingsFromPlainText,
   grantExternalUserCredits: grantSamsarExternalUserCredits,
   enhanceMessage: enhanceSamsarMessage,

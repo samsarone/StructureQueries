@@ -21,37 +21,26 @@ The repo is a monorepo with:
 
 ## Product visuals
 
-### Main splash
-
 ![Structure Queries main splash](public/splash-1280x800.png)
 
 ## Workflow visuals
-
-### Information flow
-
-This view captures the end-to-end product flow from page preparation to voice reply.
+End-to-end product flow from page preparation to voice reply.
 
 ![Workflow 1](public/workflow_1.png)
 
-### Firecrawl + cleanup
-
-This is the latest minimal crawl-and-cleanup visual.
+Firecrawl crawl and cleanup.
 
 ![Workflow 2](public/workflow_2_v3.png)
 
-### ElevenLabs transcription + TTS
-
-This is the latest minimal voice-loop visual.
+ElevenLabs transcription and TTS loop.
 
 ![Workflow 3](public/workflow_3_v2.png)
 
-### Backend RAG chatbot
-
-This view captures the current backend embedding, retrieval, and assistant-completion flow.
+Backend embedding, retrieval, and assistant flow.
 
 ![Workflow 4](public/workflow_4.png)
 
-## Latest implementation
+## Implementation notes
 
 ### Prepare-page pipeline
 

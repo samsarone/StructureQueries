@@ -483,6 +483,7 @@ function renderLandingPage(serviceName: string, extensionDownloadUrl: string) {
         display: grid;
         gap: 8px;
         justify-items: end;
+        align-items: end;
         text-align: right;
         flex-shrink: 0;
       }
@@ -502,15 +503,61 @@ function renderLandingPage(serviceName: string, extensionDownloadUrl: string) {
       }
 
       .site-banner-link {
+        display: inline-flex;
+        justify-content: flex-end;
+        justify-self: end;
+        align-self: end;
+        cursor: pointer;
         padding: 0;
         border: 0;
         background: none;
         color: rgba(151, 222, 255, 0.88);
         font-size: 0.84rem;
         font-weight: 600;
+        text-align: right;
         text-decoration: underline;
         text-decoration-color: rgba(151, 222, 255, 0.38);
         text-underline-offset: 0.24em;
+      }
+
+      .cta-meta {
+        display: grid;
+        gap: 8px;
+        align-content: center;
+      }
+
+      .cta-status {
+        display: inline-flex;
+        align-items: center;
+        min-height: 50px;
+        padding: 0 22px;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 18px;
+        background: rgba(8, 18, 29, 0.56);
+        color: rgba(236, 243, 251, 0.96);
+        font-size: 0.92rem;
+        font-weight: 700;
+      }
+
+      .cta-link {
+        display: inline-flex;
+        align-items: center;
+        min-height: 20px;
+        cursor: pointer;
+        padding: 0 4px;
+        border: 0;
+        background: none;
+        color: rgba(151, 222, 255, 0.88);
+        font-size: 0.9rem;
+        font-weight: 600;
+        text-decoration: underline;
+        text-decoration-color: rgba(151, 222, 255, 0.38);
+        text-underline-offset: 0.24em;
+      }
+
+      .cta-link:hover {
+        color: rgba(236, 243, 251, 0.96);
+        text-decoration-color: rgba(236, 243, 251, 0.7);
       }
 
       .site-banner-link:hover {
@@ -1046,6 +1093,10 @@ function renderLandingPage(serviceName: string, extensionDownloadUrl: string) {
           justify-content: center;
         }
 
+        .cta-meta {
+          justify-items: center;
+        }
+
         .preview-card {
           width: min(100%, 860px);
           justify-self: stretch;
@@ -1097,6 +1148,14 @@ function renderLandingPage(serviceName: string, extensionDownloadUrl: string) {
         .site-banner-actions {
           width: 100%;
           justify-items: start;
+          align-items: start;
+          text-align: left;
+        }
+
+        .site-banner-link {
+          justify-self: start;
+          align-self: start;
+          justify-content: flex-start;
           text-align: left;
         }
 
@@ -1227,16 +1286,19 @@ function renderLandingPage(serviceName: string, extensionDownloadUrl: string) {
             </div>
 
             <div class="cta-row">
-              <button
-                class="button button-primary"
-                type="button"
-                data-open-install-modal
-                aria-haspopup="dialog"
-                aria-controls="extension-install-modal"
-              >
-                View dev install steps
-              </button>
-              <a class="button button-secondary" href="#install">Try the web client</a>
+              <div class="cta-meta">
+                <span class="cta-status">Coming soon on webstore</span>
+                <button
+                  class="cta-link"
+                  type="button"
+                  data-open-install-modal
+                  aria-haspopup="dialog"
+                  aria-controls="extension-install-modal"
+                >
+                  Dev hackathon install instructions
+                </button>
+              </div>
+              <a class="button button-primary" href="#install">Try the web client</a>
             </div>
           </div>
 
