@@ -4,7 +4,8 @@
   <img src="public/icon.png" alt="Structure Queries logo" width="120" />
 </p>
 
-Structure Queries is a voice-enabled page analysis app for dense web content such as research papers, articles, blog posts, and technical documentation.
+Structure Queries lets you interact with any web page via text or voice.
+It is built for dense web content such as research papers, articles, blog posts, and technical documentation.
 
 The current implementation combines:
 
@@ -24,7 +25,7 @@ The repo is a monorepo with:
 ![Structure Queries main splash](public/splash-1280x800.png)
 
 ## Workflow visuals
-End-to-end product flow from page preparation to voice reply.
+End-to-end product flow from page preparation to text or voice reply.
 
 ![Workflow 1](public/workflow_1.png)
 
@@ -223,6 +224,7 @@ NODE_ENV=development
 DOTENV_CONFIG_PATH=
 
 ELEVENLABS_DEFAULT_VOICE_ID=
+ELEVENLABS_DEFAULT_MODEL_ID=eleven_multilingual_v2
 
 SAMSAR_PUBLIC_API_BASE_URL=https://api.samsar.one
 APP_NAME=test
@@ -234,8 +236,6 @@ FIRECRAWL_MAX_LINKS=10
 FIRECRAWL_POLL_INTERVAL_SECONDS=5
 FIRECRAWL_TIMEOUT_SECONDS=120
 ```
-
-`ELEVENLABS_DEFAULT_MODEL_ID` is not required for local setup. The server already defaults it to `eleven_multilingual_v2` unless you explicitly override it in code or env.
 
 Firecrawl local/self-hosted note:
 

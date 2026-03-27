@@ -217,28 +217,31 @@
       </section>
 
       <section class="hero-surface">
-        <div class="hero-stage">
-          <div class="hero-emblem">
-            <img
-              src="./structured-queries-monogram.svg"
-              class="hero-mark"
-              alt=""
-            />
-
-            <div class="voice-orb-shell" aria-hidden="true">
-              <div class="voice-ring voice-ring-one"></div>
-              <div class="voice-ring voice-ring-two"></div>
-              <div class="voice-orb">
-                <div class="voice-eq">
-                  <span></span>
-                  <span></span>
-                  <span></span>
-                  <span></span>
-                  <span></span>
-                </div>
-                <div class="voice-orb-core"></div>
-              </div>
-            </div>
+        <div class="interaction-mode-row">
+          <p class="surface-label">Mode</p>
+          <div
+            class="interaction-switch"
+            role="tablist"
+            aria-label="Interaction mode"
+          >
+            <button
+              id="interaction-mode-voice"
+              class="interaction-switch-button"
+              type="button"
+              role="tab"
+              aria-selected="true"
+            >
+              Voice
+            </button>
+            <button
+              id="interaction-mode-text"
+              class="interaction-switch-button"
+              type="button"
+              role="tab"
+              aria-selected="false"
+            >
+              Text
+            </button>
           </div>
         </div>
 
@@ -265,32 +268,117 @@
           </p>
         </section>
 
-        <div id="button-row" class="button-row">
-          <button
-            id="analyze-button"
-            class="secondary-button action-button"
-            type="button"
-          >
-            <span
-              id="analyze-button-icon"
-              class="button-icon"
-              aria-hidden="true"
-            ></span>
-            <span id="analyze-button-label">Prepare page</span>
-          </button>
-          <button
-            id="voice-toggle-button"
-            class="primary-button action-button"
-            type="button"
-          >
-            <span
-              id="voice-toggle-button-icon"
-              class="button-icon"
-              aria-hidden="true"
-            ></span>
-            <span id="voice-toggle-button-label">Start voice</span>
-          </button>
-        </div>
+        <section id="voice-mode-shell" class="mode-shell">
+          <div class="hero-stage">
+            <div class="hero-emblem">
+              <img
+                src="./structured-queries-monogram.svg"
+                class="hero-mark"
+                alt=""
+              />
+
+              <div class="voice-orb-shell" aria-hidden="true">
+                <div class="voice-ring voice-ring-one"></div>
+                <div class="voice-ring voice-ring-two"></div>
+                <div class="voice-orb">
+                  <div class="voice-eq">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                  <div class="voice-orb-core"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="button-row" class="button-row">
+            <button
+              id="analyze-button"
+              class="secondary-button action-button"
+              type="button"
+            >
+              <span
+                id="analyze-button-icon"
+                class="button-icon"
+                aria-hidden="true"
+              ></span>
+              <span id="analyze-button-label">Prepare page</span>
+            </button>
+            <button
+              id="voice-toggle-button"
+              class="primary-button action-button"
+              type="button"
+            >
+              <span
+                id="voice-toggle-button-icon"
+                class="button-icon"
+                aria-hidden="true"
+              ></span>
+              <span id="voice-toggle-button-label">Start voice</span>
+            </button>
+          </div>
+        </section>
+
+        <section id="text-mode-shell" class="text-mode-shell" hidden>
+          <div class="text-mode-toolbar">
+            <div class="text-mode-copy">
+              <p class="surface-label">Text Chat</p>
+              <p id="text-chat-status" class="text-chat-status">
+                Ask about this page in text.
+              </p>
+            </div>
+            <button
+              id="text-analyze-button"
+              class="secondary-button text-analyze-button"
+              type="button"
+            >
+              <span
+                id="text-analyze-button-icon"
+                class="button-icon"
+                aria-hidden="true"
+              ></span>
+              <span id="text-analyze-button-label">Prepare page</span>
+            </button>
+          </div>
+
+          <div
+            id="text-chat-thread"
+            class="text-chat-thread"
+            aria-live="polite"
+          ></div>
+
+          <form id="text-chat-form" class="text-chat-compose">
+            <label class="text-chat-input-shell" for="text-chat-input">
+              <span class="text-chat-input-label">Ask about this page</span>
+              <textarea
+                id="text-chat-input"
+                rows="3"
+                placeholder="Summarize the page, explain a section, or ask a focused follow-up."
+              ></textarea>
+            </label>
+
+            <div class="text-chat-compose-footer">
+              <p class="text-chat-hint">
+                Text mode uses the analysis and retrieval pipeline only. No transcription or voice playback.
+              </p>
+              <button
+                id="text-chat-submit"
+                class="primary-button action-button"
+                type="submit"
+              >
+                <span
+                  id="text-chat-submit-icon"
+                  class="button-icon"
+                  aria-hidden="true"
+                ></span>
+                <span id="text-chat-submit-label">Send</span>
+              </button>
+            </div>
+          </form>
+        </section>
       </section>
 
       <details class="drawer">

@@ -163,6 +163,7 @@ interface RuntimeMessage {
 }
 
 type LogRole = "system" | "user" | "assistant";
+type InteractionMode = "voice" | "text";
 type NotificationAction = "recharge";
 type WebSocketPhase =
   | "idle"
@@ -172,6 +173,42 @@ type WebSocketPhase =
   | "thinking"
   | "synthesizing"
   | "error";
+
+interface TextChatChunk {
+  id: string;
+  score?: number;
+  text: string;
+}
+
+interface TextChatMessage {
+  id: string;
+  role: LogRole;
+  text: string;
+  chunks?: TextChatChunk[];
+  warnings?: string[];
+  pending?: boolean;
+}
+
+interface TextChatResponsePayload {
+  ok: boolean;
+  completion?: {
+    choices?: Array<{
+      message?: {
+        content?: string;
+      };
+    }>;
+  };
+  response?: {
+    text?: string;
+    warnings?: string[];
+    retrieval?: {
+      query?: string;
+      templateId?: string;
+      chunks?: TextChatChunk[];
+    } | null;
+  };
+  error?: string;
+}
 
 interface AppState {
   assistantSessionId?: string;
@@ -195,6 +232,7 @@ interface AppState {
   websocketState: "disconnected" | "connecting" | "ready";
   websocketPhase: WebSocketPhase;
   websocketDetail: string;
+  interactionMode: InteractionMode;
   voices: VoicesPayload["voices"];
   voiceWarning?: string;
   creditIssueMessage?: string;
@@ -212,6 +250,11 @@ interface AppState {
   conversationActive: boolean;
   assistantSpeaking: boolean;
   recording: boolean;
+  textDraft: string;
+  textMessages: TextChatMessage[];
+  textSubmitting: boolean;
+  pendingTextPrompt?: string;
+  pendingTextMessageId?: string;
   maxPrepareCredits: number;
 }
 
@@ -306,6 +349,34 @@ const voicePreviewButton =
 const voiceWarningNode = document.querySelector<HTMLElement>("#voice-warning");
 const languageSelect =
   document.querySelector<HTMLSelectElement>("#language-select");
+const interactionModeVoiceButton =
+  document.querySelector<HTMLButtonElement>("#interaction-mode-voice");
+const interactionModeTextButton =
+  document.querySelector<HTMLButtonElement>("#interaction-mode-text");
+const voiceModeShellNode =
+  document.querySelector<HTMLElement>("#voice-mode-shell");
+const textModeShellNode =
+  document.querySelector<HTMLElement>("#text-mode-shell");
+const textAnalyzeButton =
+  document.querySelector<HTMLButtonElement>("#text-analyze-button");
+const textAnalyzeButtonLabel =
+  document.querySelector<HTMLElement>("#text-analyze-button-label");
+const textAnalyzeButtonIcon =
+  document.querySelector<HTMLElement>("#text-analyze-button-icon");
+const textChatStatusNode =
+  document.querySelector<HTMLElement>("#text-chat-status");
+const textChatThreadNode =
+  document.querySelector<HTMLElement>("#text-chat-thread");
+const textChatFormNode =
+  document.querySelector<HTMLFormElement>("#text-chat-form");
+const textChatInputNode =
+  document.querySelector<HTMLTextAreaElement>("#text-chat-input");
+const textChatSubmitButton =
+  document.querySelector<HTMLButtonElement>("#text-chat-submit");
+const textChatSubmitButtonLabel =
+  document.querySelector<HTMLElement>("#text-chat-submit-label");
+const textChatSubmitButtonIcon =
+  document.querySelector<HTMLElement>("#text-chat-submit-icon");
 
 const state: AppState = {
   currentUser: null,
@@ -322,6 +393,7 @@ const state: AppState = {
   websocketState: "disconnected",
   websocketPhase: "idle",
   websocketDetail: "Idle",
+  interactionMode: "voice",
   voices: [],
   voiceWarning: undefined,
   creditIssueMessage: undefined,
@@ -336,6 +408,11 @@ const state: AppState = {
   pendingAssistantLanguage: undefined,
   assistantSpeaking: false,
   recording: false,
+  textDraft: "",
+  textMessages: [],
+  textSubmitting: false,
+  pendingTextPrompt: undefined,
+  pendingTextMessageId: undefined,
   maxPrepareCredits: DEFAULT_PREPARE_PAGE_MAX_CREDITS
 };
 
@@ -345,6 +422,7 @@ let activeAssistantAudio: HTMLAudioElement | undefined;
 let activeAssistantAudioObjectUrl: string | undefined;
 let activeVoicePreviewAudio: HTMLAudioElement | undefined;
 let activeAnalyzeRequestController: AbortController | undefined;
+let activeTextRequestController: AbortController | undefined;
 let resumeConversationTimer: number | undefined;
 let conversationIdleTimer: number | undefined;
 let notificationTimer: number | undefined;
@@ -385,6 +463,12 @@ const BUTTON_ICONS = {
       <path d="M15 3.9v3.8h-3.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
       <path d="M4.9 12.8A5.6 5.6 0 0 0 14 14.7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
       <path d="M5 16.1v-3.8h3.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  `,
+  send: `
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path d="M3.8 10 15.7 4.4c.7-.3 1.4.4 1.1 1.1L11.2 17.4c-.3.7-1.3.7-1.6 0L7.8 12l-4-1.8c-.7-.3-.7-1.3 0-1.6Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="m7.8 12 4.6-4.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
     </svg>
   `,
   loader: `
@@ -706,6 +790,181 @@ function abortActiveAnalyzeRequest() {
     activeAnalyzeRequestController.abort();
     activeAnalyzeRequestController = undefined;
   }
+}
+
+function abortActiveTextRequest() {
+  if (activeTextRequestController) {
+    activeTextRequestController.abort();
+    activeTextRequestController = undefined;
+  }
+}
+
+function appendTextChatMessage(
+  role: LogRole,
+  text: string,
+  options?: {
+    chunks?: TextChatChunk[];
+    warnings?: string[];
+    pending?: boolean;
+  }
+) {
+  const message: TextChatMessage = {
+    id: crypto.randomUUID(),
+    role,
+    text,
+    chunks: options?.chunks,
+    warnings: options?.warnings,
+    pending: options?.pending
+  };
+
+  state.textMessages = [...state.textMessages, message];
+  return message.id;
+}
+
+function updateTextChatMessage(
+  messageId: string | undefined,
+  updater: (message: TextChatMessage) => TextChatMessage
+) {
+  if (!messageId) {
+    return;
+  }
+
+  state.textMessages = state.textMessages.map((message) =>
+    message.id === messageId ? updater(message) : message
+  );
+}
+
+function clearPendingTextPromptState() {
+  updateTextChatMessage(state.pendingTextMessageId, (message) => ({
+    ...message,
+    pending: false
+  }));
+  state.pendingTextPrompt = undefined;
+  state.pendingTextMessageId = undefined;
+}
+
+function resetTextConversation() {
+  abortActiveTextRequest();
+  state.textDraft = "";
+  state.textMessages = [];
+  state.textSubmitting = false;
+  state.pendingTextPrompt = undefined;
+  state.pendingTextMessageId = undefined;
+}
+
+function buildTextChatMessages() {
+  return state.textMessages
+    .filter((message) => message.role === "user" || message.role === "assistant")
+    .map((message) => ({
+      role: message.role,
+      content: message.text
+    }));
+}
+
+function formatTextChatScore(score?: number) {
+  return typeof score === "number" ? score.toFixed(3) : undefined;
+}
+
+function renderTextChatThread() {
+  if (!textChatThreadNode) {
+    return;
+  }
+
+  textChatThreadNode.innerHTML = "";
+
+  if (state.textMessages.length === 0) {
+    const emptyState = document.createElement("div");
+    const title = document.createElement("p");
+    const copy = document.createElement("p");
+
+    emptyState.className = "text-chat-empty";
+    title.className = "text-chat-empty-title";
+    title.textContent = state.analysisReady
+      ? "Ask a focused question about this page."
+      : "Start with a text question or prepare the page first.";
+    copy.className = "text-chat-empty-copy";
+    copy.textContent = state.analysisReady
+      ? "Replies stay in text and include the retrieved context used to answer."
+      : "The first text question can prepare the page context, then return a grounded answer without using transcription or TTS.";
+    emptyState.append(title, copy);
+    textChatThreadNode.append(emptyState);
+    return;
+  }
+
+  for (const message of state.textMessages) {
+    const article = document.createElement("article");
+    const roleNode = document.createElement("p");
+    const bodyNode = document.createElement("p");
+
+    article.className = `text-chat-message text-chat-message-${message.role}`;
+    if (message.pending) {
+      article.classList.add("pending");
+    }
+
+    roleNode.className = "text-chat-role";
+    roleNode.textContent =
+      message.role === "user"
+        ? "You"
+        : message.role === "assistant"
+          ? "Structure Queries"
+          : "System";
+    bodyNode.className = "text-chat-message-body";
+    bodyNode.textContent = message.text;
+    article.append(roleNode, bodyNode);
+
+    if (message.warnings?.length) {
+      for (const warning of message.warnings) {
+        const warningNode = document.createElement("p");
+        warningNode.className = "text-chat-warning";
+        warningNode.textContent = warning;
+        article.append(warningNode);
+      }
+    }
+
+    if (message.chunks?.length) {
+      const sourcesSection = document.createElement("div");
+      const sourcesLabel = document.createElement("p");
+      const sourcesList = document.createElement("div");
+
+      sourcesSection.className = "text-chat-sources";
+      sourcesLabel.className = "text-chat-sources-label";
+      sourcesLabel.textContent = "Retrieved context";
+      sourcesList.className = "text-chat-source-list";
+
+      for (const chunk of message.chunks) {
+        const sourceCard = document.createElement("article");
+        const sourceMeta = document.createElement("div");
+        const sourceId = document.createElement("p");
+        const sourceScore = document.createElement("p");
+        const sourceText = document.createElement("p");
+        const score = formatTextChatScore(chunk.score);
+
+        sourceCard.className = "text-chat-source-card";
+        sourceMeta.className = "text-chat-source-meta";
+        sourceId.className = "text-chat-source-id";
+        sourceId.textContent = chunk.id;
+        sourceMeta.append(sourceId);
+
+        if (score) {
+          sourceScore.className = "text-chat-source-score";
+          sourceScore.textContent = score;
+          sourceMeta.append(sourceScore);
+        }
+
+        sourceText.className = "text-chat-source-text";
+        sourceText.textContent = chunk.text;
+        sourceCard.append(sourceMeta, sourceText);
+        sourcesList.append(sourceCard);
+      }
+
+      sourcesSection.append(sourcesLabel, sourcesList);
+      article.append(sourcesSection);
+    }
+
+    textChatThreadNode.append(article);
+  }
+
+  textChatThreadNode.scrollTop = textChatThreadNode.scrollHeight;
 }
 
 function hideNotification() {
@@ -1265,6 +1524,29 @@ function closeAccountEditor() {
   render();
 }
 
+async function setInteractionMode(mode: InteractionMode) {
+  if (state.interactionMode === mode) {
+    return;
+  }
+
+  if (
+    mode === "text" &&
+    (state.conversationActive || state.recording || state.assistantSpeaking)
+  ) {
+    await stopRecording();
+  }
+
+  if (mode === "text" && activeSocket) {
+    closeWebSocketSession({
+      phase: "idle",
+      detail: "Idle"
+    });
+  }
+
+  state.interactionMode = mode;
+  render();
+}
+
 function render() {
   const creditIssueActive = Boolean(state.creditIssueMessage);
   const analyzeUrlError = getAnalyzeUrlError(state.currentPage?.url);
@@ -1278,10 +1560,13 @@ function render() {
     state.recording ||
     state.assistantSpeaking ||
     waitingForAssistant;
+  const textBusy = state.textSubmitting || Boolean(state.pendingTextPrompt);
   const creditsRemaining = getCreditsRemaining();
   const voiceCreditRequirementMessage =
     getVoiceConversationCreditRequirementMessage();
   const voiceCreditsBlocked = Boolean(voiceCreditRequirementMessage);
+  const showVoiceCreditRequirement =
+    state.interactionMode === "voice" && voiceCreditsBlocked;
   const lowCreditsActive =
     !state.registrationRequired &&
     creditsRemaining !== null &&
@@ -1293,7 +1578,7 @@ function render() {
   }
 
   const showCreditBanner =
-    voiceCreditsBlocked ||
+    showVoiceCreditRequirement ||
     (creditBannerAvailable && !state.creditBannerDismissed);
   const accountName =
     readOptionalString(state.currentUser?.displayName) ??
@@ -1319,6 +1604,8 @@ function render() {
       : "Open the Samsar app to recharge when you need more.";
   const analysisPill = state.isInitializing
     ? "Loading"
+    : textBusy
+      ? "Replying"
     : state.isAnalyzing
       ? "Scanning"
       : !state.serverOnline
@@ -1344,52 +1631,97 @@ function render() {
     ? "Syncing session..."
     : !state.serverOnline
       ? "Server offline."
-      : state.registrationRequired
-        ? "Finish setup to unlock page QA."
-        : creditIssueActive
-          ? "Recharge required."
-        : analyzeUrlError
-          ? analyzeUrlError
+    : state.registrationRequired
+      ? "Finish setup to unlock page QA."
+    : creditIssueActive
+      ? "Recharge required."
+    : analyzeUrlError
+      ? analyzeUrlError
+    : state.interactionMode === "text"
+      ? textBusy && state.pendingTextPrompt
+        ? "Preparing the page before answering..."
+        : textBusy
+          ? "Writing a grounded reply..."
           : state.isAnalyzing
             ? "Building page context..."
-            : state.recording
-              ? "Listening for your question..."
-              : state.assistantSpeaking
-                ? "Speaking the answer..."
-                : waitingForAssistant
-                  ? state.websocketPhase === "transcribing"
-                    ? "Transcribing your question..."
-                    : state.websocketPhase === "synthesizing"
-                      ? "Preparing voice reply..."
-                      : "Thinking..."
-                  : state.conversationActive
-                    ? "Voice chat is live."
-                    : state.analysisReady
-                      ? "Ready for voice questions."
-                      : "Prepare this page once to start QA.";
+            : voiceBusy
+              ? "Voice is active. Stop voice to use text."
+              : state.analysisReady
+                ? "Ready for text questions."
+                : "Ask in text and the page will be prepared first."
+      : state.isAnalyzing
+        ? "Building page context..."
+        : state.recording
+          ? "Listening for your question..."
+          : state.assistantSpeaking
+            ? "Speaking the answer..."
+            : waitingForAssistant
+              ? state.websocketPhase === "transcribing"
+                ? "Transcribing your question..."
+                : state.websocketPhase === "synthesizing"
+                  ? "Preparing voice reply..."
+                  : "Thinking..."
+              : state.conversationActive
+                ? "Voice chat is live."
+                : state.analysisReady
+                  ? "Ready for voice questions."
+                  : "Prepare this page once to start QA.";
   const analysisDetail = state.isInitializing
     ? "Loading client state."
     : !state.serverOnline
       ? "Server unavailable."
-      : state.registrationRequired
-        ? "Finish setup to continue."
-        : creditIssueActive
-          ? "This client is blocked until credits are recharged in Samsar."
-        : analyzeUrlError
-          ? analyzeUrlError
+    : state.registrationRequired
+      ? "Finish setup to continue."
+    : creditIssueActive
+      ? "This client is blocked until credits are recharged in Samsar."
+    : analyzeUrlError
+      ? analyzeUrlError
+    : state.interactionMode === "text"
+      ? textBusy && state.pendingTextPrompt
+        ? "Preparing the page, then sending your question automatically."
+        : textBusy
+          ? "Running the text query through retrieval and grounded completion."
           : state.isAnalyzing
             ? "Reading and indexing this page."
-            : state.recording
-              ? "Listening."
-              : state.assistantSpeaking
-                ? "Speaking."
-                : waitingForAssistant
-                  ? state.websocketDetail || "Generating assistant reply."
-                  : state.conversationActive
-                    ? "Voice chat live."
+            : voiceBusy
+              ? "Voice mode is currently active."
+              : state.analysisReady
+                ? "Text mode is ready."
+                : "Type a question to prepare the page and answer in text."
+      : state.isAnalyzing
+        ? "Reading and indexing this page."
+        : state.recording
+          ? "Listening."
+          : state.assistantSpeaking
+            ? "Speaking."
+            : waitingForAssistant
+              ? state.websocketDetail || "Generating assistant reply."
+              : state.conversationActive
+                ? "Voice chat live."
+                : state.analysisReady
+                  ? "Ready when you are."
+                  : "Create page context first.";
+  const textStatus = state.isInitializing
+    ? "Syncing session..."
+    : !state.serverOnline
+      ? "Server offline."
+      : state.registrationRequired
+        ? "Finish setup to unlock text chat."
+        : creditIssueActive
+          ? "Recharge credits to continue."
+          : analyzeUrlError
+            ? analyzeUrlError
+            : textBusy && state.pendingTextPrompt
+              ? "Preparing the page before sending your question."
+              : textBusy
+                ? "Generating a grounded text response."
+                : state.isAnalyzing
+                  ? "Building page context."
+                  : voiceBusy
+                    ? "Stop voice to switch to text chat."
                     : state.analysisReady
-                      ? "Ready when you are."
-                      : "Create page context first.";
+                      ? "Ask a focused question about this page."
+                      : "Ask your first question and the page will be prepared automatically.";
   const registrationDialogOpen =
     !state.isInitializing && (state.registrationRequired || state.accountEditorOpen);
   const registrationMode = state.registrationRequired ? "register" : "edit";
@@ -1423,6 +1755,7 @@ function render() {
     !state.analysisReady ||
     !state.currentPage?.url ||
     state.isAnalyzing ||
+    state.textSubmitting ||
     state.websocketState === "connecting" ||
     (!voiceBusy && voiceCreditsBlocked);
   const voiceButtonLabel = state.websocketState === "connecting"
@@ -1439,13 +1772,30 @@ function render() {
     : state.analysisReady
       ? "Redo scan"
       : "Prepare page";
+  const textSubmitButtonDisabled =
+    state.isInitializing ||
+    state.registrationRequired ||
+    state.registrationSubmitting ||
+    !state.serverOnline ||
+    creditIssueActive ||
+    Boolean(analyzeUrlError) ||
+    !state.currentPage?.url ||
+    state.isAnalyzing ||
+    textBusy ||
+    voiceBusy ||
+    !readOptionalString(state.textDraft);
+  const textSubmitButtonLabelText = textBusy
+    ? state.pendingTextPrompt
+      ? "Preparing..."
+      : "Sending..."
+    : "Send";
   const creditBannerMessage = creditIssueActive
     ? creditsRemaining === null
       ? "Recharge needed."
       : creditsRemaining === 0
         ? "0 credits left."
         : `${creditCountFormatter.format(creditsRemaining)} credits left.`
-    : voiceCreditsBlocked
+    : showVoiceCreditRequirement
       ? voiceCreditRequirementMessage ?? ""
     : lowCreditsActive && creditsRemaining !== null
       ? creditsRemaining === 0
@@ -1530,6 +1880,7 @@ function render() {
   setText(voiceWarningNode, state.voiceWarning ?? "");
   setText(creditWarningMessageNode, creditBannerMessage);
   setText(notificationMessageNode, state.notificationMessage ?? "");
+  setText(textChatStatusNode, textStatus);
 
   if (voiceWarningNode) {
     voiceWarningNode.hidden = !state.voiceWarning;
@@ -1541,8 +1892,8 @@ function render() {
   }
 
   if (creditWarningDismissButton) {
-    creditWarningDismissButton.hidden = voiceCreditsBlocked;
-    creditWarningDismissButton.disabled = voiceCreditsBlocked;
+    creditWarningDismissButton.hidden = showVoiceCreditRequirement;
+    creditWarningDismissButton.disabled = showVoiceCreditRequirement;
   }
 
   if (notificationNode) {
@@ -1563,9 +1914,34 @@ function render() {
 
   document.body.dataset.loading = state.isInitializing ? "true" : "false";
   document.body.dataset.voiceMode = voiceMode;
+  document.body.dataset.interactionMode = state.interactionMode;
 
   if (overlayShellNode) {
     overlayShellNode.setAttribute("aria-busy", state.isInitializing ? "true" : "false");
+  }
+
+  if (interactionModeVoiceButton) {
+    interactionModeVoiceButton.disabled = state.isInitializing;
+    interactionModeVoiceButton.setAttribute(
+      "aria-selected",
+      String(state.interactionMode === "voice")
+    );
+  }
+
+  if (interactionModeTextButton) {
+    interactionModeTextButton.disabled = state.isInitializing;
+    interactionModeTextButton.setAttribute(
+      "aria-selected",
+      String(state.interactionMode === "text")
+    );
+  }
+
+  if (voiceModeShellNode) {
+    voiceModeShellNode.hidden = state.interactionMode !== "voice";
+  }
+
+  if (textModeShellNode) {
+    textModeShellNode.hidden = state.interactionMode !== "text";
   }
 
   if (registrationOverlayNode) {
@@ -1643,7 +2019,8 @@ function render() {
       creditIssueActive ||
       Boolean(analyzeUrlError) ||
       state.isAnalyzing ||
-      voiceBusy;
+      voiceBusy ||
+      state.textSubmitting;
     analyzeButton.classList.toggle("button-chip", state.analysisReady);
     setButtonVariant(analyzeButton, state.analysisReady ? "secondary" : "primary");
   }
@@ -1651,6 +2028,29 @@ function render() {
   setText(analyzeButtonLabel, analyzeButtonLabelText);
   setIcon(
     analyzeButtonIcon,
+    state.isAnalyzing ? "loader" : state.analysisReady ? "redo" : "scan"
+  );
+
+  if (textAnalyzeButton) {
+    textAnalyzeButton.disabled =
+      state.isInitializing ||
+      state.registrationRequired ||
+      state.registrationSubmitting ||
+      !state.serverOnline ||
+      creditIssueActive ||
+      Boolean(analyzeUrlError) ||
+      state.isAnalyzing ||
+      voiceBusy ||
+      state.textSubmitting;
+    setButtonVariant(
+      textAnalyzeButton,
+      state.analysisReady ? "secondary" : "primary"
+    );
+  }
+
+  setText(textAnalyzeButtonLabel, analyzeButtonLabelText);
+  setIcon(
+    textAnalyzeButtonIcon,
     state.isAnalyzing ? "loader" : state.analysisReady ? "redo" : "scan"
   );
 
@@ -1678,6 +2078,7 @@ function render() {
   }
 
   renderVoicePreviewButton();
+  renderTextChatThread();
 
   if (languageSelect) {
     languageSelect.disabled =
@@ -1701,6 +2102,30 @@ function render() {
     registrationUsernameNode.disabled =
       state.registrationSubmitting || state.samsarAuthSubmitting;
   }
+
+  if (textChatInputNode) {
+    if (textChatInputNode.value !== state.textDraft) {
+      textChatInputNode.value = state.textDraft;
+    }
+
+    textChatInputNode.disabled =
+      state.isInitializing ||
+      state.registrationRequired ||
+      !state.serverOnline ||
+      creditIssueActive ||
+      Boolean(analyzeUrlError) ||
+      !state.currentPage?.url ||
+      state.isAnalyzing ||
+      textBusy ||
+      voiceBusy;
+  }
+
+  if (textChatSubmitButton) {
+    textChatSubmitButton.disabled = textSubmitButtonDisabled;
+  }
+
+  setText(textChatSubmitButtonLabel, textSubmitButtonLabelText);
+  setIcon(textChatSubmitButtonIcon, textBusy ? "loader" : "send");
 
   if (accountButton) {
     accountButton.disabled =
@@ -1834,6 +2259,7 @@ function showInsufficientCreditsState(message?: string | null) {
 
   creditsRefreshPending = false;
   creditsRefreshInFlight = false;
+  abortActiveTextRequest();
   if (state.currentUser) {
     state.currentUser = {
       ...state.currentUser,
@@ -1842,6 +2268,8 @@ function showInsufficientCreditsState(message?: string | null) {
   }
   state.creditIssueMessage = issueMessage;
   state.creditBannerDismissed = false;
+  clearPendingTextPromptState();
+  state.textSubmitting = false;
   void stopPageRecordingCapture();
   closeWebSocketSession({
     phase: "error",
@@ -2689,6 +3117,157 @@ function setCurrentPrepareRequest(
   state.currentPrepareStatus = request?.status;
 }
 
+async function sendPendingTextPrompt() {
+  const prompt = readOptionalString(state.pendingTextPrompt);
+
+  if (!prompt || state.textSubmitting) {
+    return;
+  }
+
+  if (state.registrationRequired) {
+    clearPendingTextPromptState();
+    appendTextChatMessage("system", "Finish setup before using text chat.");
+    render();
+    return;
+  }
+
+  if (!state.currentPage?.url) {
+    clearPendingTextPromptState();
+    appendTextChatMessage("system", "Open a supported page before asking a text question.");
+    render();
+    return;
+  }
+
+  if (!hasActiveSamsarCredentials() || !state.assistantSessionId) {
+    clearPendingTextPromptState();
+    appendTextChatMessage(
+      "system",
+      "Registration is incomplete. Register this browser installation again."
+    );
+    render();
+    return;
+  }
+
+  if (!state.currentTemplateId) {
+    clearPendingTextPromptState();
+    appendTextChatMessage(
+      "system",
+      "No page context is ready yet. Prepare the page and try again."
+    );
+    render();
+    return;
+  }
+
+  abortActiveTextRequest();
+  const controller = new AbortController();
+  activeTextRequestController = controller;
+  state.textSubmitting = true;
+  render();
+
+  try {
+    const payload = await fetchJson<TextChatResponsePayload>(
+      "/api/chat-completion",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          assistantSessionId: state.assistantSessionId,
+          ...buildSessionCredentialPayload(),
+          language: getSelectedLanguage(),
+          messages: buildTextChatMessages(),
+          pageTitle: state.currentPage.title,
+          pageUrl: state.currentPage.url,
+          stream: false,
+          templateId: state.currentTemplateId
+        })
+      }
+    );
+
+    clearPendingTextPromptState();
+
+    const assistantText =
+      readOptionalString(payload.response?.text) ??
+      readOptionalString(payload.completion?.choices?.[0]?.message?.content) ??
+      "Assistant reply unavailable.";
+    const chunks = payload.response?.retrieval?.chunks ?? undefined;
+    const warnings = payload.response?.warnings ?? [];
+
+    appendTextChatMessage("assistant", assistantText, {
+      chunks,
+      warnings
+    });
+    await refreshCreditsAfterRequest();
+  } catch (error) {
+    if (isAbortError(error)) {
+      return;
+    }
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Failed to generate a grounded text reply.";
+
+    clearPendingTextPromptState();
+
+    if (isInsufficientCreditsMessage(message)) {
+      showInsufficientCreditsState(message);
+      return;
+    }
+
+    appendTextChatMessage("system", message);
+  } finally {
+    if (activeTextRequestController === controller) {
+      activeTextRequestController = undefined;
+    }
+
+    state.textSubmitting = false;
+    render();
+  }
+}
+
+async function submitTextPrompt() {
+  const prompt = readOptionalString(state.textDraft);
+
+  if (!prompt || state.textSubmitting || state.isAnalyzing) {
+    return;
+  }
+
+  if (state.registrationRequired) {
+    appendTextChatMessage("system", "Finish setup before using text chat.");
+    render();
+    return;
+  }
+
+  const analyzeUrlError = getAnalyzeUrlError(state.currentPage?.url);
+
+  if (analyzeUrlError) {
+    appendTextChatMessage("system", analyzeUrlError);
+    render();
+    return;
+  }
+
+  const messageId = appendTextChatMessage("user", prompt, {
+    pending: true
+  });
+
+  state.textDraft = "";
+  state.pendingTextPrompt = prompt;
+  state.pendingTextMessageId = messageId;
+  render();
+
+  if (!state.analysisReady || !state.currentTemplateId) {
+    await analyzeCurrentPage({
+      connectSocket: false
+    });
+    return;
+  }
+
+  await sendPendingTextPrompt();
+}
+
 async function finalizePreparedPage(input: {
   url: string;
   requestId: string;
@@ -2728,6 +3307,10 @@ async function finalizePreparedPage(input: {
       console.error("Failed to prime websocket session after prepare-page", error);
     });
   }
+
+  if (state.pendingTextPrompt) {
+    void sendPendingTextPrompt();
+  }
 }
 
 async function failPreparedPage(input: {
@@ -2756,6 +3339,14 @@ async function failPreparedPage(input: {
   await syncCreditsRemainingFromPrepareRequest(input.creditsRemaining);
   render();
   appendLog("system", message);
+
+  if (state.pendingTextPrompt || state.interactionMode === "text") {
+    if (state.pendingTextPrompt) {
+      clearPendingTextPromptState();
+    }
+    appendTextChatMessage("system", message);
+    render();
+  }
 }
 
 function schedulePendingPreparePageStatusPoll(delayMs = 2_500) {
@@ -3591,7 +4182,9 @@ async function stopRecording() {
   });
 }
 
-async function analyzeCurrentPage() {
+async function analyzeCurrentPage(input?: {
+  connectSocket?: boolean;
+}) {
   if (!state.browserSessionId || !state.currentPage?.url) {
     return;
   }
@@ -3678,7 +4271,7 @@ async function analyzeCurrentPage() {
         creditsRemaining: Number.isFinite(creditsRemaining)
           ? creditsRemaining
           : null,
-        connectSocket: true,
+        connectSocket: input?.connectSocket ?? state.interactionMode === "voice",
         logMessage: "Page ready for QA."
       });
       return;
@@ -3735,6 +4328,7 @@ async function refreshAll() {
     state.currentPage = await fetchPageContext();
 
     if (previousPageUrl && previousPageUrl !== state.currentPage?.url) {
+      resetTextConversation();
       if (state.conversationActive || state.recording || state.assistantSpeaking) {
         await stopRecording();
       } else {
@@ -3850,6 +4444,12 @@ analyzeButton?.addEventListener("click", () => {
   void analyzeCurrentPage();
 });
 
+textAnalyzeButton?.addEventListener("click", () => {
+  void analyzeCurrentPage({
+    connectSocket: false
+  });
+});
+
 registrationFormNode?.addEventListener("submit", (event) => {
   event.preventDefault();
   void submitAccountProfile();
@@ -3899,6 +4499,31 @@ voiceToggleButton?.addEventListener("click", () => {
       normalizeRecordingError(error)
     );
   });
+});
+
+interactionModeVoiceButton?.addEventListener("click", () => {
+  void setInteractionMode("voice");
+});
+
+interactionModeTextButton?.addEventListener("click", () => {
+  void setInteractionMode("text");
+});
+
+textChatFormNode?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  void submitTextPrompt();
+});
+
+textChatInputNode?.addEventListener("input", () => {
+  state.textDraft = textChatInputNode.value;
+  render();
+});
+
+textChatInputNode?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    void submitTextPrompt();
+  }
 });
 
 voicePreviewButton?.addEventListener("click", () => {
@@ -3955,6 +4580,7 @@ prepareMaxCreditsInput?.addEventListener("blur", () => {
 window.addEventListener("pagehide", () => {
   clearPrepareStatusPollTimer();
   abortActiveAnalyzeRequest();
+  abortActiveTextRequest();
   stopVoicePreviewPlayback();
   void stopRecording();
 });
