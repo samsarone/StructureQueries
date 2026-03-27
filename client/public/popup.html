@@ -107,6 +107,28 @@
           </p>
         </section>
 
+        <label class="field field-select">
+          <span class="field-label-row">
+            <span>Caching time</span>
+            <span
+              class="field-tooltip"
+              aria-label="Prepared pages are cached on the server for repeat analysis. Default is 1 hour. You can extend it to 1 day."
+              role="img"
+              tabindex="0"
+              title="Prepared pages are cached on the server for repeat analysis. Default is 1 hour. You can extend it to 1 day."
+            >
+              ?
+            </span>
+          </span>
+          <select id="caching-ttl-select">
+            <option value="3600">1 hour</option>
+            <option value="86400">1 day</option>
+          </select>
+          <small class="field-hint">
+            Prepared pages stay cached on the server so you can come back without preparing again.
+          </small>
+        </label>
+
         <div class="dialog-actions">
           <button
             id="registration-submit-button"
@@ -324,12 +346,9 @@
 
         <section id="text-mode-shell" class="text-mode-shell" hidden>
           <div class="text-mode-toolbar">
-            <div class="text-mode-copy">
-              <p class="surface-label">Text Chat</p>
-              <p id="text-chat-status" class="text-chat-status">
-                Ask about this page in text.
-              </p>
-            </div>
+            <p id="text-chat-status" class="text-chat-status">
+              Ready.
+            </p>
             <button
               id="text-analyze-button"
               class="secondary-button text-analyze-button"
@@ -351,19 +370,12 @@
           ></div>
 
           <form id="text-chat-form" class="text-chat-compose">
-            <label class="text-chat-input-shell" for="text-chat-input">
-              <span class="text-chat-input-label">Ask about this page</span>
+            <div class="text-chat-compose-footer">
               <textarea
                 id="text-chat-input"
                 rows="3"
-                placeholder="Summarize the page, explain a section, or ask a focused follow-up."
+                placeholder="Ask a question"
               ></textarea>
-            </label>
-
-            <div class="text-chat-compose-footer">
-              <p class="text-chat-hint">
-                Text mode uses the analysis and retrieval pipeline only. No transcription or voice playback.
-              </p>
               <button
                 id="text-chat-submit"
                 class="primary-button action-button"

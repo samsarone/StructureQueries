@@ -4,6 +4,7 @@ import { env } from "../config/env.js";
 
 export interface StructureQueriesRegistrationInput {
   browserSessionId: string;
+  cachingTtlSeconds?: number | null;
   extensionId?: string;
   email?: string;
   username?: string;
@@ -37,6 +38,19 @@ function readOptionalString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+function readOptionalPositiveInteger(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return Math.floor(value);
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : undefined;
+  }
+
+  return undefined;
+}
+
 export function buildStructureQueriesAssistantSystemPrompt() {
   return [
     "You are the Structure Queries assistant for question answering over dense documents and webpages.",
@@ -57,6 +71,24 @@ export function buildStructureQueriesAssistantSystemPrompt() {
   ].join("\n");
 }
 
+export function buildStructureQueriesTextAssistantSystemPrompt() {
+  return [
+    "You are the Structure Queries assistant for text-based question answering over dense documents and webpages.",
+    "Always answer in the same language as the user's latest message unless the user explicitly asks to switch languages.",
+    "Use the retrieved document context provided in the conversation as your primary evidence and synthesize across relevant sections when helpful.",
+    "Give the most useful answer supported by that context, starting with the shortest complete answer that fully addresses the user's request. When the context is partial, ambiguous, or incomplete, say what is directly supported and clearly label any brief inference or uncertainty.",
+    "Do not invent document-specific facts, quotes, figures, or citations that are not supported by the retrieved context.",
+    "Optimize for on-screen reading: concise, direct, and easy to scan.",
+    "By default, keep responses brief and use short paragraphs. Use bullets only when they make the answer clearer.",
+    "If a short answer is sufficient, stop once the answer is complete.",
+    "Keep technical terms, acronyms, APIs, version strings, product names, code identifiers, and quoted text accurate as written in the source context.",
+    "Do not rewrite wording for pronunciation, spoken cadence, or TTS normalization.",
+    "Do not expand acronyms or add spoken-form scaffolding unless the user asks for that explicitly.",
+    "Prefer grounded answers and clear reasoning over filler or stylistic flourish.",
+    "Only produce image-style output when the user explicitly asks for an image, visual, illustration, mockup, or similar asset."
+  ].join("\n");
+}
+
 export function buildStructureQueriesExternalUser(
   input: StructureQueriesRegistrationInput
 ): ExternalUserIdentity {
@@ -64,6 +96,7 @@ export function buildStructureQueriesExternalUser(
     env.integrations.samsar.externalAssistantPromptVersion;
   const browserInstallation = {
     browser_session_id: input.browserSessionId,
+    caching_ttl: readOptionalPositiveInteger(input.cachingTtlSeconds) ?? null,
     extension_id: readOptionalString(input.extensionId) ?? null,
     preferred_language: readOptionalString(input.preferredLanguage ?? undefined) ?? null,
     preferred_voice_id: readOptionalString(input.preferredVoiceId) ?? null,

@@ -12,6 +12,11 @@
   const DEFAULT_PREPARE_PAGE_MAX_CREDITS = 20;
   const MIN_PREPARE_PAGE_MAX_CREDITS = 1;
   const MAX_PREPARE_PAGE_MAX_CREDITS = 100;
+  const DEFAULT_CACHING_TTL_SECONDS = 60 * 60;
+  const ONE_DAY_CACHING_TTL_SECONDS = 24 * 60 * 60;
+  const EMBEDDING_TEMPLATE_EXPIRED_CODE = "EMBEDDING_TEMPLATE_EXPIRED";
+  const EXPIRED_PAGE_CACHE_MESSAGE =
+    "This page cache expired. Prepare the page again.";
   const MIN_SPEECH_DURATION_MS = 360;
   const SILENCE_STOP_DURATION_MS = 520;
   const MIN_SIGNAL_RMS = 0.02;
@@ -111,6 +116,7 @@
     advancedDisplayName: document.querySelector("#advanced-display-name"),
     advancedEmail: document.querySelector("#advanced-email"),
     advancedUsername: document.querySelector("#advanced-username"),
+    cachingTtlSelect: document.querySelector("#caching-ttl-select"),
     prepareMaxCreditsInput: document.querySelector("#prepare-max-credits-input"),
     settingsCreditsRemaining: document.querySelector("#settings-credits-remaining"),
     settingsCreditsCaption: document.querySelector("#settings-credits-caption"),
@@ -168,6 +174,8 @@
     noticeMessage: null,
     settingsSaving: false,
     pendingAction: null,
+    pageCacheExpired: false,
+    cachingTtlSeconds: DEFAULT_CACHING_TTL_SECONDS,
     maxPrepareCredits: DEFAULT_PREPARE_PAGE_MAX_CREDITS
   };
 
@@ -223,6 +231,16 @@
       MIN_PREPARE_PAGE_MAX_CREDITS,
       Math.min(MAX_PREPARE_PAGE_MAX_CREDITS, Math.floor(parsed))
     );
+  }
+
+  function normalizeCachingTtlSeconds(value) {
+    return Number(value) === ONE_DAY_CACHING_TTL_SECONDS
+      ? ONE_DAY_CACHING_TTL_SECONDS
+      : DEFAULT_CACHING_TTL_SECONDS;
+  }
+
+  function isExpiredTemplateCode(code) {
+    return code === EMBEDDING_TEMPLATE_EXPIRED_CODE;
   }
 
   function safeStorageGet(key) {
@@ -825,10 +843,19 @@
     refs.prepareMaxCreditsInput.value = String(state.maxPrepareCredits);
   }
 
+  function syncCachingTtlInput() {
+    if (!refs.cachingTtlSelect) {
+      return;
+    }
+
+    refs.cachingTtlSelect.value = String(state.cachingTtlSeconds);
+  }
+
   function savePreparePageSettings() {
     safeStorageSet(
       PREPARE_PAGE_SETTINGS_STORAGE_KEY,
       JSON.stringify({
+        cachingTtlSeconds: state.cachingTtlSeconds,
         maxPrepareCredits: state.maxPrepareCredits
       })
     );
@@ -838,21 +865,28 @@
     const stored = safeStorageGet(PREPARE_PAGE_SETTINGS_STORAGE_KEY);
 
     if (!stored) {
+      state.cachingTtlSeconds = DEFAULT_CACHING_TTL_SECONDS;
       state.maxPrepareCredits = DEFAULT_PREPARE_PAGE_MAX_CREDITS;
+      syncCachingTtlInput();
       syncPreparePageCreditCapInput();
       return;
     }
 
     try {
       const payload = JSON.parse(stored);
+      state.cachingTtlSeconds = normalizeCachingTtlSeconds(
+        payload?.cachingTtlSeconds
+      );
       state.maxPrepareCredits = normalizePreparePageCreditCap(
         payload?.maxPrepareCredits
       );
     } catch {
+      state.cachingTtlSeconds = DEFAULT_CACHING_TTL_SECONDS;
       state.maxPrepareCredits = DEFAULT_PREPARE_PAGE_MAX_CREDITS;
       safeStorageRemove(PREPARE_PAGE_SETTINGS_STORAGE_KEY);
     }
 
+    syncCachingTtlInput();
     syncPreparePageCreditCapInput();
   }
 
@@ -861,6 +895,15 @@
       refs.prepareMaxCreditsInput?.value ?? state.maxPrepareCredits
     );
     syncPreparePageCreditCapInput();
+    savePreparePageSettings();
+    render();
+  }
+
+  function updateCachingTtlFromInput() {
+    state.cachingTtlSeconds = normalizeCachingTtlSeconds(
+      refs.cachingTtlSelect?.value ?? state.cachingTtlSeconds
+    );
+    syncCachingTtlInput();
     savePreparePageSettings();
     render();
   }
@@ -904,8 +947,13 @@
         readOptionalString(payload.preferredLanguage) ??
           getPreferredLanguageFromUser(payload.externalUser)
       );
+      state.cachingTtlSeconds =
+        getCachingTtlSecondsFromUser(payload.externalUser) ??
+        state.cachingTtlSeconds;
+      syncCachingTtlInput();
       state.preferredVoiceId = readOptionalString(payload.preferredVoiceId) ?? null;
       state.preferredVoiceName = readOptionalString(payload.preferredVoiceName) ?? null;
+      state.pageCacheExpired = false;
       state.registrationRequired = !(
         (state.externalUserApiKey || state.authToken) &&
         state.assistantSessionId
@@ -922,6 +970,7 @@
     state.assistantSessionId = null;
     state.registrationRequired = true;
     state.creditIssueMessage = null;
+    state.pageCacheExpired = false;
     safeStorageRemove(REGISTRATION_STORAGE_KEY);
   }
 
@@ -957,6 +1006,7 @@
       };
       state.currentTemplateId = readOptionalString(payload?.templateId) ?? null;
       state.analysisReady = Boolean(state.currentTemplateId);
+      state.pageCacheExpired = false;
     } catch {
       safeStorageRemove(PAGE_STATE_STORAGE_KEY);
     }
@@ -970,6 +1020,7 @@
       state.currentPage = null;
       state.currentTemplateId = null;
       state.analysisReady = false;
+      state.pageCacheExpired = false;
       savePageState();
       return;
     }
@@ -982,6 +1033,7 @@
     if (previousUrl && previousUrl !== normalized) {
       state.currentTemplateId = null;
       state.analysisReady = false;
+      state.pageCacheExpired = false;
       resetConversationLog();
       if (state.conversationActive || state.recording || state.assistantSpeaking) {
         void stopConversationMode({
@@ -1040,6 +1092,10 @@
     if (preferredLanguage) {
       setSelectedLanguage(preferredLanguage);
     }
+    state.cachingTtlSeconds =
+      getCachingTtlSecondsFromUser(state.currentUser) ??
+      state.cachingTtlSeconds;
+    syncCachingTtlInput();
     syncCreditIssueStateWithBalance();
     populateProfileInputs(true);
     saveRegistrationState();
@@ -1095,6 +1151,23 @@
       readOptionalString(browserInstallation.preferred_language) ??
       readOptionalString(browserInstallation.preferredLanguage) ??
       null
+    );
+  }
+
+  function getCachingTtlSecondsFromUser(user) {
+    const browserInstallation =
+      user?.browserInstallation && typeof user.browserInstallation === "object"
+        ? user.browserInstallation
+        : user?.browser_installation && typeof user.browser_installation === "object"
+          ? user.browser_installation
+          : null;
+
+    if (!browserInstallation) {
+      return null;
+    }
+
+    return normalizeCachingTtlSeconds(
+      browserInstallation.caching_ttl ?? browserInstallation.cachingTtl
     );
   }
 
@@ -1279,6 +1352,7 @@
       body: JSON.stringify({
         authToken: getActiveAuthToken(),
         browserSessionId: state.browserSessionId,
+        cachingTtlSeconds: state.cachingTtlSeconds,
         displayName: identity.displayName,
         email: identity.email,
         username: identity.username,
@@ -1303,7 +1377,10 @@
       },
       body: JSON.stringify({
         assistantSessionId: state.assistantSessionId,
-        ...buildSessionCredentialPayload()
+        ...buildSessionCredentialPayload(),
+        cachingTtlSeconds: state.cachingTtlSeconds,
+        preferredLanguage: getSelectedLanguage(),
+        preferredVoiceId: getSelectedVoiceId()
       })
     });
 
@@ -1330,6 +1407,7 @@
         body: JSON.stringify({
           assistantSessionId: state.assistantSessionId,
           ...buildSessionCredentialPayload(),
+          cachingTtlSeconds: state.cachingTtlSeconds,
           displayName: identity.displayName,
           email: identity.email,
           username: identity.username,
@@ -1510,6 +1588,38 @@
     render();
   }
 
+  function expireCurrentPageCache(input) {
+    const message =
+      readOptionalString(input?.message) ?? EXPIRED_PAGE_CACHE_MESSAGE;
+
+    state.analysisReady = false;
+    state.currentTemplateId = null;
+    state.pageCacheExpired = true;
+    state.isAnalyzing = false;
+
+    if (state.conversationActive || state.recording || state.assistantSpeaking) {
+      void stopConversationMode({
+        detail: "Prepare page"
+      });
+    } else {
+      closeWebSocketSession({
+        phase: "idle",
+        detail: "Prepare page"
+      });
+    }
+
+    savePageState();
+    render();
+
+    if (input?.appendLog) {
+      appendLog("system", message);
+    }
+
+    if (input?.notify) {
+      showNotice(message);
+    }
+  }
+
   async function refreshIndexStatus() {
     if (!state.currentPage?.url || !state.currentTemplateId) {
       return;
@@ -1519,17 +1629,34 @@
       const payload = await fetchJson(
         `/api/webpages/status?url=${encodeURIComponent(state.currentPage.url)}&templateId=${encodeURIComponent(state.currentTemplateId)}`
       );
+
+      if (
+        isExpiredTemplateCode(payload.code) ||
+        readOptionalString(payload.status) === "expired"
+      ) {
+        expireCurrentPageCache();
+        return;
+      }
+
       state.analysisReady = Boolean(payload.analysisAvailable);
       state.currentTemplateId = readOptionalString(payload.templateId) ?? state.currentTemplateId;
+      state.pageCacheExpired = false;
       savePageState();
-    } catch {
+    } catch (error) {
+      if (isExpiredTemplateCode(error?.code) || error?.status === 410) {
+        expireCurrentPageCache();
+        return;
+      }
+
       state.analysisReady = Boolean(state.currentTemplateId);
     }
   }
 
   async function analyzeCurrentPage() {
     setCurrentPageFromInput();
+    state.pageCacheExpired = false;
     updatePreparePageCreditCapFromInput();
+    updateCachingTtlFromInput();
 
     const analyzeUrlError = getAnalyzeUrlError(state.currentPage?.url);
     if (analyzeUrlError) {
@@ -1555,12 +1682,14 @@
         },
         body: JSON.stringify({
           ...buildSessionCredentialPayload(),
+          cachingTtlSeconds: state.cachingTtlSeconds,
           url: state.currentPage.url,
           maxPrepareCredits: state.maxPrepareCredits
         })
       });
 
       state.analysisReady = Boolean(payload.ok);
+      state.pageCacheExpired = false;
       state.currentTemplateId = readOptionalString(payload.analysis?.templateId) ?? null;
       if (
         state.currentUser &&
@@ -1588,6 +1717,12 @@
 
       if (code === "insufficient_credits" || isInsufficientCreditsMessage(message)) {
         showInsufficientCreditsState(message);
+      } else if (isExpiredTemplateCode(code) || error?.status === 410) {
+        expireCurrentPageCache({
+          appendLog: true,
+          message,
+          notify: true
+        });
       } else {
         appendLog("system", message);
       }
@@ -2013,6 +2148,15 @@
 
       if (code === "insufficient_credits" || isInsufficientCreditsMessage(message)) {
         showInsufficientCreditsState(message);
+        return;
+      }
+
+      if (isExpiredTemplateCode(code)) {
+        expireCurrentPageCache({
+          appendLog: true,
+          message,
+          notify: true
+        });
         return;
       }
 
@@ -2645,6 +2789,10 @@
       return "The page is ready. Start voice when you're ready to ask.";
     }
 
+    if (state.pageCacheExpired) {
+      return EXPIRED_PAGE_CACHE_MESSAGE;
+    }
+
     if (state.currentPage?.url) {
       return "Analyze this page to prepare the conversation.";
     }
@@ -2657,7 +2805,7 @@
       return "Analyzing...";
     }
 
-    return state.analysisReady ? "Re-analyze" : "Analyze page";
+    return state.analysisReady ? "Re-analyze" : "Prepare page";
   }
 
   function getVoiceButtonLabel() {
@@ -2805,6 +2953,15 @@
         : "Sign in to sync your Samsar credits here.";
     }
 
+    if (refs.cachingTtlSelect) {
+      if (refs.cachingTtlSelect.value !== String(state.cachingTtlSeconds)) {
+        refs.cachingTtlSelect.value = String(state.cachingTtlSeconds);
+      }
+
+      refs.cachingTtlSelect.disabled =
+        state.authSubmitting || state.settingsSaving || state.isAnalyzing;
+    }
+
     if (refs.voicePreviewButton) {
       const previewBusy = state.recording || state.assistantSpeaking;
       refs.voicePreviewButton.disabled =
@@ -2890,7 +3047,9 @@
     if (refs.analysisStatus) {
       refs.analysisStatus.textContent = state.analysisReady
         ? `Ready${state.currentTemplateId ? ` • Template ${state.currentTemplateId}` : ""}`
-        : getSurfaceStatusText();
+        : state.pageCacheExpired
+          ? EXPIRED_PAGE_CACHE_MESSAGE
+          : getSurfaceStatusText();
     }
 
     if (refs.pageUrl) {
@@ -3114,6 +3273,10 @@
 
   refs.prepareMaxCreditsInput?.addEventListener("blur", () => {
     updatePreparePageCreditCapFromInput();
+  });
+
+  refs.cachingTtlSelect?.addEventListener("change", () => {
+    updateCachingTtlFromInput();
   });
 
   window.addEventListener("focus", () => {

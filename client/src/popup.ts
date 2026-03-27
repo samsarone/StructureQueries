@@ -19,6 +19,11 @@ const NOTIFICATION_DURATION_MS = 6_000;
 const DEFAULT_PREPARE_PAGE_MAX_CREDITS = 20;
 const MIN_PREPARE_PAGE_MAX_CREDITS = 1;
 const MAX_PREPARE_PAGE_MAX_CREDITS = 100;
+const DEFAULT_CACHING_TTL_SECONDS = 60 * 60;
+const ONE_DAY_CACHING_TTL_SECONDS = 24 * 60 * 60;
+const EMBEDDING_TEMPLATE_EXPIRED_CODE = "EMBEDDING_TEMPLATE_EXPIRED";
+const EXPIRED_PAGE_CACHE_MESSAGE =
+  "This page cache expired. Prepare the page again.";
 const creditCountFormatter = new Intl.NumberFormat();
 
 interface ExtensionSessionPayload {
@@ -63,6 +68,7 @@ interface RegistrationStatePayload {
 }
 
 interface PreparePageSettingsPayload {
+  cachingTtlSeconds?: number;
   maxPrepareCredits?: number;
 }
 
@@ -184,7 +190,6 @@ interface TextChatMessage {
   id: string;
   role: LogRole;
   text: string;
-  chunks?: TextChatChunk[];
   warnings?: string[];
   pending?: boolean;
 }
@@ -245,6 +250,7 @@ interface AppState {
   notificationAction?: NotificationAction;
   pendingAssistantText?: string;
   pendingAssistantLanguage?: string;
+  pageCacheExpired: boolean;
   currentPrepareRequestId?: string;
   currentPrepareStatus?: string;
   conversationActive: boolean;
@@ -255,6 +261,7 @@ interface AppState {
   textSubmitting: boolean;
   pendingTextPrompt?: string;
   pendingTextMessageId?: string;
+  cachingTtlSeconds: number;
   maxPrepareCredits: number;
 }
 
@@ -302,6 +309,8 @@ const settingsCreditsRemainingNode =
   document.querySelector<HTMLElement>("#settings-credits-remaining");
 const settingsCreditsCaptionNode =
   document.querySelector<HTMLElement>("#settings-credits-caption");
+const cachingTtlSelect =
+  document.querySelector<HTMLSelectElement>("#caching-ttl-select");
 const prepareMaxCreditsInput =
   document.querySelector<HTMLInputElement>("#prepare-max-credits-input");
 const samsarAuthButton =
@@ -404,6 +413,7 @@ const state: AppState = {
   voicePreviewVoiceId: undefined,
   notificationMessage: undefined,
   notificationAction: undefined,
+  pageCacheExpired: false,
   conversationActive: false,
   pendingAssistantLanguage: undefined,
   assistantSpeaking: false,
@@ -413,6 +423,7 @@ const state: AppState = {
   textSubmitting: false,
   pendingTextPrompt: undefined,
   pendingTextMessageId: undefined,
+  cachingTtlSeconds: DEFAULT_CACHING_TTL_SECONDS,
   maxPrepareCredits: DEFAULT_PREPARE_PAGE_MAX_CREDITS
 };
 
@@ -506,6 +517,16 @@ function normalizePreparePageCreditCap(value: unknown) {
   );
 }
 
+function normalizeCachingTtlSeconds(value: unknown) {
+  const parsed = Number(value);
+
+  if (parsed === ONE_DAY_CACHING_TTL_SECONDS) {
+    return ONE_DAY_CACHING_TTL_SECONDS;
+  }
+
+  return DEFAULT_CACHING_TTL_SECONDS;
+}
+
 function getErrorCode(error: unknown) {
   return (
     error &&
@@ -527,6 +548,10 @@ function getErrorStatus(error: unknown) {
       ? error.status
       : undefined
   );
+}
+
+function isExpiredTemplateCode(code: string | null | undefined) {
+  return code === EMBEDDING_TEMPLATE_EXPIRED_CODE;
 }
 
 function isAbortError(error: unknown) {
@@ -753,6 +778,28 @@ function getPreferredLanguageFromUser(
   );
 }
 
+function getCachingTtlSecondsFromUser(
+  user?: StructureQueriesExternalUserPayload | null
+) {
+  const browserInstallation = user?.browserInstallation;
+
+  if (!browserInstallation || typeof browserInstallation !== "object") {
+    return undefined;
+  }
+
+  const installation = browserInstallation as Record<string, unknown>;
+
+  return normalizeCachingTtlSeconds(
+    typeof installation.caching_ttl === "number" ||
+      typeof installation.caching_ttl === "string"
+      ? installation.caching_ttl
+      : typeof installation.cachingTtl === "number" ||
+          typeof installation.cachingTtl === "string"
+        ? installation.cachingTtl
+        : undefined
+  );
+}
+
 function clearResumeConversationTimer() {
   if (typeof resumeConversationTimer === "number") {
     window.clearTimeout(resumeConversationTimer);
@@ -803,7 +850,6 @@ function appendTextChatMessage(
   role: LogRole,
   text: string,
   options?: {
-    chunks?: TextChatChunk[];
     warnings?: string[];
     pending?: boolean;
   }
@@ -812,7 +858,6 @@ function appendTextChatMessage(
     id: crypto.randomUUID(),
     role,
     text,
-    chunks: options?.chunks,
     warnings: options?.warnings,
     pending: options?.pending
   };
@@ -861,10 +906,6 @@ function buildTextChatMessages() {
     }));
 }
 
-function formatTextChatScore(score?: number) {
-  return typeof score === "number" ? score.toFixed(3) : undefined;
-}
-
 function renderTextChatThread() {
   if (!textChatThreadNode) {
     return;
@@ -875,24 +916,18 @@ function renderTextChatThread() {
   if (state.textMessages.length === 0) {
     const emptyState = document.createElement("div");
     const title = document.createElement("p");
-    const copy = document.createElement("p");
 
     emptyState.className = "text-chat-empty";
     title.className = "text-chat-empty-title";
-    title.textContent = state.analysisReady
-      ? "Ask a focused question about this page."
-      : "Start with a text question or prepare the page first.";
-    copy.className = "text-chat-empty-copy";
-    copy.textContent = state.analysisReady
-      ? "Replies stay in text and include the retrieved context used to answer."
-      : "The first text question can prepare the page context, then return a grounded answer without using transcription or TTS.";
-    emptyState.append(title, copy);
+    title.textContent = state.analysisReady ? "Ask a question." : "Ready to chat.";
+    emptyState.append(title);
     textChatThreadNode.append(emptyState);
     return;
   }
 
   for (const message of state.textMessages) {
     const article = document.createElement("article");
+    const headerNode = document.createElement("div");
     const roleNode = document.createElement("p");
     const bodyNode = document.createElement("p");
 
@@ -901,16 +936,32 @@ function renderTextChatThread() {
       article.classList.add("pending");
     }
 
+    headerNode.className = "text-chat-message-header";
     roleNode.className = "text-chat-role";
     roleNode.textContent =
       message.role === "user"
         ? "You"
         : message.role === "assistant"
-          ? "Structure Queries"
+          ? "Assistant"
           : "System";
+    headerNode.append(roleNode);
+
+    if (
+      message.role === "assistant" &&
+      !message.pending &&
+      message.text.trim()
+    ) {
+      const copyButton = document.createElement("button");
+      copyButton.className = "text-chat-copy-button";
+      copyButton.type = "button";
+      copyButton.dataset.textChatCopyId = message.id;
+      copyButton.textContent = "Copy";
+      headerNode.append(copyButton);
+    }
+
     bodyNode.className = "text-chat-message-body";
     bodyNode.textContent = message.text;
-    article.append(roleNode, bodyNode);
+    article.append(headerNode, bodyNode);
 
     if (message.warnings?.length) {
       for (const warning of message.warnings) {
@@ -919,46 +970,6 @@ function renderTextChatThread() {
         warningNode.textContent = warning;
         article.append(warningNode);
       }
-    }
-
-    if (message.chunks?.length) {
-      const sourcesSection = document.createElement("div");
-      const sourcesLabel = document.createElement("p");
-      const sourcesList = document.createElement("div");
-
-      sourcesSection.className = "text-chat-sources";
-      sourcesLabel.className = "text-chat-sources-label";
-      sourcesLabel.textContent = "Retrieved context";
-      sourcesList.className = "text-chat-source-list";
-
-      for (const chunk of message.chunks) {
-        const sourceCard = document.createElement("article");
-        const sourceMeta = document.createElement("div");
-        const sourceId = document.createElement("p");
-        const sourceScore = document.createElement("p");
-        const sourceText = document.createElement("p");
-        const score = formatTextChatScore(chunk.score);
-
-        sourceCard.className = "text-chat-source-card";
-        sourceMeta.className = "text-chat-source-meta";
-        sourceId.className = "text-chat-source-id";
-        sourceId.textContent = chunk.id;
-        sourceMeta.append(sourceId);
-
-        if (score) {
-          sourceScore.className = "text-chat-source-score";
-          sourceScore.textContent = score;
-          sourceMeta.append(sourceScore);
-        }
-
-        sourceText.className = "text-chat-source-text";
-        sourceText.textContent = chunk.text;
-        sourceCard.append(sourceMeta, sourceText);
-        sourcesList.append(sourceCard);
-      }
-
-      sourcesSection.append(sourcesLabel, sourcesList);
-      article.append(sourcesSection);
     }
 
     textChatThreadNode.append(article);
@@ -1209,6 +1220,14 @@ function syncPreparePageCreditCapInput() {
   prepareMaxCreditsInput.value = String(state.maxPrepareCredits);
 }
 
+function syncCachingTtlInput() {
+  if (!cachingTtlSelect) {
+    return;
+  }
+
+  cachingTtlSelect.value = String(state.cachingTtlSeconds);
+}
+
 function setIcon(
   node: HTMLElement | null,
   icon: keyof typeof BUTTON_ICONS
@@ -1242,6 +1261,46 @@ function dismissCreditBanner(event?: Event) {
   }
 
   render();
+}
+
+async function writeTextToClipboard(value: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  const textArea = document.createElement("textarea");
+  textArea.value = value;
+  textArea.setAttribute("readonly", "true");
+  textArea.style.position = "fixed";
+  textArea.style.opacity = "0";
+  textArea.style.pointerEvents = "none";
+  document.body.append(textArea);
+  textArea.select();
+
+  const copied = document.execCommand("copy");
+  document.body.removeChild(textArea);
+
+  if (!copied) {
+    throw new Error("Clipboard access is unavailable.");
+  }
+}
+
+async function copyTextChatMessage(messageId: string | undefined) {
+  const message = state.textMessages.find((entry) => entry.id === messageId);
+  const text = readOptionalString(message?.text);
+
+  if (!text) {
+    return;
+  }
+
+  try {
+    await writeTextToClipboard(text);
+    showNotification("Copied.");
+  } catch (error) {
+    console.error("Failed to copy text chat response", error);
+    showNotification("Copy failed.");
+  }
 }
 
 function normalizeWebSocketPhase(phase: string): WebSocketPhase {
@@ -1613,9 +1672,11 @@ function render() {
         : state.registrationRequired
           ? "Register"
           : creditIssueActive
-            ? "Recharge"
+          ? "Recharge"
           : analyzeUrlError
             ? "Blocked"
+            : state.pageCacheExpired
+              ? "Expired"
             : state.recording
               ? "Listening"
               : state.assistantSpeaking
@@ -1637,6 +1698,8 @@ function render() {
       ? "Recharge required."
     : analyzeUrlError
       ? analyzeUrlError
+    : state.pageCacheExpired
+      ? EXPIRED_PAGE_CACHE_MESSAGE
     : state.interactionMode === "text"
       ? textBusy && state.pendingTextPrompt
         ? "Preparing the page before answering..."
@@ -1676,6 +1739,8 @@ function render() {
       ? "This client is blocked until credits are recharged in Samsar."
     : analyzeUrlError
       ? analyzeUrlError
+    : state.pageCacheExpired
+      ? "Prepared page cache expired and must be prepared again."
     : state.interactionMode === "text"
       ? textBusy && state.pendingTextPrompt
         ? "Preparing the page, then sending your question automatically."
@@ -1706,22 +1771,24 @@ function render() {
     : !state.serverOnline
       ? "Server offline."
       : state.registrationRequired
-        ? "Finish setup to unlock text chat."
+        ? "Finish setup."
         : creditIssueActive
-          ? "Recharge credits to continue."
+          ? "Recharge required."
           : analyzeUrlError
             ? analyzeUrlError
+            : state.pageCacheExpired
+              ? "Prepare again."
             : textBusy && state.pendingTextPrompt
-              ? "Preparing the page before sending your question."
+              ? "Preparing page..."
               : textBusy
-                ? "Generating a grounded text response."
+                ? "Replying..."
                 : state.isAnalyzing
-                  ? "Building page context."
+                  ? "Preparing page..."
                   : voiceBusy
-                    ? "Stop voice to switch to text chat."
+                    ? "Stop voice first."
                     : state.analysisReady
-                      ? "Ask a focused question about this page."
-                      : "Ask your first question and the page will be prepared automatically.";
+                      ? "Ready."
+                      : "Ask a question.";
   const registrationDialogOpen =
     !state.isInitializing && (state.registrationRequired || state.accountEditorOpen);
   const registrationMode = state.registrationRequired ? "register" : "edit";
@@ -2077,6 +2144,17 @@ function render() {
       state.isInitializing;
   }
 
+  if (cachingTtlSelect) {
+    if (cachingTtlSelect.value !== String(state.cachingTtlSeconds)) {
+      cachingTtlSelect.value = String(state.cachingTtlSeconds);
+    }
+
+    cachingTtlSelect.disabled =
+      state.registrationSubmitting ||
+      state.samsarAuthSubmitting ||
+      state.isInitializing;
+  }
+
   renderVoicePreviewButton();
   renderTextChatThread();
 
@@ -2371,6 +2449,20 @@ async function markPageAnalyzed(
   });
 }
 
+async function clearAnalyzedPage(url: string) {
+  const cache = await getAnalyzedPagesCache();
+  const normalizedUrl = normalizeUrl(url);
+
+  if (!(normalizedUrl in cache)) {
+    return;
+  }
+
+  delete cache[normalizedUrl];
+  await chrome.storage.local.set({
+    [ANALYZED_PAGES_STORAGE_KEY]: cache
+  });
+}
+
 async function getAnalyzedPageState(url: string) {
   const cache = await getAnalyzedPagesCache();
   return cache[normalizeUrl(url)];
@@ -2461,23 +2553,44 @@ async function loadPreparePageSettings() {
   const payload = stored[PREPARE_PAGE_SETTINGS_STORAGE_KEY];
 
   if (!payload || typeof payload !== "object") {
+    state.cachingTtlSeconds = DEFAULT_CACHING_TTL_SECONDS;
     state.maxPrepareCredits = DEFAULT_PREPARE_PAGE_MAX_CREDITS;
+    syncCachingTtlInput();
     syncPreparePageCreditCapInput();
     return;
   }
 
+  state.cachingTtlSeconds = normalizeCachingTtlSeconds(
+    (payload as PreparePageSettingsPayload).cachingTtlSeconds
+  );
   state.maxPrepareCredits = normalizePreparePageCreditCap(
     (payload as PreparePageSettingsPayload).maxPrepareCredits
   );
+  syncCachingTtlInput();
   syncPreparePageCreditCapInput();
 }
 
 async function savePreparePageSettings() {
   await chrome.storage.local.set({
     [PREPARE_PAGE_SETTINGS_STORAGE_KEY]: {
+      cachingTtlSeconds: state.cachingTtlSeconds,
       maxPrepareCredits: state.maxPrepareCredits
     } satisfies PreparePageSettingsPayload
   });
+}
+
+function syncPreparePageSettingsFromUser(
+  user?: StructureQueriesExternalUserPayload | null
+) {
+  const cachingTtlSeconds = getCachingTtlSecondsFromUser(user);
+
+  if (cachingTtlSeconds) {
+    state.cachingTtlSeconds = cachingTtlSeconds;
+    syncCachingTtlInput();
+    void savePreparePageSettings().catch((error) => {
+      console.error("Failed to persist caching settings from browser profile", error);
+    });
+  }
 }
 
 async function saveRegistrationState(
@@ -2532,6 +2645,7 @@ async function loadRegistrationState() {
     state.externalUserApiKey = undefined;
     state.preferredVoiceId = undefined;
     state.preferredVoiceName = undefined;
+    state.pageCacheExpired = false;
     state.registrationRequired = true;
     syncRegistrationForm();
     return;
@@ -2551,6 +2665,8 @@ async function loadRegistrationState() {
     registration?.preferredLanguage ??
       getPreferredLanguageFromUser(registration?.externalUser)
   );
+  syncPreparePageSettingsFromUser(registration?.externalUser);
+  state.pageCacheExpired = false;
   state.registrationRequired = !(
     (state.externalUserApiKey || state.authToken) &&
     state.assistantSessionId
@@ -2570,6 +2686,18 @@ function updatePreparePageCreditCapFromInput() {
 
   void savePreparePageSettings().catch((error) => {
     console.error("Failed to persist prepare page settings", error);
+  });
+}
+
+function updateCachingTtlFromInput() {
+  state.cachingTtlSeconds = normalizeCachingTtlSeconds(
+    cachingTtlSelect?.value ?? state.cachingTtlSeconds
+  );
+  syncCachingTtlInput();
+  render();
+
+  void savePreparePageSettings().catch((error) => {
+    console.error("Failed to persist caching settings", error);
   });
 }
 
@@ -2608,6 +2736,7 @@ function applyBrowserSessionPayload(payload: BrowserSessionPayload) {
   if (preferredLanguage) {
     setSelectedLanguage(preferredLanguage);
   }
+  syncPreparePageSettingsFromUser(state.currentUser);
   syncCreditIssueStateWithBalance();
 }
 
@@ -2623,7 +2752,10 @@ async function syncBrowserSession() {
     },
     body: JSON.stringify({
       assistantSessionId: state.assistantSessionId,
-      ...buildSessionCredentialPayload()
+      ...buildSessionCredentialPayload(),
+      cachingTtlSeconds: state.cachingTtlSeconds,
+      preferredLanguage: getSelectedLanguage(),
+      preferredVoiceId: getSelectedVoiceId()
     })
   });
 
@@ -2670,6 +2802,7 @@ async function persistBrowserProfilePreferences() {
       body: JSON.stringify({
         assistantSessionId: state.assistantSessionId,
         ...buildSessionCredentialPayload(),
+        cachingTtlSeconds: state.cachingTtlSeconds,
         displayName: state.currentUser?.displayName ?? "",
         email: state.currentUser?.email ?? "",
         username: state.currentUser?.username ?? "",
@@ -2715,6 +2848,7 @@ async function submitAccountProfile() {
       body: JSON.stringify({
         assistantSessionId: state.assistantSessionId,
         ...buildSessionCredentialPayload(),
+        cachingTtlSeconds: state.cachingTtlSeconds,
         displayName: registrationDisplayNameNode?.value ?? "",
         email: registrationEmailNode?.value ?? "",
         username: registrationUsernameNode?.value ?? "",
@@ -2850,6 +2984,7 @@ async function continueWithSamsarOne() {
         body: JSON.stringify({
           authToken: resolvedAuthToken,
           browserSessionId: state.browserSessionId,
+          cachingTtlSeconds: state.cachingTtlSeconds,
           displayName:
             readOptionalString(sessionPayload.displayName) ??
             registrationDisplayNameNode?.value ??
@@ -3058,11 +3193,62 @@ function closeWebSocketSession(input?: {
   state.pendingAssistantLanguage = undefined;
 }
 
+async function expireCurrentPageCache(input?: {
+  appendLog?: boolean;
+  appendText?: boolean;
+  message?: string;
+  notify?: boolean;
+}) {
+  const pageUrl = state.currentPage?.url;
+  const message =
+    readOptionalString(input?.message) ?? EXPIRED_PAGE_CACHE_MESSAGE;
+
+  abortActiveTextRequest();
+  clearPrepareStatusPollTimer();
+  setCurrentPrepareRequest(null);
+
+  if (state.conversationActive || state.recording || state.assistantSpeaking) {
+    await stopPageRecordingCapture();
+  }
+
+  closeWebSocketSession({
+    phase: "idle",
+    detail: "Prepare page"
+  });
+  clearPendingTextPromptState();
+  state.isAnalyzing = false;
+  state.analysisReady = false;
+  state.currentTemplateId = undefined;
+  state.pageCacheExpired = true;
+  state.textSubmitting = false;
+
+  if (pageUrl) {
+    await clearAnalyzedPage(pageUrl);
+    await removePendingPreparePageRequest(pageUrl);
+  }
+
+  render();
+
+  if (input?.appendLog) {
+    appendLog("system", message);
+  }
+
+  if (input?.appendText) {
+    appendTextChatMessage("system", message);
+    render();
+  }
+
+  if (input?.notify) {
+    showNotification(message);
+  }
+}
+
 async function refreshIndexStatus() {
   if (!state.currentPage?.url) {
     state.indexChecked = false;
     state.analysisReady = false;
     state.currentTemplateId = undefined;
+    state.pageCacheExpired = false;
     return;
   }
 
@@ -3085,11 +3271,30 @@ async function refreshIndexStatus() {
         state.currentPage.url
       )}&templateId=${encodeURIComponent(state.currentTemplateId)}`
     );
+
+    if (
+      isExpiredTemplateCode(payload.code) ||
+      readOptionalString(payload.status) === "expired"
+    ) {
+      await expireCurrentPageCache();
+      return;
+    }
+
     state.analysisReady =
       Boolean(localAnalysis?.analyzed) && Boolean(payload.analysisAvailable);
     state.currentTemplateId = payload.templateId ?? state.currentTemplateId;
+    state.pageCacheExpired = false;
   } catch (error) {
     console.error("Failed to check webpage status", error);
+
+    if (
+      isExpiredTemplateCode(getErrorCode(error)) ||
+      getErrorStatus(error) === 410
+    ) {
+      await expireCurrentPageCache();
+      return;
+    }
+
     state.analysisReady = Boolean(localAnalysis?.analyzed);
   }
 }
@@ -3152,7 +3357,9 @@ async function sendPendingTextPrompt() {
     clearPendingTextPromptState();
     appendTextChatMessage(
       "system",
-      "No page context is ready yet. Prepare the page and try again."
+      state.pageCacheExpired
+        ? EXPIRED_PAGE_CACHE_MESSAGE
+        : "No page context is ready yet. Prepare the page and try again."
     );
     render();
     return;
@@ -3177,6 +3384,9 @@ async function sendPendingTextPrompt() {
           assistantSessionId: state.assistantSessionId,
           ...buildSessionCredentialPayload(),
           language: getSelectedLanguage(),
+          metadata: {
+            responseMode: "text"
+          },
           messages: buildTextChatMessages(),
           pageTitle: state.currentPage.title,
           pageUrl: state.currentPage.url,
@@ -3192,11 +3402,9 @@ async function sendPendingTextPrompt() {
       readOptionalString(payload.response?.text) ??
       readOptionalString(payload.completion?.choices?.[0]?.message?.content) ??
       "Assistant reply unavailable.";
-    const chunks = payload.response?.retrieval?.chunks ?? undefined;
     const warnings = payload.response?.warnings ?? [];
 
     appendTextChatMessage("assistant", assistantText, {
-      chunks,
       warnings
     });
     await refreshCreditsAfterRequest();
@@ -3214,6 +3422,17 @@ async function sendPendingTextPrompt() {
 
     if (isInsufficientCreditsMessage(message)) {
       showInsufficientCreditsState(message);
+      return;
+    }
+
+    if (
+      isExpiredTemplateCode(getErrorCode(error)) ||
+      getErrorStatus(error) === 410
+    ) {
+      await expireCurrentPageCache({
+        appendText: true,
+        message
+      });
       return;
     }
 
@@ -3258,6 +3477,13 @@ async function submitTextPrompt() {
   state.pendingTextMessageId = messageId;
   render();
 
+  if (state.pageCacheExpired && !state.analysisReady) {
+    clearPendingTextPromptState();
+    appendTextChatMessage("system", EXPIRED_PAGE_CACHE_MESSAGE);
+    render();
+    return;
+  }
+
   if (!state.analysisReady || !state.currentTemplateId) {
     await analyzeCurrentPage({
       connectSocket: false
@@ -3280,6 +3506,7 @@ async function finalizePreparedPage(input: {
   setCurrentPrepareRequest(null);
   state.isAnalyzing = false;
   state.analysisReady = true;
+  state.pageCacheExpired = false;
   state.currentTemplateId = input.templateId ?? state.currentTemplateId;
 
   await markPageAnalyzed(input.url, {
@@ -3333,6 +3560,15 @@ async function failPreparedPage(input: {
     isInsufficientCreditsMessage(message)
   ) {
     showInsufficientCreditsState(message);
+    return;
+  }
+
+  if (isExpiredTemplateCode(input.code)) {
+    await expireCurrentPageCache({
+      appendLog: true,
+      appendText: Boolean(state.pendingTextPrompt || state.interactionMode === "text"),
+      message
+    });
     return;
   }
 
@@ -3440,8 +3676,11 @@ async function reconcilePendingPreparePageRequest(
 
     if (
       nextStatus === "failed" ||
+      nextStatus === "expired" ||
       payload.reason === "prepare_request_failed" ||
-      payload.code === "insufficient_credits"
+      payload.reason === "embedding_template_expired" ||
+      payload.code === "insufficient_credits" ||
+      isExpiredTemplateCode(payload.code)
     ) {
       await failPreparedPage({
         url: currentPageUrl,
@@ -3946,6 +4185,16 @@ function handleSocketMessage(event: MessageEvent<string>) {
       return;
     }
 
+    if (isExpiredTemplateCode(code)) {
+      void expireCurrentPageCache({
+        appendLog: true,
+        appendText: state.interactionMode === "text",
+        message,
+        notify: true
+      });
+      return;
+    }
+
     state.websocketPhase = "error";
     state.websocketDetail = message;
     appendLog("system", message);
@@ -4189,7 +4438,9 @@ async function analyzeCurrentPage(input?: {
     return;
   }
 
+  state.pageCacheExpired = false;
   updatePreparePageCreditCapFromInput();
+  updateCachingTtlFromInput();
 
   const analyzeUrlError = getAnalyzeUrlError(state.currentPage.url);
 
@@ -4238,6 +4489,7 @@ async function analyzeCurrentPage(input?: {
       signal: controller.signal,
       body: JSON.stringify({
         ...buildSessionCredentialPayload(),
+        cachingTtlSeconds: state.cachingTtlSeconds,
         prepareRequestId: requestId,
         url: state.currentPage.url,
         maxPrepareCredits: state.maxPrepareCredits
@@ -4336,6 +4588,7 @@ async function refreshAll() {
       }
       resetConversationLog();
       state.currentTemplateId = undefined;
+      state.pageCacheExpired = false;
     }
 
     if (state.serverOnline && state.registrationRequired) {
@@ -4514,6 +4767,23 @@ textChatFormNode?.addEventListener("submit", (event) => {
   void submitTextPrompt();
 });
 
+textChatThreadNode?.addEventListener("click", (event) => {
+  const target = event.target;
+
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  const copyButton = target.closest<HTMLButtonElement>("[data-text-chat-copy-id]");
+
+  if (!copyButton) {
+    return;
+  }
+
+  event.preventDefault();
+  void copyTextChatMessage(copyButton.dataset.textChatCopyId);
+});
+
 textChatInputNode?.addEventListener("input", () => {
   state.textDraft = textChatInputNode.value;
   render();
@@ -4575,6 +4845,10 @@ prepareMaxCreditsInput?.addEventListener("change", () => {
 
 prepareMaxCreditsInput?.addEventListener("blur", () => {
   updatePreparePageCreditCapFromInput();
+});
+
+cachingTtlSelect?.addEventListener("change", () => {
+  updateCachingTtlFromInput();
 });
 
 window.addEventListener("pagehide", () => {

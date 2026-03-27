@@ -39,6 +39,16 @@ function readOptionalNumber(value: unknown) {
   return undefined;
 }
 
+function normalizeCachingTtlSeconds(value: unknown) {
+  const parsed = readOptionalNumber(value);
+
+  if (parsed === undefined || parsed <= 0) {
+    return undefined;
+  }
+
+  return Math.floor(parsed);
+}
+
 function readOptionalBoolean(value: unknown) {
   return typeof value === "boolean" ? value : undefined;
 }
@@ -64,6 +74,7 @@ function createBrowserInstallationMetadata(
 ) {
   return {
     browser_session_id: session.browserSessionId,
+    caching_ttl: session.cachingTtlSeconds ?? undefined,
     extension_id: session.extensionId,
     preferred_language: session.preferredLanguage,
     preferred_voice_id: session.preferredVoiceId,
@@ -92,9 +103,14 @@ function createExternalUserIdentity(
     session.userAgent ??
     readOptionalString(existingBrowserInstallation?.user_agent) ??
     readOptionalString(existingBrowserInstallation?.userAgent);
+  const cachingTtlSeconds =
+    session.cachingTtlSeconds ??
+    normalizeCachingTtlSeconds(existingBrowserInstallation?.caching_ttl) ??
+    normalizeCachingTtlSeconds(existingBrowserInstallation?.cachingTtl);
 
   return buildStructureQueriesExternalUser({
     browserSessionId: session.browserSessionId,
+    cachingTtlSeconds,
     extensionId: session.extensionId ?? undefined,
     email:
       readOptionalString(body.email) ??
@@ -194,6 +210,9 @@ function shouldGrantStarterCredits(
 function createSessionPayload(body: Record<string, unknown>) {
   return {
     browserSessionId: readOptionalString(body.browserSessionId) ?? "",
+    cachingTtlSeconds: normalizeCachingTtlSeconds(
+      body.cachingTtlSeconds ?? body.caching_ttl
+    ),
     extensionId: readOptionalString(body.extensionId) ?? null,
     preferredLanguage: readOptionalString(body.preferredLanguage) ?? null,
     preferredVoiceId: readOptionalString(body.preferredVoiceId) ?? null,

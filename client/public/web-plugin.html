@@ -334,6 +334,28 @@
               </small>
             </label>
 
+            <label class="field field-select prepare-credit-field">
+              <span class="field-label-row">
+                <span>Caching time</span>
+                <span
+                  class="field-tooltip"
+                  aria-label="Prepared pages are cached on the server for repeat analysis. Default is 1 hour. You can extend it to 1 day."
+                  role="img"
+                  tabindex="0"
+                  title="Prepared pages are cached on the server for repeat analysis. Default is 1 hour. You can extend it to 1 day."
+                >
+                  ?
+                </span>
+              </span>
+              <select id="caching-ttl-select">
+                <option value="3600">1 hour</option>
+                <option value="86400">1 day</option>
+              </select>
+              <small class="field-hint">
+                Prepared pages stay cached on the server so you can come back without preparing again.
+              </small>
+            </label>
+
             <div class="advanced-grid">
               <label class="field field-select advanced-language-field">
                 <span>Language</span>

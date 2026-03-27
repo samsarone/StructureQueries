@@ -1,5 +1,7 @@
 import { SamsarRequestError } from "samsar-js";
 
+import { SamsarUserRouteError } from "./samsar-user-auth.js";
+
 function readOptionalString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
@@ -63,6 +65,19 @@ function isCreditsIssue(error: SamsarRequestError, detail?: string) {
   );
 }
 
+function readGenericErrorStatus(error: unknown) {
+  return (
+    error &&
+    typeof error === "object" &&
+    "status" in error &&
+    typeof error.status === "number" &&
+    error.status >= 400 &&
+    error.status < 600
+      ? error.status
+      : undefined
+  );
+}
+
 function normalizeActionMessage(actionMessage: string) {
   return actionMessage.trim().replace(/[.:]\s*$/, "");
 }
@@ -76,6 +91,10 @@ export function isSamsarCreditsIssue(error: unknown) {
 }
 
 export function getSamsarErrorStatus(error: unknown, fallbackStatus = 502) {
+  if (error instanceof SamsarUserRouteError) {
+    return error.status;
+  }
+
   if (
     error instanceof SamsarRequestError &&
     typeof error.status === "number" &&
@@ -85,7 +104,41 @@ export function getSamsarErrorStatus(error: unknown, fallbackStatus = 502) {
     return error.status;
   }
 
+  const genericStatus = readGenericErrorStatus(error);
+
+  if (genericStatus !== undefined) {
+    return genericStatus;
+  }
+
   return fallbackStatus;
+}
+
+export function getSamsarErrorCode(error: unknown) {
+  if (error instanceof SamsarUserRouteError) {
+    return readOptionalString(error.code);
+  }
+
+  if (error instanceof SamsarRequestError) {
+    const body =
+      error.body && typeof error.body === "object"
+        ? (error.body as Record<string, unknown>)
+        : undefined;
+
+    return readOptionalString(body?.code);
+  }
+
+  if (error && typeof error === "object" && "code" in error) {
+    return readOptionalString((error as { code?: unknown }).code);
+  }
+
+  return undefined;
+}
+
+export function isSamsarTemplateExpiredIssue(error: unknown) {
+  return (
+    getSamsarErrorCode(error) === "EMBEDDING_TEMPLATE_EXPIRED" ||
+    getSamsarErrorStatus(error, 0) === 410
+  );
 }
 
 export function getSamsarErrorMessage(
@@ -93,6 +146,15 @@ export function getSamsarErrorMessage(
   actionMessage: string
 ) {
   const normalizedActionMessage = normalizeActionMessage(actionMessage);
+  const templateExpired = isSamsarTemplateExpiredIssue(error);
+
+  if (templateExpired) {
+    return "This prepared page cache expired. Prepare the page again.";
+  }
+
+  if (error instanceof SamsarUserRouteError) {
+    return error.message.trim() || normalizedActionMessage;
+  }
 
   if (error instanceof SamsarRequestError) {
     const detail = extractErrorDetail(error.body);
@@ -122,12 +184,23 @@ export function getSamsarErrorMessage(
 }
 
 export function getSamsarErrorContext(error: unknown) {
+  if (error instanceof SamsarUserRouteError) {
+    return {
+      status: error.status,
+      code: error.code,
+      creditsCharged: null,
+      creditsRemaining: error.creditsRemaining,
+      body: null
+    };
+  }
+
   if (!(error instanceof SamsarRequestError)) {
     return undefined;
   }
 
   return {
     status: error.status,
+    code: getSamsarErrorCode(error),
     url: error.url,
     creditsCharged: error.creditsCharged,
     creditsRemaining: error.creditsRemaining,

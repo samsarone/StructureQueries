@@ -311,6 +311,11 @@ export async function handleChatCompletionsRoute(
       error instanceof GroundedAssistantError ? error.status : 502;
 
     response.status(status).json({
+      ...(error instanceof GroundedAssistantError && error.code
+        ? {
+            code: error.code
+          }
+        : {}),
       error:
         error instanceof Error
           ? error.message
@@ -357,6 +362,11 @@ proxyChatCompletionRouter.post("/", (request, response) => {
 
       response.status(status).json({
         ok: false,
+        ...(error instanceof GroundedAssistantError && error.code
+          ? {
+              code: error.code
+            }
+          : {}),
         error:
           error instanceof Error
             ? error.message

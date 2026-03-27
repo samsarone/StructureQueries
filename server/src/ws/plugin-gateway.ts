@@ -13,8 +13,10 @@ import {
 } from "../lib/external-usage-billing.js";
 import { prepareAssistantTextForSpeech } from "../lib/speech-prep.js";
 import {
+  getSamsarErrorCode,
   getSamsarErrorMessage,
-  isSamsarCreditsIssue
+  isSamsarCreditsIssue,
+  isSamsarTemplateExpiredIssue
 } from "../lib/samsar-errors.js";
 
 interface SessionInitMessage {
@@ -163,16 +165,26 @@ function sendSocketError(
   }
 ) {
   const insufficientCredits = isSamsarCreditsIssue(error);
+  const templateExpired = isSamsarTemplateExpiredIssue(error);
   const message = getSamsarErrorMessage(error, input.fallbackMessage);
+  const code = insufficientCredits
+    ? "insufficient_credits"
+    : templateExpired
+      ? "EMBEDDING_TEMPLATE_EXPIRED"
+      : getSamsarErrorCode(error) ?? "request_failed";
 
   sendStatus(
     socket,
     "error",
-    insufficientCredits ? "Not enough credits are available." : input.statusDetail
+    insufficientCredits
+      ? "Not enough credits are available."
+      : templateExpired
+        ? "Prepared page cache expired."
+        : input.statusDetail
   );
   sendMessage(socket, {
     type: "error",
-    code: insufficientCredits ? "insufficient_credits" : "request_failed",
+    code,
     message
   });
 }

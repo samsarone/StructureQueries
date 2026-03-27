@@ -1,6 +1,9 @@
 import { env } from "../config/env.js";
 import { samsarAdapter } from "../adapters/samsar.js";
-import { buildStructureQueriesExternalUser } from "./external-user.js";
+import {
+  buildStructureQueriesExternalUser,
+  buildStructureQueriesTextAssistantSystemPrompt
+} from "./external-user.js";
 import { createSamsarUserAssistantCompletion } from "./samsar-user-auth.js";
 import {
   extractMessageText,
@@ -9,6 +12,12 @@ import {
   type GroundedAssistantReply,
   type RetrievedChunk
 } from "./chat-completions.js";
+import {
+  getSamsarErrorCode,
+  getSamsarErrorMessage,
+  getSamsarErrorStatus,
+  isSamsarTemplateExpiredIssue
+} from "./samsar-errors.js";
 
 interface GenerateGroundedAssistantReplyInput {
   authToken?: string;
@@ -240,14 +249,37 @@ function wantsImageResponse(
   );
 }
 
+function resolveResponseMode(metadata: Record<string, unknown>) {
+  const responseMode = readStringAlias(metadata, [
+    "responseMode",
+    "response_mode",
+    "interactionMode",
+    "interaction_mode"
+  ])?.toLowerCase();
+
+  return responseMode === "text" || responseMode === "voice"
+    ? responseMode
+    : undefined;
+}
+
 export class GroundedAssistantError extends Error {
   status: number;
+  code?: string;
 
-  constructor(message: string, status = 400) {
+  constructor(message: string, status = 400, code?: string) {
     super(message);
     this.name = "GroundedAssistantError";
     this.status = status;
+    this.code = code;
   }
+}
+
+function createExpiredTemplateError(error: unknown) {
+  return new GroundedAssistantError(
+    getSamsarErrorMessage(error, "Prepared page cache expired"),
+    getSamsarErrorStatus(error, 410),
+    getSamsarErrorCode(error) ?? "EMBEDDING_TEMPLATE_EXPIRED"
+  );
 }
 
 function resolveTemplateId(input: GenerateGroundedAssistantReplyInput) {
@@ -418,6 +450,7 @@ export async function generateGroundedAssistantReply(
   input: GenerateGroundedAssistantReplyInput
 ): Promise<GroundedAssistantReply> {
   const metadata = input.metadata ?? {};
+  const responseMode = resolveResponseMode(metadata);
   const browserSessionId =
     readStringValue(input.browserSessionId) ??
     readStringAlias(metadata, ["browserSessionId", "browser_session_id"]);
@@ -545,6 +578,10 @@ export async function generateGroundedAssistantReply(
       score: match.score
     }));
   } catch (error) {
+    if (isSamsarTemplateExpiredIssue(error)) {
+      throw createExpiredTemplateError(error);
+    }
+
     warnings.push(
       error instanceof Error
         ? `Similarity search failed: ${error.message}`
@@ -570,6 +607,10 @@ export async function generateGroundedAssistantReply(
       similarityMatches
     ).slice(0, retrievalLimit);
   } catch (error) {
+    if (isSamsarTemplateExpiredIssue(error)) {
+      throw createExpiredTemplateError(error);
+    }
+
     warnings.push(
       error instanceof Error
         ? `Reranked retrieval failed: ${error.message}`
@@ -578,7 +619,7 @@ export async function generateGroundedAssistantReply(
   }
 
   const groundingBlock = buildGroundingBlock(retrievedChunks);
-  const assistantMessages = attachGroundingContextToMessages(
+  const groundedAssistantMessages = attachGroundingContextToMessages(
     normalizeAssistantMessages(input.messages),
     {
       query,
@@ -588,6 +629,16 @@ export async function generateGroundedAssistantReply(
       groundingBlock
     }
   );
+  const assistantMessages =
+    responseMode === "text"
+      ? [
+          {
+            role: "system" as const,
+            content: buildStructureQueriesTextAssistantSystemPrompt()
+          },
+          ...groundedAssistantMessages
+        ]
+      : groundedAssistantMessages;
 
   const imageResponseEnabled =
     env.integrations.samsar.imageToolEnabled &&

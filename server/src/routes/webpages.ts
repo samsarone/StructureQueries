@@ -18,10 +18,12 @@ import {
   upsertPreparePageRequest
 } from "../lib/prepare-page-requests.js";
 import {
+  getSamsarErrorCode,
   getSamsarErrorContext,
   getSamsarErrorMessage,
   getSamsarErrorStatus,
-  isSamsarCreditsIssue
+  isSamsarCreditsIssue,
+  isSamsarTemplateExpiredIssue
 } from "../lib/samsar-errors.js";
 
 function createEmbeddingName(title: string | undefined, url: string) {
@@ -51,6 +53,26 @@ function normalizePreparePageCreditCap(value: unknown) {
   return Math.max(1, Math.min(100, Math.floor(parsed)));
 }
 
+function normalizeCachingTtlSeconds(value: unknown) {
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return undefined;
+  }
+
+  return Math.floor(parsed);
+}
+
+function toCachingTtlMinutes(value: unknown) {
+  const cachingTtlSeconds = normalizeCachingTtlSeconds(value);
+
+  if (!cachingTtlSeconds) {
+    return undefined;
+  }
+
+  return Math.max(1, Math.ceil(cachingTtlSeconds / 60));
+}
+
 function normalizePreparePageStatus(
   value: unknown,
   fallback = "pending"
@@ -69,6 +91,29 @@ function summarizeEmbeddingRecords(records: Array<Record<string, unknown>>) {
       typeof record.content_length === "number" ? record.content_length : null,
     title: readOptionalString(record.title) ?? null
   }));
+}
+
+function createExpiredEmbeddingStatusPayload(input: {
+  checkedAt?: string;
+  requestId?: string;
+}) {
+  const checkedAt = input.checkedAt ?? new Date().toISOString();
+
+  return {
+    ok: true,
+    indexed: false,
+    status: "expired",
+    checkedAt,
+    reason: "embedding_template_expired",
+    analysisAvailable: false,
+    lastAnalyzedAt: null,
+    templateId: null,
+    requestId: input.requestId ?? null,
+    error: "This prepared page cache expired. Prepare the page again.",
+    code: "EMBEDDING_TEMPLATE_EXPIRED",
+    creditsRemaining: null,
+    recordCount: null
+  };
 }
 
 function isPrivateHostname(hostname: string) {
@@ -124,8 +169,8 @@ async function refreshTrackedPreparePageRequest(requestId: string) {
 
   if (
     !trackedRequest ||
-    trackedRequest.status === "completed" ||
     trackedRequest.status === "failed" ||
+    trackedRequest.status === "expired" ||
     !trackedRequest.templateId ||
     !samsarAdapter.isConfigured()
   ) {
@@ -157,6 +202,19 @@ async function refreshTrackedPreparePageRequest(requestId: string) {
         : trackedRequest.completedAt ?? null
     });
   } catch (error) {
+    if (isSamsarTemplateExpiredIssue(error)) {
+      return upsertPreparePageRequest({
+        requestId,
+        status: "expired",
+        analysisAvailable: false,
+        templateId: null,
+        recordCount: null,
+        error: getSamsarErrorMessage(error, "Prepared page cache expired"),
+        code: getSamsarErrorCode(error) ?? "EMBEDDING_TEMPLATE_EXPIRED",
+        completedAt: new Date().toISOString()
+      });
+    }
+
     console.warn("Failed to refresh tracked prepare-page request status", {
       requestId,
       templateId: trackedRequest.templateId,
@@ -210,6 +268,8 @@ webpagesRouter.get("/status", async (request, response) => {
         reason:
           status === "failed"
             ? "prepare_request_failed"
+            : status === "expired"
+              ? "embedding_template_expired"
             : status === "completed"
               ? "prepare_request_completed"
               : "prepare_request_pending",
@@ -283,8 +343,16 @@ webpagesRouter.get("/status", async (request, response) => {
         typeof embeddingStatus.data.record_count === "number"
           ? embeddingStatus.data.record_count
           : null
-    });
+      });
   } catch (error) {
+    if (isSamsarTemplateExpiredIssue(error)) {
+      response.json({
+        ...createExpiredEmbeddingStatusPayload({ checkedAt: new Date().toISOString() }),
+        url: rawUrl || null
+      });
+      return;
+    }
+
     response.status(502).json({
       ok: false,
       error:
@@ -329,6 +397,10 @@ webpagesRouter.post("/analyze", async (request, response) => {
   const maxPrepareCredits = normalizePreparePageCreditCap(
     request.body?.maxPrepareCredits ?? request.body?.max_prepare_credits
   );
+  const cachingTtlSeconds = normalizeCachingTtlSeconds(
+    request.body?.cachingTtlSeconds ?? request.body?.caching_ttl
+  );
+  const ttlMinutes = toCachingTtlMinutes(cachingTtlSeconds);
   const prepareRequestId =
     readOptionalString(request.body?.prepareRequestId) ??
     readOptionalString(request.body?.requestId) ??
@@ -448,11 +520,17 @@ webpagesRouter.post("/analyze", async (request, response) => {
     const embeddingPayload = {
       name: createEmbeddingName(title || undefined, url),
       plain_text: crawlResult.records,
-      field_options: getUrlEmbeddingFieldOptions()
+      field_options: getUrlEmbeddingFieldOptions(),
+      ...(ttlMinutes
+        ? {
+            ttl_minutes: ttlMinutes
+          }
+        : {})
     };
     const externalUser = browserSessionId
       ? buildStructureQueriesExternalUser({
           browserSessionId,
+          cachingTtlSeconds,
           preferredLanguage: preferredLanguage || undefined,
           preferredVoiceId: preferredVoiceId || undefined
         })

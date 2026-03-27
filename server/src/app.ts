@@ -2016,6 +2016,17 @@ function renderPrivacyPage(serviceName: string) {
       </section>
 
       <section class="card">
+        <p class="eyebrow">Deep Analysis Cache</p>
+        <h2>How prepared page embeddings are cached</h2>
+        <ul>
+          <li>When you prepare a page for deep analysis, the backend creates embeddings from the prepared document content and caches them server-side so the page does not need to be prepared again for each follow-up question.</li>
+          <li>By default, that server-side embeddings cache is kept for 1 hour.</li>
+          <li>If you change the caching time in settings, the cache can be kept longer, up to 1 day in the current implementation.</li>
+          <li>After the selected cache time expires, the cached embeddings are deleted and the page must be prepared again before further grounded analysis can continue.</li>
+        </ul>
+      </section>
+
+      <section class="card">
         <p class="eyebrow">Retention</p>
         <h2>Storage and retention notes</h2>
         <ul>

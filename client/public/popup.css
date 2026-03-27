@@ -416,6 +416,10 @@ select option {
   gap: 8px;
 }
 
+body[data-interaction-mode="text"] .drawer {
+  display: none;
+}
+
 .top-credit-banner {
   position: relative;
   z-index: 1;
@@ -820,23 +824,21 @@ select option {
 
 .text-mode-toolbar {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
 }
 
-.text-mode-copy {
-  min-width: 0;
-  display: grid;
-  gap: 4px;
-}
-
 .text-chat-status {
   margin: 0;
+  min-width: 0;
   font-size: 0.74rem;
   font-weight: 600;
   line-height: 1.45;
   color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .text-analyze-button {
@@ -850,16 +852,24 @@ select option {
 .text-chat-thread {
   display: grid;
   gap: 8px;
+  min-width: 0;
   min-height: 220px;
   max-height: 320px;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding-right: 2px;
+}
+
+.text-chat-thread > * {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .text-chat-empty {
   display: grid;
   gap: 8px;
   align-content: center;
+  min-width: 0;
   min-height: 220px;
   padding: 16px;
   border-radius: 18px;
@@ -889,12 +899,14 @@ select option {
 .text-chat-message {
   display: grid;
   gap: 8px;
+  min-width: 0;
   padding: 12px 13px;
   border-radius: 18px;
   border: 1px solid rgba(143, 223, 255, 0.1);
   background:
     linear-gradient(180deg, rgba(10, 18, 31, 0.72), rgba(7, 13, 24, 0.78)),
     rgba(8, 16, 28, 0.72);
+  overflow: hidden;
 }
 
 .text-chat-message-user {
@@ -919,13 +931,42 @@ select option {
   opacity: 0.78;
 }
 
+.text-chat-message-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
 .text-chat-role {
   margin: 0;
+  min-width: 0;
   font-size: 0.66rem;
   font-weight: 800;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
+  letter-spacing: 0.08em;
   color: rgba(186, 221, 243, 0.72);
+}
+
+.text-chat-copy-button {
+  flex-shrink: 0;
+  min-height: 28px;
+  padding: 0 9px;
+  border-radius: 10px;
+  border: 1px solid rgba(143, 223, 255, 0.14);
+  background:
+    linear-gradient(180deg, rgba(10, 18, 31, 0.88), rgba(7, 13, 24, 0.9)),
+    rgba(8, 16, 28, 0.8);
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: rgba(236, 244, 251, 0.9);
+}
+
+.text-chat-copy-button:hover:not(:disabled),
+.text-chat-copy-button:focus-visible {
+  transform: none;
+  border-color: rgba(123, 226, 255, 0.2);
+  color: var(--text);
 }
 
 .text-chat-message-user .text-chat-role {
@@ -942,6 +983,7 @@ select option {
 
 .text-chat-message-body {
   margin: 0;
+  max-width: 100%;
   font-size: 0.82rem;
   line-height: 1.62;
   color: var(--text);
@@ -1030,30 +1072,22 @@ select option {
 }
 
 .text-chat-compose {
-  display: grid;
-  gap: 10px;
+  display: block;
+  min-width: 0;
   padding: 12px;
   border-radius: 18px;
   border: 1px solid rgba(143, 223, 255, 0.12);
   background:
     linear-gradient(180deg, rgba(10, 18, 31, 0.76), rgba(7, 13, 24, 0.82)),
     rgba(8, 16, 28, 0.74);
+  overflow: hidden;
 }
 
-.text-chat-input-shell {
-  display: grid;
-  gap: 8px;
-}
-
-.text-chat-input-label {
-  font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: rgba(170, 214, 238, 0.86);
-}
-
-.text-chat-input-shell textarea {
+.text-chat-compose-footer textarea {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
   min-height: 94px;
   padding: 0;
   border: 0;
@@ -1062,28 +1096,25 @@ select option {
   font-size: 0.82rem;
   line-height: 1.58;
   color: var(--text);
+  overflow-x: hidden;
+  resize: none;
 }
 
-.text-chat-input-shell textarea::placeholder {
+.text-chat-compose-footer textarea::placeholder {
   color: rgba(183, 205, 223, 0.46);
 }
 
 .text-chat-compose-footer {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
+  align-items: stretch;
   gap: 10px;
-}
-
-.text-chat-hint {
-  margin: 0;
-  font-size: 0.72rem;
-  line-height: 1.5;
-  color: rgba(183, 205, 223, 0.72);
+  min-width: 0;
+  min-height: 94px;
 }
 
 .text-chat-compose-footer .primary-button {
   flex-shrink: 0;
+  align-self: flex-end;
 }
 
 .primary-button,
@@ -1363,6 +1394,28 @@ select option {
   font-size: 0.7rem;
   line-height: 1.45;
   color: rgba(183, 205, 223, 0.74);
+}
+
+.field-label-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.field-tooltip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(143, 223, 255, 0.16);
+  background: rgba(10, 18, 31, 0.7);
+  font-size: 0.62rem;
+  font-weight: 800;
+  line-height: 1;
+  color: rgba(236, 244, 251, 0.84);
+  cursor: help;
 }
 
 .field-select {
@@ -1947,7 +2000,6 @@ body[data-interaction-mode="text"] #voice-mode-shell {
   }
 
   .text-mode-toolbar,
-  .text-chat-compose-footer,
   .interaction-mode-row {
     align-items: stretch;
     flex-direction: column;
@@ -1964,6 +2016,10 @@ body[data-interaction-mode="text"] #voice-mode-shell {
   .text-analyze-button,
   .text-chat-compose-footer .primary-button {
     width: 100%;
+  }
+
+  .text-chat-compose-footer {
+    flex-direction: column;
   }
 
   .registration-dialog {
