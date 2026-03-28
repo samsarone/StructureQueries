@@ -3993,7 +3993,15 @@ function speakLocally(text: string, language?: string | null) {
 }
 
 function handleSocketMessage(event: MessageEvent<string>) {
-  const payload = JSON.parse(event.data) as RuntimeMessage;
+  let payload: RuntimeMessage;
+
+  try {
+    payload = JSON.parse(event.data) as RuntimeMessage;
+  } catch (error) {
+    console.error("Failed to parse websocket payload", error, event.data);
+    appendLog("system", "Received an invalid realtime response.");
+    return;
+  }
 
   if (payload.type === "status") {
     const phase = typeof payload.phase === "string" ? payload.phase : "idle";
@@ -4228,9 +4236,38 @@ async function ensureWebSocketSession() {
 
   activeSocketPromise = new Promise<WebSocket>((resolve, reject) => {
     const socket = new WebSocket(SERVER_WS_URL);
+    let opened = false;
+    let settled = false;
+
+    const failConnection = (message: string) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      if (activeSocket === socket) {
+        activeSocket = undefined;
+      }
+      clearConversationIdleTimer();
+      state.conversationActive = false;
+      state.recording = false;
+      state.assistantSpeaking = false;
+      state.pendingAssistantText = undefined;
+      state.pendingAssistantLanguage = undefined;
+      state.websocketState = "disconnected";
+      state.websocketPhase = "error";
+      state.websocketDetail = message;
+      render();
+      reject(new Error(message));
+    };
 
     socket.addEventListener("message", handleSocketMessage);
     socket.addEventListener("close", () => {
+      if (!opened) {
+        failConnection("Failed to connect to websocket gateway.");
+        return;
+      }
+
       if (activeSocket === socket) {
         activeSocket = undefined;
         clearConversationIdleTimer();
@@ -4246,9 +4283,11 @@ async function ensureWebSocketSession() {
       }
     });
     socket.addEventListener("error", () => {
-      reject(new Error("Failed to connect to websocket gateway."));
+      failConnection("Failed to connect to websocket gateway.");
     });
     socket.addEventListener("open", () => {
+      opened = true;
+      settled = true;
       activeSocket = socket;
       state.websocketState = "ready";
       state.websocketPhase = "connected";
@@ -4405,7 +4444,11 @@ async function startRecording() {
     resetConversationIdleTimer();
   } catch (error) {
     clearConversationIdleTimer();
-    state.conversationActive = false;
+    closeWebSocketSession({
+      phase: "error",
+      detail: normalizeRecordingError(error)
+    });
+    render();
 
     try {
       await requestMicrophonePermissionFromPanel();
